@@ -170,9 +170,8 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
       // 4. Calculate exact scheduled ISO timestamp & short-notice flags
       const now = new Date();
       const rawTime = data.rawTime || "10:00";
-      const meetingDateTime = data.scheduledIso
-        ? new Date(data.scheduledIso)
-        : new Date(`${data.date}T${rawTime}:00`);
+      const isoStr = data.scheduledIso || `${data.date}T${rawTime}:00+05:00`;
+      const meetingDateTime = new Date(isoStr);
 
       const scheduledIso = isNaN(meetingDateTime.getTime())
         ? now.toISOString()
