@@ -89,6 +89,7 @@ function BookingPage() {
           leadName: name || email.split("@")[0],
           date: date,
           time: formattedTime,
+          rawTime: time,
           agentEmail: agentEmail,
         },
       });

@@ -101,6 +101,9 @@ export const triggerBookingFormEmailFn = createServerFn({ method: "POST" })
 /**
  * 4. Trigger Meeting Booking & Confirmation Emails
  */
+/**
+ * 4. Trigger Meeting Booking & Confirmation Emails
+ */
 export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
   .validator(
     (data: {
@@ -108,6 +111,7 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
       agentEmail?: string;
       date: string;
       time: string;
+      rawTime?: string;
       leadId?: string;
       leadName?: string;
     }) => data,
@@ -124,9 +128,37 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         meetingTime: data.time,
       });
 
-      // 2. Log confirmation email in emails_sent
+      // 2. Ensure lead exists in Supabase leads table
+      let leadId = data.leadId;
+      if (!leadId) {
+        const { data: existingLead } = await supabase
+          .from("leads")
+          .select("id")
+          .eq("email", data.leadEmail)
+          .single();
+
+        if (existingLead?.id) {
+          leadId = existingLead.id;
+        } else {
+          const { data: newLead } = await supabase
+            .from("leads")
+            .insert({
+              name: data.leadName || data.leadEmail.split("@")[0],
+              email: data.leadEmail,
+              status: "meeting",
+              assigned_agent_name: agentEmail,
+            })
+            .select("id")
+            .single();
+          leadId = newLead?.id;
+        }
+      } else {
+        await supabase.from("leads").update({ status: "meeting" }).eq("id", leadId);
+      }
+
+      // 3. Log confirmation email in emails_sent
       await supabase.from("emails_sent").insert({
-        lead_id: data.leadId || null,
+        lead_id: leadId || null,
         lead_email: data.leadEmail,
         subject: `Meeting Confirmed: ${data.date} at ${data.time}`,
         sequence_type: "meeting_confirmed",
@@ -134,17 +166,41 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         sent_at: new Date().toISOString(),
       });
 
-      // 3. Insert record into Supabase meetings table
-      if (data.leadId) {
-        const scheduledTime = new Date(`${data.date}T${data.time}`).toISOString();
-        await supabase.from("meetings").insert({
-          lead_id: data.leadId,
+      // 4. Calculate exact scheduled ISO timestamp
+      const rawTime = data.rawTime || "10:00";
+      const meetingDateTime = new Date(`${data.date}T${rawTime}:00`);
+      const scheduledIso = isNaN(meetingDateTime.getTime())
+        ? new Date().toISOString()
+        : meetingDateTime.toISOString();
+
+      // 5. Insert meeting into Supabase meetings table ALWAYS!
+      const { data: insertedMeeting } = await supabase
+        .from("meetings")
+        .insert({
+          lead_id: leadId || null,
           title: `Sales Meeting with ${data.leadName || data.leadEmail}`,
-          scheduled_time: scheduledTime,
+          scheduled_time: scheduledIso,
+          completed: false,
+        })
+        .select("id")
+        .single();
+
+      // 6. If scheduled meeting time is starting right now or within 2 minutes, fire Meeting Starting NOW email immediately!
+      const now = new Date();
+      const diffMs = meetingDateTime.getTime() - now.getTime();
+      if (diffMs <= 2 * 60 * 1000) {
+        await sendMeetingStartedNowEmail({
+          leadEmail: data.leadEmail,
+          agentEmail: agentEmail,
+          meetingTime: data.time,
         });
 
-        // Update lead status to 'meeting'
-        await supabase.from("leads").update({ status: "meeting" }).eq("id", data.leadId);
+        if (insertedMeeting?.id) {
+          await supabase
+            .from("meetings")
+            .update({ reminder_started_sent: true, completed: true })
+            .eq("id", insertedMeeting.id);
+        }
       }
 
       return { success: true };
@@ -178,20 +234,30 @@ export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
         const meetingTime = new Date(m.scheduled_time);
 
         // Fetch lead email AND assigned agent name
-        const { data: lead } = await supabase
-          .from("leads")
-          .select("email, assigned_agent_name, agent")
-          .eq("id", m.lead_id)
-          .single();
+        let leadEmail: string | null = null;
+        let agentEmail = "garryamelia6265@gmail.com";
 
-        if (!lead || !lead.email) continue;
-        const agentEmail = lead.assigned_agent_name || lead.agent || "garryamelia6265@gmail.com";
+        if (m.lead_id) {
+          const { data: lead } = await supabase
+            .from("leads")
+            .select("email, assigned_agent_name, agent")
+            .eq("id", m.lead_id)
+            .single();
+
+          if (lead?.email) {
+            leadEmail = lead.email;
+            agentEmail = lead.assigned_agent_name || lead.agent || agentEmail;
+          }
+        }
+
+        if (!leadEmail) continue;
+
         const formattedTimeStr = meetingTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
         // Stage 1: 24-Hour Reminder (Sent 1 day before)
         if (!m.reminder_24h_sent && meetingTime <= oneDayLater && meetingTime > oneHourLater) {
           await send1DayMeetingReminderEmail({
-            leadEmail: lead.email,
+            leadEmail: leadEmail,
             agentEmail: agentEmail,
             meetingDate: meetingTime.toLocaleDateString(),
             meetingTime: formattedTimeStr,
@@ -203,7 +269,7 @@ export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
         // Stage 2: 1-Hour Reminder (Sent 60 minutes before)
         if (!m.reminder_1h_sent && meetingTime <= oneHourLater && meetingTime > now) {
           await send1HourMeetingReminderEmail({
-            leadEmail: lead.email,
+            leadEmail: leadEmail,
             agentEmail: agentEmail,
             meetingTime: formattedTimeStr,
           });
@@ -214,7 +280,7 @@ export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
         // Stage 3: Meeting Starting NOW (Sent right at the scheduled meeting time)
         if (!m.reminder_started_sent && now >= meetingTime) {
           await sendMeetingStartedNowEmail({
-            leadEmail: lead.email,
+            leadEmail: leadEmail,
             agentEmail: agentEmail,
             meetingTime: formattedTimeStr,
           });
