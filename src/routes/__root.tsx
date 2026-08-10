@@ -124,6 +124,18 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const runReminderCheck = () => {
+      import("@/lib/server-actions").then(({ checkAndSendMeetingRemindersFn }) => {
+        checkAndSendMeetingRemindersFn({ data: {} }).catch(() => {});
+      });
+    };
+    runReminderCheck();
+    const interval = setInterval(runReminderCheck, 20000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <CrmProvider>

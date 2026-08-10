@@ -4,6 +4,7 @@ import {
   send1HourMeetingReminderEmail,
   sendBookingFormEmail,
   sendMeetingConfirmationEmail,
+  sendMeetingStartedNowEmail,
   sendReminderEmail,
   sendWelcomeEmail,
 } from "./email-service";
@@ -154,7 +155,7 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
   });
 
 /**
- * 5. Automated Background Check for 1-Day and 1-Hour Meeting Reminders
+ * 5. Automated Background Check for 24-Hour, 1-Hour, and Meeting Starting NOW Emails
  */
 export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
   .validator(() => ({}))
@@ -167,7 +168,7 @@ export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
       // Fetch pending meetings
       const { data: upcomingMeetings } = await supabase
         .from("meetings")
-        .select("id, lead_id, scheduled_time, reminder_24h_sent, reminder_1h_sent")
+        .select("id, lead_id, scheduled_time, reminder_24h_sent, reminder_1h_sent, reminder_started_sent")
         .eq("completed", false);
 
       if (!upcomingMeetings) return { success: true, processed: 0 };
@@ -184,29 +185,43 @@ export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
           .single();
 
         if (!lead || !lead.email) continue;
-        // Use assigned agent email if available, else fall back to admin
         const agentEmail = lead.assigned_agent_name || lead.agent || "garryamelia6265@gmail.com";
+        const formattedTimeStr = meetingTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-        // Check 24-hour reminder
-        if (!m.reminder_24h_sent && meetingTime <= oneDayLater && meetingTime > now) {
+        // Stage 1: 24-Hour Reminder (Sent 1 day before)
+        if (!m.reminder_24h_sent && meetingTime <= oneDayLater && meetingTime > oneHourLater) {
           await send1DayMeetingReminderEmail({
             leadEmail: lead.email,
             agentEmail: agentEmail,
             meetingDate: meetingTime.toLocaleDateString(),
-            meetingTime: meetingTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            meetingTime: formattedTimeStr,
           });
           await supabase.from("meetings").update({ reminder_24h_sent: true }).eq("id", m.id);
           count++;
         }
 
-        // Check 1-hour reminder
+        // Stage 2: 1-Hour Reminder (Sent 60 minutes before)
         if (!m.reminder_1h_sent && meetingTime <= oneHourLater && meetingTime > now) {
           await send1HourMeetingReminderEmail({
             leadEmail: lead.email,
             agentEmail: agentEmail,
-            meetingTime: meetingTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            meetingTime: formattedTimeStr,
           });
           await supabase.from("meetings").update({ reminder_1h_sent: true }).eq("id", m.id);
+          count++;
+        }
+
+        // Stage 3: Meeting Starting NOW (Sent right at the scheduled meeting time)
+        if (!m.reminder_started_sent && now >= meetingTime) {
+          await sendMeetingStartedNowEmail({
+            leadEmail: lead.email,
+            agentEmail: agentEmail,
+            meetingTime: formattedTimeStr,
+          });
+          await supabase
+            .from("meetings")
+            .update({ reminder_started_sent: true, completed: true })
+            .eq("id", m.id);
           count++;
         }
       }
@@ -217,3 +232,4 @@ export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
       return { success: false, error: err?.message };
     }
   });
+

@@ -200,19 +200,25 @@ export async function send1DayMeetingReminderEmail({
   const mailOptions = {
     from: `"Nexa CRM Reminders" <${GMAIL_USER}>`,
     to: recipients,
-    subject: `📌 Reminder: Scheduled Meeting Tomorrow at ${meetingTime}`,
+    subject: `📌 24-Hour Reminder: Upcoming Sales Meeting Tomorrow (${meetingTime})`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; background-color: #ffffff;">
-        <div style="background-color: #f59e0b; padding: 16px; text-align: center; color: white; border-radius: 8px 8px 0 0;">
-          <h2 style="margin: 0;">Tomorrow's Meeting Reminder</h2>
+        <div style="background-color: #4f46e5; padding: 20px; text-align: center; color: white; border-radius: 8px 8px 0 0;">
+          <h2 style="margin: 0;">📌 24-Hour Meeting Reminder</h2>
         </div>
         <div style="padding: 24px; color: #334155; line-height: 1.6;">
-          <p>This is a friendly reminder for your upcoming meeting tomorrow.</p>
-          <div style="background-color: #fffbeb; border: 1px solid #fef3c7; padding: 16px; border-radius: 8px; margin: 20px 0;">
-            <p style="margin: 4px 0;"><strong>Date:</strong> ${meetingDate}</p>
-            <p style="margin: 4px 0;"><strong>Time:</strong> ${meetingTime}</p>
+          <p>Hello,</p>
+          <p>This is your 24-hour advance reminder for your scheduled sales meeting with our team tomorrow.</p>
+          <div style="background-color: #eef2ff; border: 1px solid #c7d2fe; padding: 16px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 4px 0; color: #3730a3;"><strong>Date:</strong> ${meetingDate}</p>
+            <p style="margin: 4px 0; color: #3730a3;"><strong>Time:</strong> ${meetingTime}</p>
+            <p style="margin: 4px 0; color: #3730a3;"><strong>Participants:</strong> ${leadEmail} & Sales Representative (${agentEmail})</p>
           </div>
-          <p style="font-size: 13px; color: #64748b;">If you need to adjust or reschedule, please contact us as soon as possible.</p>
+          <p>Please review any documents or questions before the meeting. We look forward to speaking with you tomorrow!</p>
+          <p style="font-size: 13px; color: #64748b;">Need to reschedule? Reply directly to this email.</p>
+        </div>
+        <div style="background-color: #f8fafc; padding: 16px; text-align: center; font-size: 12px; color: #94a3b8; border-radius: 0 0 8px 8px;">
+          &copy; ${new Date().getFullYear()} Nexa CRM. All rights reserved.
         </div>
       </div>
     `,
@@ -238,15 +244,23 @@ export async function send1HourMeetingReminderEmail({
   const mailOptions = {
     from: `"Nexa CRM Reminders" <${GMAIL_USER}>`,
     to: recipients,
-    subject: `⏰ Starting in 1 Hour: Scheduled Meeting (${meetingTime})`,
+    subject: `⏰ 1-Hour Reminder: Your Sales Meeting Starts in 60 Minutes (${meetingTime})`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; background-color: #ffffff;">
-        <div style="background-color: #ef4444; padding: 16px; text-align: center; color: white; border-radius: 8px 8px 0 0;">
-          <h2 style="margin: 0;">Meeting Starts in 1 Hour</h2>
+        <div style="background-color: #f59e0b; padding: 20px; text-align: center; color: white; border-radius: 8px 8px 0 0;">
+          <h2 style="margin: 0;">⏰ Meeting Starts in 1 Hour!</h2>
         </div>
         <div style="padding: 24px; color: #334155; line-height: 1.6;">
-          <p>Your meeting is starting in 1 hour at <strong>${meetingTime}</strong>!</p>
-          <p>Please ensure you are prepared and ready for the session.</p>
+          <p>Hello,</p>
+          <p>Your sales meeting is starting in 1 hour at <strong>${meetingTime}</strong>!</p>
+          <div style="background-color: #fffbeb; border: 1px solid #fef3c7; padding: 16px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 4px 0; color: #92400e;"><strong>Scheduled Time:</strong> ${meetingTime}</p>
+            <p style="margin: 4px 0; color: #92400e;"><strong>Participants:</strong> ${leadEmail} & Sales Representative (${agentEmail})</p>
+          </div>
+          <p>Please ensure you are ready to join the session on time.</p>
+        </div>
+        <div style="background-color: #f8fafc; padding: 16px; text-align: center; font-size: 12px; color: #94a3b8; border-radius: 0 0 8px 8px;">
+          &copy; ${new Date().getFullYear()} Nexa CRM. All rights reserved.
         </div>
       </div>
     `,
@@ -254,3 +268,48 @@ export async function send1HourMeetingReminderEmail({
 
   return await transporter.sendMail(mailOptions);
 }
+
+/**
+ * 7. Meeting Started NOW — Meeting Time Arrived (Sent to BOTH Lead & Agent)
+ */
+export async function sendMeetingStartedNowEmail({
+  leadEmail,
+  agentEmail,
+  meetingTime,
+}: {
+  leadEmail: string;
+  agentEmail: string;
+  meetingTime: string;
+}) {
+  const recipients = [leadEmail, agentEmail, GMAIL_USER].filter(Boolean).join(",");
+
+  const mailOptions = {
+    from: `"Nexa CRM Live Session" <${GMAIL_USER}>`,
+    to: recipients,
+    subject: `🔔 Meeting Time Arrived! Your Sales Session is Starting Now (${meetingTime})`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; background-color: #ffffff;">
+        <div style="background-color: #10b981; padding: 20px; text-align: center; color: white; border-radius: 8px 8px 0 0;">
+          <h2 style="margin: 0;">🎉 Your Meeting is Starting Now!</h2>
+        </div>
+        <div style="padding: 24px; color: #334155; line-height: 1.6;">
+          <p>Hello,</p>
+          <p>It's <strong>${meetingTime}</strong> and your scheduled sales meeting is starting right now!</p>
+          <div style="background-color: #ecfdf5; border: 1px solid #a7f3d0; padding: 16px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 4px 0; color: #065f46;"><strong>Status:</strong> Live Session Started</p>
+            <p style="margin: 4px 0; color: #065f46;"><strong>Scheduled Time:</strong> ${meetingTime}</p>
+            <p style="margin: 4px 0; color: #065f46;"><strong>Participants:</strong> ${leadEmail} & Sales Representative (${agentEmail})</p>
+          </div>
+          <p>Please join the meeting or connect with your sales representative now.</p>
+          <p style="font-size: 13px; color: #64748b;">Thank you for choosing Nexa CRM for your sales automation.</p>
+        </div>
+        <div style="background-color: #f8fafc; padding: 16px; text-align: center; font-size: 12px; color: #94a3b8; border-radius: 0 0 8px 8px;">
+          &copy; ${new Date().getFullYear()} Nexa CRM. All rights reserved.
+        </div>
+      </div>
+    `,
+  };
+
+  return await transporter.sendMail(mailOptions);
+}
+
