@@ -1,12 +1,12 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
+import nodemailer from "nodemailer";
 
-// ── Supabase client (service role for cron, bypasses RLS) ──────────────────
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  process.env.VITE_SUPABASE_ANON_KEY!
-);
+// ── Supabase credentials (same as app) ────────────────────────────────────
+const SUPABASE_URL = "https://nyjhbeqpjfdhhvqvjzyy.supabase.co";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im55amhiZXFwamZkaGh2cXZqenl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwMTAyMTgsImV4cCI6MjEwMTU4NjIxOH0.dng1sTshSzApFQia9YPkGsaBiiwWSJYduX_bAl5asPM";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ── Nodemailer transporter ─────────────────────────────────────────────────
 const GMAIL_USER = "garryamelia6265@gmail.com";
@@ -20,9 +20,11 @@ const transporter = nodemailer.createTransport({
 });
 
 async function sendEmail(to: string | string[], subject: string, html: string) {
+  const recipients = Array.isArray(to) ? to.filter(Boolean) : [to].filter(Boolean);
+  if (recipients.length === 0) return;
   await transporter.sendMail({
     from: `"Nexa CRM Meetings" <${GMAIL_USER}>`,
-    to: Array.isArray(to) ? to.join(", ") : to,
+    to: recipients.join(", "),
     subject,
     html,
   });
@@ -74,7 +76,7 @@ function reminder24hHtml(meetingDate: string, meetingTime: string) {
     </div>
     <div style="padding:28px;color:#334155;line-height:1.7">
       <h2 style="color:#1e293b">Your meeting is tomorrow</h2>
-      <p>Just a friendly reminder that you have a sales meeting scheduled for <strong>${meetingDate}</strong> at <strong>${meetingTime}</strong>.</p>
+      <p>Reminder: your sales meeting is on <strong>${meetingDate}</strong> at <strong>${meetingTime}</strong>.</p>
       <p>Please review your materials and be prepared for the discussion.</p>
     </div>
     <div style="background:#f8fafc;padding:16px;text-align:center;font-size:12px;color:#94a3b8;border-radius:0 0 8px 8px">
@@ -84,8 +86,7 @@ function reminder24hHtml(meetingDate: string, meetingTime: string) {
 }
 
 // ── Main handler ───────────────────────────────────────────────────────────
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Allow only GET (Vercel Cron) or POST (manual trigger)
+export default async function handler(req: any, res: any) {
   if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -150,37 +151,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         continue;
       }
 
-      const recipients = [leadEmail, agentEmail].filter(Boolean);
+      const recipients = [leadEmail, agentEmail].filter(
+        (e, i, arr) => e && arr.indexOf(e) === i
+      );
 
-      // Stage 3: Meeting Starting NOW
+      // Stage 3: Meeting Starting NOW (mark completed so it only fires once)
       if (!meeting.completed && now.getTime() >= meetingTime.getTime()) {
         await sendEmail(recipients, `🔴 Your Meeting is Starting NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
         await supabase.from("meetings").update({ completed: true }).eq("id", meeting.id);
         count++;
-        results.push(`Meeting NOW email sent to ${recipients.join(", ")} for ${formattedTime}`);
-        continue; // skip other stages
+        results.push(`NOW email → ${recipients.join(", ")} at ${formattedTime}`);
+        continue;
       }
 
       // Stage 2: 1-Hour Reminder
-      if (!meeting.reminder_1h_sent && meetingTime <= oneHourLater && meetingTime > now) {
+      if (!meeting.reminder_1h_sent && meetingTime.getTime() <= oneHourLater.getTime() && meetingTime.getTime() > now.getTime()) {
         await sendEmail(recipients, `⏰ Your Meeting Starts in 1 Hour — ${formattedTime}`, reminder1hHtml(formattedTime));
         await supabase.from("meetings").update({ reminder_1h_sent: true }).eq("id", meeting.id);
         count++;
-        results.push(`1h reminder sent to ${recipients.join(", ")} for ${formattedTime}`);
+        results.push(`1h reminder → ${recipients.join(", ")} at ${formattedTime}`);
       }
 
       // Stage 1: 24-Hour Reminder
-      if (!meeting.reminder_24h_sent && meetingTime <= oneDayLater && meetingTime > oneHourLater) {
+      if (!meeting.reminder_24h_sent && meetingTime.getTime() <= oneDayLater.getTime() && meetingTime.getTime() > oneHourLater.getTime()) {
         await sendEmail(recipients, `📅 Meeting Tomorrow — ${formattedDate} at ${formattedTime}`, reminder24hHtml(formattedDate, formattedTime));
         await supabase.from("meetings").update({ reminder_24h_sent: true }).eq("id", meeting.id);
         count++;
-        results.push(`24h reminder sent to ${recipients.join(", ")} for ${formattedTime}`);
+        results.push(`24h reminder → ${recipients.join(", ")} at ${formattedTime}`);
       }
     }
 
     return res.status(200).json({ success: true, processed: count, results });
   } catch (err: any) {
-    console.error("Cron check-reminders error:", err);
+    console.error("check-reminders error:", err);
     return res.status(500).json({ success: false, error: err?.message });
   }
 }
