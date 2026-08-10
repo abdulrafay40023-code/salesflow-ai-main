@@ -83,6 +83,12 @@ function BookingPage() {
       const formattedTime = `${displayHour.toString().padStart(2, "0")}:${minStr} ${period}`;
       setConfirmedTimeLabel(formattedTime);
 
+      // Calculate exact ISO string in user's browser timezone
+      const [year, month, day] = date.split("-").map(Number);
+      const [hourVal, minVal] = time.split(":").map(Number);
+      const localMeetingDate = new Date(year, month - 1, day, hourVal, minVal, 0);
+      const scheduledIso = localMeetingDate.toISOString();
+
       const res = await confirmMeetingBookingFn({
         data: {
           leadEmail: email,
@@ -90,6 +96,7 @@ function BookingPage() {
           date: date,
           time: formattedTime,
           rawTime: time,
+          scheduledIso: scheduledIso,
           agentEmail: agentEmail,
         },
       });

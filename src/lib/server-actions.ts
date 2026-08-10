@@ -112,6 +112,7 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
       date: string;
       time: string;
       rawTime?: string;
+      scheduledIso?: string;
       leadId?: string;
       leadName?: string;
     }) => data,
@@ -168,7 +169,10 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
 
       // 4. Calculate exact scheduled ISO timestamp
       const rawTime = data.rawTime || "10:00";
-      const meetingDateTime = new Date(`${data.date}T${rawTime}:00`);
+      const meetingDateTime = data.scheduledIso
+        ? new Date(data.scheduledIso)
+        : new Date(`${data.date}T${rawTime}:00`);
+
       const scheduledIso = isNaN(meetingDateTime.getTime())
         ? new Date().toISOString()
         : meetingDateTime.toISOString();
@@ -198,7 +202,7 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         if (insertedMeeting?.id) {
           await supabase
             .from("meetings")
-            .update({ reminder_started_sent: true, completed: true })
+            .update({ completed: true })
             .eq("id", insertedMeeting.id);
         }
       }
@@ -224,7 +228,7 @@ export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
       // Fetch pending meetings
       const { data: upcomingMeetings } = await supabase
         .from("meetings")
-        .select("id, lead_id, scheduled_time, reminder_24h_sent, reminder_1h_sent, reminder_started_sent")
+        .select("id, lead_id, scheduled_time, reminder_24h_sent, reminder_1h_sent, completed")
         .eq("completed", false);
 
       if (!upcomingMeetings) return { success: true, processed: 0 };
@@ -278,7 +282,7 @@ export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
         }
 
         // Stage 3: Meeting Starting NOW (Sent right at the scheduled meeting time)
-        if (!m.reminder_started_sent && now >= meetingTime) {
+        if (!m.completed && now.getTime() >= meetingTime.getTime()) {
           await sendMeetingStartedNowEmail({
             leadEmail: leadEmail,
             agentEmail: agentEmail,
@@ -286,7 +290,7 @@ export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
           });
           await supabase
             .from("meetings")
-            .update({ reminder_started_sent: true, completed: true })
+            .update({ completed: true })
             .eq("id", m.id);
           count++;
         }
