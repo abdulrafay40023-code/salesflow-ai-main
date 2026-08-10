@@ -127,12 +127,10 @@ function RootComponent() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const runReminderCheck = () => {
-      import("@/lib/server-actions").then(({ checkAndSendMeetingRemindersFn }) => {
-        checkAndSendMeetingRemindersFn({ data: {} }).catch(() => {});
-      });
+      fetch("/api/check-reminders", { method: "GET" }).catch(() => {});
     };
     runReminderCheck();
-    const interval = setInterval(runReminderCheck, 20000);
+    const interval = setInterval(runReminderCheck, 15000); // every 15 seconds
     return () => clearInterval(interval);
   }, []);
 
