@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { Sparkles, ShieldCheck, Loader2 } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
 import { signInWithGoogle } from "@/lib/supabase";
-import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -10,7 +10,13 @@ export const Route = createFileRoute("/")({
       { title: "Sign in — Nexa CRM | AI Sales Workspace" },
       {
         name: "description",
-        content: "Sign in to Nexa CRM with your Google account.",
+        content:
+          "Sign in to Nexa CRM, the AI-powered sales workspace for lead management, follow-ups and automated outreach.",
+      },
+      { property: "og:title", content: "Sign in — Nexa CRM" },
+      {
+        property: "og:description",
+        content: "AI-powered CRM for modern sales teams: leads, follow-ups, and automated email.",
       },
     ],
   }),
@@ -39,30 +45,68 @@ function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#080b11] text-white flex flex-col items-center justify-center p-4 sm:p-6 select-none font-sans">
-      <div className="w-full max-w-md space-y-6 flex flex-col items-center">
-        {/* Header outside the card */}
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
-            Welcome
-          </h1>
-          <p className="text-slate-400 text-sm sm:text-base font-normal">
-            Sign in to your account to continue
-          </p>
+    <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr] bg-[#080b11]">
+      {/* Left Half: Blue Branding Section */}
+      <section className="relative hidden overflow-hidden bg-primary/95 mesh-bg p-12 lg:flex lg:flex-col lg:justify-between text-primary-foreground">
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-9 place-items-center rounded-xl bg-primary-foreground/15">
+            <Sparkles className="size-4.5" />
+          </span>
+          <span className="font-display text-lg font-bold">Nexa CRM</span>
         </div>
 
-        {/* Card Box */}
-        <div className="w-full rounded-2xl bg-[#0f141c]/90 border border-slate-800/80 p-8 sm:p-10 shadow-2xl backdrop-blur-xl space-y-6">
-          <div className="text-center space-y-1.5">
-            <h2 className="text-xl font-bold text-white tracking-tight">
-              Sign In
+        <div className="max-w-lg">
+          <h1 className="font-display text-4xl font-bold leading-tight xl:text-5xl">
+            The AI workspace where pipeline actually moves.
+          </h1>
+          <p className="mt-5 text-base text-primary-foreground/75">
+            Import leads, automate outreach, and never miss a follow-up. Built for sales teams
+            that live in their CRM.
+          </p>
+          <dl className="mt-10 grid grid-cols-3 gap-4">
+            {[
+              ["42%", "Faster response"],
+              ["3.1x", "More meetings"],
+              ["18h", "Saved / week"],
+            ].map(([v, l]) => (
+              <div key={l} className="rounded-2xl bg-primary-foreground/10 p-4 backdrop-blur-sm">
+                <dt className="font-display text-2xl font-bold">{v}</dt>
+                <dd className="mt-1 text-xs text-primary-foreground/70">{l}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+
+        <p className="flex items-center gap-2 text-xs text-primary-foreground/70">
+          <ShieldCheck className="size-4" /> SOC 2 Type II · GDPR ready · SSO supported
+        </p>
+      </section>
+
+      {/* Right Half: Google Sign-In Panel */}
+      <section className="flex flex-col items-center justify-center px-5 py-12 sm:px-10 bg-[#080b11]">
+        <div className="w-full max-w-md animate-fade-in space-y-8">
+          <div className="flex items-center gap-2.5 lg:hidden">
+            <span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground">
+              <Sparkles className="size-4.5" />
+            </span>
+            <span className="font-display text-lg font-bold text-white">Nexa CRM</span>
+          </div>
+
+          <div>
+            <h2 className="font-display text-3xl font-bold text-white tracking-tight">
+              Welcome back
             </h2>
-            <p className="text-xs sm:text-sm text-slate-400 font-normal">
-              Continue with your Google account
+            <p className="mt-2 text-sm text-slate-400">
+              Sign in with your Google OAuth account to access your CRM.
             </p>
           </div>
 
-          <div className="pt-2">
+          <div className="rounded-2xl bg-[#0f141c]/90 border border-slate-800/80 p-8 shadow-2xl space-y-6">
+            <div className="space-y-1">
+              <h3 className="text-lg font-semibold text-white">Sign In</h3>
+              <p className="text-xs text-slate-400">Continue with Google account</p>
+            </div>
+
             <button
               type="button"
               disabled={isLoading}
@@ -93,14 +137,20 @@ function LoginPage() {
               )}
               <span>Sign in with Google</span>
             </button>
+
+            <div className="flex items-center justify-center gap-2 rounded-xl bg-slate-900/60 p-3 text-xs text-slate-400 border border-slate-800/50">
+              <ShieldCheck className="size-4 text-emerald-500 shrink-0" />
+              <span>Multi-Agent Sync & Live Database Active</span>
+            </div>
           </div>
 
-          <p className="text-xs text-slate-500 text-center pt-2 font-normal">
+          <p className="text-xs text-slate-500 text-center font-normal">
             By signing in, you agree to our terms and privacy policy.
           </p>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
+
 
