@@ -164,15 +164,15 @@ export default async function handler(req: any, res: any) {
         continue;
       }
 
-      // Stage 2: 1-Hour Reminder
-      if (!meeting.reminder_1h_sent && meetingTime.getTime() <= oneHourLater.getTime() && meetingTime.getTime() > now.getTime()) {
+      // Stage 2: 1-Hour Reminder (Only if meeting is more than 2 minutes in future and within 1 hour)
+      if (!meeting.reminder_1h_sent && meetingTime.getTime() <= oneHourLater.getTime() && meetingTime.getTime() > (now.getTime() + 2 * 60 * 1000)) {
         await sendEmail(recipients, `⏰ Your Meeting Starts in 1 Hour — ${formattedTime}`, reminder1hHtml(formattedTime));
         await supabase.from("meetings").update({ reminder_1h_sent: true }).eq("id", meeting.id);
         count++;
         results.push(`1h reminder → ${recipients.join(", ")} at ${formattedTime}`);
       }
 
-      // Stage 1: 24-Hour Reminder
+      // Stage 1: 24-Hour Reminder (Only if meeting is more than 1 hour in future and within 24 hours)
       if (!meeting.reminder_24h_sent && meetingTime.getTime() <= oneDayLater.getTime() && meetingTime.getTime() > oneHourLater.getTime()) {
         await sendEmail(recipients, `📅 Meeting Tomorrow — ${formattedDate} at ${formattedTime}`, reminder24hHtml(formattedDate, formattedTime));
         await supabase.from("meetings").update({ reminder_24h_sent: true }).eq("id", meeting.id);

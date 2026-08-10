@@ -269,15 +269,14 @@ function DashboardPage() {
                 <div>
                   <p className="text-sm font-semibold">{m.title}</p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(m.scheduled_time).toLocaleString("en-US", {
-                      timeZone: "Asia/Karachi",
+                    {new Date(m.scheduled_time).toLocaleString([], {
                       month: "short",
                       day: "numeric",
                       year: "numeric",
                       hour: "2-digit",
                       minute: "2-digit",
                       hour12: true,
-                    })} PKT
+                    })}
                   </p>
                 </div>
               </div>

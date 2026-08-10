@@ -167,31 +167,36 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         sent_at: new Date().toISOString(),
       });
 
-      // 4. Calculate exact scheduled ISO timestamp
+      // 4. Calculate exact scheduled ISO timestamp & short-notice flags
+      const now = new Date();
       const rawTime = data.rawTime || "10:00";
       const meetingDateTime = data.scheduledIso
         ? new Date(data.scheduledIso)
         : new Date(`${data.date}T${rawTime}:00`);
 
       const scheduledIso = isNaN(meetingDateTime.getTime())
-        ? new Date().toISOString()
+        ? now.toISOString()
         : meetingDateTime.toISOString();
 
-      // 5. Insert meeting into Supabase meetings table ALWAYS!
+      const diffMs = meetingDateTime.getTime() - now.getTime();
+      const isWithin24h = diffMs <= 24 * 60 * 60 * 1000;
+      const isWithin1h = diffMs <= 60 * 60 * 1000;
+
+      // 5. Insert meeting into Supabase meetings table ALWAYS with appropriate flags!
       const { data: insertedMeeting } = await supabase
         .from("meetings")
         .insert({
           lead_id: leadId || null,
           title: `Sales Meeting with ${data.leadName || data.leadEmail}`,
           scheduled_time: scheduledIso,
+          reminder_24h_sent: isWithin24h ? true : false,
+          reminder_1h_sent: isWithin1h ? true : false,
           completed: false,
         })
         .select("id")
         .single();
 
       // 6. If scheduled meeting time is starting right now or within 2 minutes, fire Meeting Starting NOW email immediately!
-      const now = new Date();
-      const diffMs = meetingDateTime.getTime() - now.getTime();
       if (diffMs <= 2 * 60 * 1000) {
         await sendMeetingStartedNowEmail({
           leadEmail: data.leadEmail,
