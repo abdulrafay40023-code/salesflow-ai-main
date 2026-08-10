@@ -52,6 +52,8 @@ function BookingPage() {
   const [loading, setLoading] = useState(false);
   const [booked, setBooked] = useState(false);
 
+  const [confirmedTimeLabel, setConfirmedTimeLabel] = useState("");
+
   // Auto pre-fill from query params if available
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -73,12 +75,13 @@ function BookingPage() {
 
     setLoading(true);
     try {
-      // Format time as 12-hour AM/PM for emails
+      // Format time as 12-hour AM/PM for emails & confirmation UI
       const [hourStr, minStr] = time.split(":");
       const hour = parseInt(hourStr, 10);
       const period = hour >= 12 ? "PM" : "AM";
       const displayHour = hour % 12 === 0 ? 12 : hour % 12;
-      const formattedTime = `${displayHour}:${minStr} ${period}`;
+      const formattedTime = `${displayHour.toString().padStart(2, "0")}:${minStr} ${period}`;
+      setConfirmedTimeLabel(formattedTime);
 
       const res = await confirmMeetingBookingFn({
         data: {
@@ -123,7 +126,7 @@ function BookingPage() {
             </p>
             <div className="rounded-xl border border-border bg-accent/40 p-4 text-xs space-y-1 w-full max-w-sm text-left">
               <p>🗓️ <strong>Date:</strong> {date}</p>
-              <p>⏰ <strong>Time:</strong> {time}</p>
+              <p>⏰ <strong>Time:</strong> {confirmedTimeLabel || time}</p>
               <p>📧 <strong>Notifications:</strong> 1-day & 1-hour email reminders active</p>
             </div>
             <Button variant="outline" className="mt-4 rounded-xl" onClick={() => setBooked(false)}>
