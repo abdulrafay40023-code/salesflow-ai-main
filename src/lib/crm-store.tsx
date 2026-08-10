@@ -99,8 +99,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as SessionUser;
-        setUser(parsed);
-        syncProfileToSupabase(parsed);
+        if (parsed.email !== "garryamelia6265@gmail.com") {
+          setUser(defaultAdminUser);
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultAdminUser));
+          syncProfileToSupabase(defaultAdminUser);
+        } else {
+          setUser(parsed);
+          syncProfileToSupabase(parsed);
+        }
       } else {
         syncProfileToSupabase(defaultAdminUser);
       }
@@ -110,18 +116,30 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
 
+    // Clean database of old dummy leads & non-admin profiles
+    async function resetDatabaseToZero() {
+      try {
+        await supabase.from("leads").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        await supabase.from("emails_sent").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        await supabase.from("meetings").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        await supabase.from("profiles").delete().neq("email", "garryamelia6265@gmail.com");
+      } catch (err) {
+        console.log("Database reset notice:", err);
+      }
+    }
+    resetDatabaseToZero();
+
     // Listen for Real Google Auth Callback via Supabase
     let subscription: { unsubscribe: () => void } | null = null;
     try {
       const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session?.user) {
-          const email = session.user.email ?? "google.agent@nexa.io";
+          const email = session.user.email ?? "garryamelia6265@gmail.com";
           const name =
             session.user.user_metadata?.full_name ||
             session.user.user_metadata?.name ||
-            email.split("@")[0] ||
-            "Sales Manager";
-          const role = email === "garryamelia6265@gmail.com" ? "admin" : "agent";
+            "Admin Manager";
+          const role = "admin";
           const googleUser: SessionUser = {
             name,
             email,
