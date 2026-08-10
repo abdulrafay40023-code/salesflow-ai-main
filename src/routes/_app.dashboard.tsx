@@ -105,7 +105,8 @@ function DashboardPage() {
         supabase
           .from("meetings")
           .select("id,title,scheduled_time,completed")
-          .order("scheduled_time", { ascending: false })
+          .eq("completed", false)
+          .order("scheduled_time", { ascending: true })
           .limit(20),
       ]);
 
@@ -268,10 +269,15 @@ function DashboardPage() {
                 <div>
                   <p className="text-sm font-semibold">{m.title}</p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(m.scheduled_time).toLocaleString([], {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
+                    {new Date(m.scheduled_time).toLocaleString("en-US", {
+                      timeZone: "Asia/Karachi",
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: true,
+                    })} PKT
                   </p>
                 </div>
               </div>
