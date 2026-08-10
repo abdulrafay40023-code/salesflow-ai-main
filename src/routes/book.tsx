@@ -20,7 +20,7 @@ export const Route = createFileRoute("/book")({
 function generate24HourTimeSlots() {
   const slots: { value: string; label: string }[] = [];
   for (let hour = 0; hour < 24; hour++) {
-    for (const min of [0, 30]) {
+    for (let min = 0; min < 60; min += 5) {
       const hStr = hour.toString().padStart(2, "0");
       const mStr = min.toString().padStart(2, "0");
       const value = `${hStr}:${mStr}`;
