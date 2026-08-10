@@ -127,6 +127,9 @@ function AdminPage() {
   async function fetchData() {
     setLoading(true);
     try {
+      // Ensure non-admin users in DB profiles table are set to 'agent'
+      await supabase.from("profiles").update({ role: "agent" }).neq("email", ADMIN_EMAIL);
+
       const [{ data: leadsData }, { data: emailData }, { data: profileData }] = await Promise.all([
         supabase.from("leads").select("*").order("created_at", { ascending: false }),
         supabase.from("emails_sent").select("*").order("sent_at", { ascending: false }),
@@ -232,10 +235,11 @@ function AdminPage() {
   profiles.forEach((p) => {
     if (!p.email) return;
     const key = p.email.toLowerCase();
+    const role = p.email.toLowerCase() === ADMIN_EMAIL ? "admin" : "agent";
     agentStatsMap[key] = {
-      name: p.full_name || p.email.split("@")[0] || "Sales Agent",
+      name: p.full_name || p.email.split("@")[0] || "Working Agent",
       email: p.email,
-      role: p.role || "agent",
+      role,
       totalLeads: 0,
       newLeads: 0,
       contacted: 0,
@@ -489,7 +493,7 @@ function AdminPage() {
                           <div className="flex items-center justify-between gap-1">
                             <p className="font-bold text-white truncate group-hover:text-violet-300 transition-colors">{a.name}</p>
                             <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${a.role === "admin" ? "bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/30" : "bg-blue-500/20 text-blue-300"}`}>
-                              {a.role === "admin" ? "Admin" : "Agent"}
+                              {a.role === "admin" ? "Admin" : "Working Agent"}
                             </span>
                           </div>
                           <p className="text-xs text-white/40 truncate">{a.email !== "—" ? a.email : "Active Team Member"}</p>

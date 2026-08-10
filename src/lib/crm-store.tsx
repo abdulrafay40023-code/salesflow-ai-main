@@ -60,7 +60,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const syncProfileToSupabase = useCallback(async (u: SessionUser) => {
     if (!u.email) return;
     try {
-      const role = u.email === "garryamelia6265@gmail.com" ? "admin" : u.role || "agent";
+      const role = u.email === "garryamelia6265@gmail.com" ? "admin" : "agent";
       const name = u.name || u.email.split("@")[0];
 
       // Attempt to register/update in profiles table if auth user exists
@@ -99,14 +99,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as SessionUser;
-        if (parsed.email !== "garryamelia6265@gmail.com") {
-          setUser(defaultAdminUser);
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultAdminUser));
-          syncProfileToSupabase(defaultAdminUser);
-        } else {
-          setUser(parsed);
-          syncProfileToSupabase(parsed);
-        }
+        setUser(parsed);
+        syncProfileToSupabase(parsed);
       } else {
         syncProfileToSupabase(defaultAdminUser);
       }
@@ -116,30 +110,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
 
-    // Clean database of old dummy leads & non-admin profiles
-    async function resetDatabaseToZero() {
-      try {
-        await supabase.from("leads").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-        await supabase.from("emails_sent").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-        await supabase.from("meetings").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-        await supabase.from("profiles").delete().neq("email", "garryamelia6265@gmail.com");
-      } catch (err) {
-        console.log("Database reset notice:", err);
-      }
-    }
-    resetDatabaseToZero();
+    // Note: Database is managed manually via Supabase dashboard or SQL editor
 
     // Listen for Real Google Auth Callback via Supabase
     let subscription: { unsubscribe: () => void } | null = null;
     try {
       const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session?.user) {
-          const email = session.user.email ?? "garryamelia6265@gmail.com";
+          const email = session.user.email ?? "";
           const name =
             session.user.user_metadata?.full_name ||
             session.user.user_metadata?.name ||
-            "Admin Manager";
-          const role = "admin";
+            email.split("@")[0] ||
+            "Working Agent";
+          // Only garryamelia6265@gmail.com is admin, everyone else is agent
+          const role: "admin" | "agent" = email === "garryamelia6265@gmail.com" ? "admin" : "agent";
           const googleUser: SessionUser = {
             name,
             email,
