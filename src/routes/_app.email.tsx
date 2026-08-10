@@ -1,0 +1,420 @@
+import { createFileRoute } from "@tanstack/react-router";
+import {
+  BadgeCheck, Bot, CheckCircle2, Clock,
+  Inbox, Mail, MailQuestion, RefreshCw, Send, Sparkles, Calendar,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { PageHeader } from "@/components/crm/Topbar";
+import { StatCard } from "@/components/crm/StatCard";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table, TableBody, TableCell,
+  TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
+import {
+  triggerBookingFormEmailFn,
+  triggerReminderEmailFn,
+  checkAndSendMeetingRemindersFn,
+} from "@/lib/server-actions";
+
+export const Route = createFileRoute("/_app/email")({
+  head: () => ({
+    meta: [
+      { title: "AI Email Automation — Nexa CRM" },
+      { name: "description", content: "Welcome emails, reminder sequences, delivery history and AI automation timeline." },
+      { property: "og:title", content: "AI Email Automation — Nexa CRM" },
+    ],
+  }),
+  component: EmailPage,
+});
+
+const stateTone: Record<string, string> = {
+  sent:               "bg-primary/12 text-primary border-primary/25",
+  opened:             "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  replied:            "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  meeting_confirmed:  "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  pending:            "bg-warning/15 text-warning border-warning/30",
+  failed:             "bg-muted text-muted-foreground border-border",
+};
+
+type DbEmailLog = {
+  id: string;
+  lead_id: string;
+  lead_email: string;
+  subject: string;
+  type: string;
+  status: string;
+  sent_at: string;
+};
+
+type DbLead = { id: string; name: string; company: string; email: string; status?: string };
+
+function EmailPage() {
+  const [mounted, setMounted] = useState(false);
+  const [emails, setEmails]   = useState<DbEmailLog[]>([]);
+  const [leads, setLeads]     = useState<DbLead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [lastSyncStr, setLastSyncStr] = useState<string>("");
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  async function fetchData() {
+    setLoading(true);
+    try {
+      const [{ data: e }, { data: l }] = await Promise.all([
+        supabase.from("emails_sent").select("id,lead_id,lead_email,subject,sequence_type,status,sent_at").order("sent_at", { ascending: false }),
+        supabase.from("leads").select("id,name,company,email,status"),
+      ]);
+      if (e) {
+        const mapped = e
+          .filter((item: any) => item && item.sequence_type !== "agent_presence" && item.sequence_type !== "agent_login")
+          .map((item: any) => ({
+            id: item.id || `em-${Math.random()}`,
+            lead_id: item.lead_id || "",
+            lead_email: item.lead_email || "",
+            subject: item.subject || "",
+            type: item.sequence_type || "automation",
+            status: item.status || "sent",
+            sent_at: item.sent_at || "",
+          }));
+        setEmails(mapped as DbEmailLog[]);
+      }
+      if (l) setLeads(l as DbLead[]);
+    } catch (err) {
+      console.error("Email fetch error", err);
+    }
+    setLastSyncStr(new Date().toLocaleTimeString());
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    fetchData();
+    const sub = supabase
+      .channel("email-page")
+      .on("postgres_changes", { event: "*", schema: "public", table: "emails_sent" }, () => fetchData())
+      .subscribe();
+    const interval = setInterval(fetchData, 30000);
+    return () => { sub.unsubscribe(); clearInterval(interval); };
+  }, []);
+
+  const leadMap = useMemo(() => {
+    const map: Record<string, DbLead> = {};
+    (leads || []).forEach((l) => {
+      if (l && l.id) map[l.id] = l;
+      if (l && l.email) map[l.email.toLowerCase()] = l;
+    });
+    return map;
+  }, [leads]);
+
+  // Set of all lead emails/IDs that have booked a meeting or replied
+  const repliedLeadKeys = useMemo(() => {
+    const keys = new Set<string>();
+    (leads || []).forEach((l) => {
+      if (l.status === "meeting" || l.status === "won") {
+        if (l.id) keys.add(l.id);
+        if (l.email) keys.add(l.email.toLowerCase());
+      }
+    });
+    (emails || []).forEach((e) => {
+      if (e?.type === "meeting_confirmed" || e?.status === "replied" || e?.status === "opened") {
+        if (e.lead_id) keys.add(e.lead_id);
+        if (e.lead_email) keys.add(e.lead_email.toLowerCase());
+      }
+    });
+    return keys;
+  }, [leads, emails]);
+
+  const isReply = (e: DbEmailLog) => {
+    if (e?.type === "meeting_confirmed" || e?.status === "replied" || e?.status === "opened") return true;
+    if (e?.lead_id && repliedLeadKeys.has(e.lead_id)) return true;
+    if (e?.lead_email && repliedLeadKeys.has(e.lead_email.toLowerCase())) return true;
+    const l = e?.lead_id ? leadMap[e.lead_id] : (e?.lead_email ? leadMap[e.lead_email.toLowerCase()] : null);
+    if (l?.email && repliedLeadKeys.has(l.email.toLowerCase())) return true;
+    return false;
+  };
+
+  const counts = useMemo(() => {
+    const list = emails || [];
+    const totalOutreachLeadsCount = Math.max(
+      new Set(list.map((e) => e.lead_id || e.lead_email).filter(Boolean)).size,
+      leads.length
+    );
+
+    const repliedLeadsCount = (leads || []).filter(
+      (l) => l.status === "meeting" || l.status === "won" || (l.email && repliedLeadKeys.has(l.email.toLowerCase()))
+    ).length || (repliedLeadKeys.size > 0 ? 1 : 0);
+
+    const noResponseCount = Math.max(0, totalOutreachLeadsCount - repliedLeadsCount);
+
+    return {
+      sent: list.length,
+      pending: list.filter((e) => e?.status === "pending").length,
+      replied: repliedLeadsCount,
+      none: noResponseCount,
+    };
+  }, [emails, leads, repliedLeadKeys]);
+
+  function filterEmails(tab: string) {
+    const list = emails || [];
+    if (tab === "all") return list;
+    if (tab === "sent") return list.filter((e) => e?.status === "sent" || e?.type === "welcome");
+    if (tab === "pending") return list.filter((e) => e?.status === "pending");
+    if (tab === "replied") return list.filter(isReply);
+    if (tab === "no-response") return list.filter((e) => !isReply(e) && e?.status !== "pending" && e?.status !== "failed");
+    return list;
+  }
+
+  async function handleSendBookingLink(leadId: string, email: string) {
+    if (!email) return;
+    toast.loading("Sending Booking Form Email...");
+    const res = await triggerBookingFormEmailFn({ data: { email, leadId } });
+    if (res?.success) {
+      toast.success("Booking Form link sent successfully via Gmail SMTP!");
+      fetchData();
+    } else {
+      toast.error(res?.error || "Failed to send booking link");
+    }
+  }
+
+  async function handleSend24hReminder(leadId: string, email: string) {
+    if (!email) return;
+    toast.loading("Sending 24h Follow-up Reminder...");
+    const res = await triggerReminderEmailFn({ data: { email, reminderNumber: 1, leadId } });
+    if (res?.success) {
+      toast.success("24h Reminder Email sent via Gmail SMTP!");
+      fetchData();
+    } else {
+      toast.error(res?.error || "Failed to send reminder");
+    }
+  }
+
+  async function handleRunMeetingReminderCheck() {
+    toast.loading("Checking upcoming meetings & sending 1-day / 1-hour reminders...");
+    const res = await checkAndSendMeetingRemindersFn({ data: {} });
+    if (res?.success) {
+      toast.success(`Meeting reminder check complete! (${res.processed ?? 0} reminders sent)`);
+    } else {
+      toast.error(res?.error || "Check failed");
+    }
+  }
+
+  // Timeline: last 5 real email events
+  const timelineItems = useMemo(() => {
+    return (emails || []).slice(0, 5).map((e) => {
+      let IconComp = Clock;
+      if (e?.status === "opened") IconComp = BadgeCheck;
+      else if (e?.status === "failed") IconComp = Bot;
+      else if (e?.type === "welcome") IconComp = Sparkles;
+
+      const leadObj = e?.lead_id ? leadMap[e.lead_id] : null;
+
+      return {
+        time: e?.sent_at ? new Date(e.sent_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—",
+        title: e?.subject || `${e?.type || "automated"} email`,
+        detail: `Status: ${e?.status || "sent"} · Lead: ${leadObj?.name ?? "Lead"}`,
+        icon: IconComp,
+      };
+    });
+  }, [emails, leadMap]);
+
+  if (!mounted) {
+    return (
+      <div className="flex h-96 items-center justify-center text-muted-foreground">
+        <RefreshCw className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="AI Email Automation"
+        subtitle="Live automated outreach — sequences, delivery and replies."
+        action={
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              {loading ? "Syncing..." : lastSyncStr ? `Live · ${lastSyncStr}` : "Live"}
+            </span>
+            <Button onClick={fetchData} variant="outline" size="sm" className="rounded-xl gap-1.5">
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+            <Button onClick={handleRunMeetingReminderCheck} variant="secondary" size="sm" className="rounded-xl gap-1.5">
+              <Clock className="h-3.5 w-3.5" />
+              Check Meeting Reminders
+            </Button>
+          </div>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Sent"        value={counts.sent}    icon={Send}        />
+        <StatCard label="Pending"     value={counts.pending} icon={Clock}       tone="warning"     />
+        <StatCard label="Replied"     value={counts.replied} icon={CheckCircle2} tone="success"    />
+        <StatCard label="No response" value={counts.none}    icon={MailQuestion} tone="destructive"/>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {[
+          { title: "Welcome Email",    desc: "Sent instantly via garryamelia6265@gmail.com when a lead is imported.", meta: "Trigger: lead imported · Delay: 0 min", active: true },
+          { title: "Reminder Emails",  desc: "Nudges leads automatically every 24 hours until they respond or book.", meta: "Trigger: 24h interval · Delay: 24 h", active: true },
+        ].map((c) => (
+          <div key={c.title} className="panel p-5">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+              <div className="min-w-0">
+                <h2 className="font-display text-lg font-bold">{c.title}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{c.desc}</p>
+              </div>
+              <Switch defaultChecked={c.active} className="shrink-0" />
+            </div>
+            <div className="mt-4 rounded-xl border border-dashed border-border bg-surface-2/60 p-4">
+              <p className="text-xs font-medium text-muted-foreground">{c.meta}</p>
+              <p className="mt-2 text-sm">
+                "Hi, thanks for reaching out. We would love to show you our automated sales CRM workspace."
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Email History - LIVE */}
+        <div className="panel overflow-hidden lg:col-span-2">
+          <div className="border-b border-border p-5">
+            <h2 className="font-display text-lg font-bold">Email History & Actions</h2>
+            <p className="text-sm text-muted-foreground">Every automated message and outcome — live from Supabase</p>
+          </div>
+          <Tabs defaultValue="all" className="p-5">
+            <TabsList className="rounded-xl">
+              {["all", "sent", "pending", "replied", "no-response"].map((t) => (
+                <TabsTrigger key={t} value={t} className="rounded-lg capitalize">
+                  {t === "no-response" ? "No response" : t}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            {["all", "sent", "pending", "replied", "no-response"].map((t) => {
+              const rows = filterEmails(t);
+              return (
+                <TabsContent key={t} value={t} className="mt-4">
+                  {rows.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
+                      <Inbox className="h-8 w-8 opacity-30" />
+                      <p className="text-sm">No email records yet. Import leads to send welcome emails.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl border border-border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-surface-2/60">
+                            <TableHead>Recipient</TableHead>
+                            <TableHead>Subject</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {rows.map((e) => {
+                            const lead = e.lead_id ? leadMap[e.lead_id] : null;
+                            return (
+                              <TableRow key={e.id}>
+                                <TableCell className="whitespace-nowrap">
+                                  <p className="font-medium">{lead?.name ?? "Lead"}</p>
+                                  <p className="text-xs text-muted-foreground">{lead?.email ?? "—"}</p>
+                                </TableCell>
+                                <TableCell className="max-w-48 truncate">{e.subject || "—"}</TableCell>
+                                <TableCell className="whitespace-nowrap text-muted-foreground capitalize">{e.type}</TableCell>
+                                <TableCell>
+                                  {(() => {
+                                    const replied = isReply(e);
+                                    const displayLabel = e.type === "meeting_confirmed" ? "booked" : (replied ? "replied" : e.status);
+                                    const toneClass = replied ? stateTone.replied : (stateTone[e.status] ?? stateTone.sent);
+                                    return (
+                                      <Badge variant="outline" className={`rounded-full capitalize ${toneClass}`}>
+                                        {displayLabel}
+                                      </Badge>
+                                    );
+                                  })()}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-1.5">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 text-xs rounded-lg text-emerald-600 hover:text-emerald-500"
+                                      onClick={() => handleSendBookingLink(e.lead_id, lead?.email || "")}
+                                      title="Send Booking Form Email"
+                                    >
+                                      <Calendar className="h-3.5 w-3.5 mr-1" /> Booking Form
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 text-xs rounded-lg text-blue-600 hover:text-blue-500"
+                                      onClick={() => handleSend24hReminder(e.lead_id, lead?.email || "")}
+                                      title="Send 24h Follow-up Reminder"
+                                    >
+                                      <Clock className="h-3.5 w-3.5 mr-1" /> 24h Nudge
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </TabsContent>
+              );
+            })}
+          </Tabs>
+        </div>
+
+        {/* AI Automation Timeline - LIVE */}
+        <div className="panel p-5">
+          <h2 className="font-display text-lg font-bold">AI Automation Timeline</h2>
+          <p className="text-sm text-muted-foreground">Today's automated activity</p>
+          {timelineItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-10 text-center text-muted-foreground">
+              <Mail className="h-8 w-8 opacity-30" />
+              <p className="text-sm">No automation activity yet. Import leads to start automation.</p>
+            </div>
+          ) : (
+            <ol className="mt-6 space-y-6">
+              {timelineItems.map((t, i) => {
+                const IconComponent = t.icon || Clock;
+                return (
+                  <li key={i} className="relative flex gap-4">
+                    {i < timelineItems.length - 1 && (
+                      <span className="absolute left-4 top-9 h-full w-px bg-border" />
+                    )}
+                    <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                      <IconComponent className="size-4" />
+                    </span>
+                    <div className="min-w-0 pb-1">
+                      <p className="text-sm font-semibold">{t.title}</p>
+                      <p className="text-xs text-muted-foreground">{t.detail}</p>
+                      <p className="mt-1 text-xs font-medium text-primary">{t.time}</p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
