@@ -228,7 +228,8 @@ function DashboardPage() {
   // Stats from Supabase (live)
   const total = dbLeads.length;
   const contacted = dbLeads.filter((l) => l.status === "contacted").length;
-  const meetingsBooked = dbLeads.filter((l) => l.status === "meeting").length;
+  // Meetings booked = actual rows in meetings table (not lead status)
+  const meetingsBooked = dbMeetings.length;
   const wonLeads = dbLeads.filter((l) => l.status === "won").length;
 
   // Active uncompleted meetings scheduled strictly for TODAY (local date match)
@@ -454,11 +455,21 @@ function DashboardPage() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">{l.name}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {l.company} · {l.agent || "Unassigned"}
+                        {l.company} · {l.assigned_agent_name || l.agent || "Unassigned"}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {l.status !== "contacted" && l.status !== "won" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs rounded-lg text-blue-500 hover:text-blue-400 hover:bg-blue-500/10 border-blue-500/30"
+                        onClick={() => handleUpdateLeadStatus(l.id, "contacted")}
+                      >
+                        <Mail className="h-3 w-3 mr-1" /> Contacted
+                      </Button>
+                    ) : null}
                     {l.status !== "won" ? (
                       <Button
                         size="sm"
