@@ -14,10 +14,10 @@ import { supabase } from "./supabase";
  * 1. Trigger Welcome Email
  */
 export const triggerWelcomeEmailFn = createServerFn({ method: "POST" })
-  .validator((data: { email: string; leadId?: string }) => data)
+  .validator((data: { email: string; leadId?: string; agentEmail?: string }) => data)
   .handler(async ({ data }) => {
     try {
-      await sendWelcomeEmail({ toEmail: data.email });
+      await sendWelcomeEmail({ toEmail: data.email, agentEmail: data.agentEmail });
 
       if (data.leadId) {
         await supabase.from("emails_sent").insert({
@@ -120,24 +120,26 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       let leadId = data.leadId;
-      let realAgentEmail = data.agentEmail || "";
+      const cleanLeadEmail = (data.leadEmail || "").trim().toLowerCase();
+      let realAgentEmail = (data.agentEmail || "").trim();
 
-      // 1. Look up lead in Supabase leads table to find assigned agent email
-      const { data: existingLead } = await supabase
+      // 1. Case-insensitive lookup for existing lead in Supabase leads table
+      const { data: leadRows } = await supabase
         .from("leads")
-        .select("id, assigned_agent_name, agent")
-        .eq("email", data.leadEmail)
-        .single();
+        .select("id, assigned_agent_name, agent, email")
+        .ilike("email", cleanLeadEmail);
+
+      const existingLead = leadRows && leadRows.length > 0 ? leadRows[0] : null;
 
       if (existingLead) {
         if (existingLead.id) leadId = existingLead.id;
         const agentField = existingLead.assigned_agent_name || existingLead.agent;
-        if (agentField) {
-          realAgentEmail = agentField;
+        if (agentField && agentField !== "Unassigned" && agentField.trim() !== "") {
+          realAgentEmail = agentField.trim();
         }
       }
 
-      if (!realAgentEmail || realAgentEmail === "Unassigned") {
+      if (!realAgentEmail || realAgentEmail === "Unassigned" || !realAgentEmail.includes("@")) {
         realAgentEmail = "garryamelia6265@gmail.com";
       }
 
@@ -149,21 +151,24 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         meetingTime: data.time,
       });
 
-      // 3. Ensure lead exists in Supabase leads table with status = 'meeting'
-      if (!leadId) {
+      // 3. Update existing lead or create only if truly new
+      if (leadId) {
+        await supabase
+          .from("leads")
+          .update({ status: "meeting", assigned_agent_name: realAgentEmail })
+          .eq("id", leadId);
+      } else {
         const { data: newLead } = await supabase
           .from("leads")
           .insert({
             name: data.leadName || data.leadEmail.split("@")[0],
-            email: data.leadEmail,
+            email: cleanLeadEmail,
             status: "meeting",
             assigned_agent_name: realAgentEmail,
           })
           .select("id")
           .single();
         leadId = newLead?.id;
-      } else {
-        await supabase.from("leads").update({ status: "meeting" }).eq("id", leadId);
       }
 
       // 4. Log confirmation email in emails_sent

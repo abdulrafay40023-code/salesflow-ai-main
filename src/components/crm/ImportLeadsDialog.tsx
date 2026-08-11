@@ -188,9 +188,9 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
         import("@/lib/server-actions").then(({ triggerWelcomeEmailFn }) => {
           inserted.forEach((item) => {
             if (item.email && item.email.includes("@")) {
-              triggerWelcomeEmailFn({ data: { email: item.email, leadId: item.id } }).catch((err) =>
-                console.log("Welcome email send notice:", err)
-              );
+              triggerWelcomeEmailFn({
+                data: { email: item.email, leadId: item.id, agentEmail: currentAgent },
+              }).catch((err) => console.log("Welcome email send notice:", err));
             }
           });
         });

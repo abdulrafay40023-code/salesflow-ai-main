@@ -22,9 +22,15 @@ const SITE_URL = "https://salesflow-ai-main.vercel.app";
  */
 export async function sendWelcomeEmail({
   toEmail,
+  agentEmail,
 }: {
   toEmail: string;
+  agentEmail?: string;
 }) {
+  const bookingUrl = agentEmail
+    ? `${SITE_URL}/book?email=${encodeURIComponent(toEmail)}&agent=${encodeURIComponent(agentEmail)}`
+    : `${SITE_URL}/book?email=${encodeURIComponent(toEmail)}`;
+
   const mailOptions = {
     from: `"Nexa CRM" <${GMAIL_USER}>`,
     to: toEmail,
@@ -40,7 +46,7 @@ export async function sendWelcomeEmail({
           <p>Thank you for reaching out to us. We have received your information and are excited to assist you with your sales and business goals.</p>
           <p>Our team is reviewing your details to provide you with the best tailored solution.</p>
           <div style="margin: 30px 0; text-align: center;">
-            <a href="${SITE_URL}/book" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+            <a href="${bookingUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
               Book a Meeting Slot Now
             </a>
           </div>
