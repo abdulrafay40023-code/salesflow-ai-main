@@ -120,7 +120,7 @@ function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [tab, setTab] = useState<"agents" | "leads" | "emails">("agents");
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<{ name: string; email: string } | null>(null);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
 
@@ -480,7 +480,7 @@ function AdminPage() {
                   return (
                     <div
                       key={a.name}
-                      onClick={() => setSelectedAgent(a.email !== "—" ? a.email : a.name)}
+                      onClick={() => setSelectedAgent({ name: a.name, email: a.email })}
                       className="group cursor-pointer rounded-xl border border-white/10 bg-white/5 p-5 shadow-inner hover:bg-white/10 hover:border-violet-500/50 transition-all"
                     >
                       <div className="flex items-center gap-3 mb-4">
@@ -651,9 +651,11 @@ function AdminPage() {
               <div>
                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
                   <UserCheck className="h-5 w-5 text-violet-400" />
-                  Agent Workspace: <span className="text-violet-300">{selectedAgent}</span>
+                  Agent Workspace: <span className="text-violet-300">{selectedAgent.name}</span>
                 </h3>
-                <p className="text-xs text-white/40">Inspecting assigned leads and real-time activity for this agent</p>
+                <p className="text-xs text-white/40">
+                  {selectedAgent.email !== "—" ? selectedAgent.email : "Active Team Member"} · Inspecting assigned leads and real-time activity
+                </p>
               </div>
               <Button
                 variant="ghost"
@@ -666,11 +668,20 @@ function AdminPage() {
             </div>
 
             {(() => {
-              const agentLeads = leads.filter(
-                (l) =>
-                  (l.assigned_agent_name || l.agent || "").toLowerCase() === selectedAgent.toLowerCase() ||
-                  (l.assigned_agent_name || l.agent || "").toLowerCase().includes(selectedAgent.toLowerCase())
-              );
+              const emailLower = (selectedAgent.email || "").toLowerCase();
+              const nameLower = (selectedAgent.name || "").toLowerCase();
+              const usernameLower = emailLower.includes("@") ? emailLower.split("@")[0]! : "";
+
+              const agentLeads = leads.filter((l) => {
+                const assigned = (l.assigned_agent_name || l.agent || "").toLowerCase();
+                if (!assigned) return false;
+                return (
+                  (emailLower && (assigned === emailLower || assigned.includes(emailLower))) ||
+                  (nameLower && (assigned === nameLower || assigned.includes(nameLower))) ||
+                  (usernameLower && assigned.includes(usernameLower))
+                );
+              });
+
               return (
                 <div className="space-y-4">
                   <div className="grid grid-cols-3 gap-3 text-center">
@@ -679,7 +690,7 @@ function AdminPage() {
                       <p className="text-xl font-bold text-white">{agentLeads.length}</p>
                     </div>
                     <div className="rounded-xl bg-white/5 p-3">
-                      <p className="text-xs text-white/40">Contacted / Qualified</p>
+                      <p className="text-xs text-white/40">Approached / Contacted</p>
                       <p className="text-xl font-bold text-violet-300">
                         {agentLeads.filter((l) => l.status !== "new" && l.status !== "lost").length}
                       </p>
