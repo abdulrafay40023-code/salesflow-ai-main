@@ -71,10 +71,19 @@ function LeadsPage() {
   async function fetchLeads() {
     setLoading(true);
     try {
-      const { data } = await supabase
+      const isAdmin = !user || user.role === "admin" || user.email === "garryamelia6265@gmail.com";
+
+      let query = supabase
         .from("leads")
         .select("*")
         .order("created_at", { ascending: false });
+
+      // Working agent sees only their own imported leads
+      if (!isAdmin && user?.email) {
+        query = query.eq("assigned_agent_name", user.email);
+      }
+
+      const { data } = await query;
 
       if (data) {
         const mapped: Lead[] = data.map((l: DbLead) => ({
@@ -159,7 +168,7 @@ function LeadsPage() {
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
-            <ImportLeadsDialog />
+            <ImportLeadsDialog onImportDone={fetchLeads} />
           </div>
         }
       />

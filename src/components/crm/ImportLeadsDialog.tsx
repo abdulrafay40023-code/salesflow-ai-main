@@ -27,7 +27,7 @@ import * as XLSX from "xlsx";
 
 const columns = ["Name", "Company", "Email", "Phone", "Status", "Assigned Agent"];
 
-export function ImportLeadsDialog() {
+export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void } = {}) {
   const { user, addLeads } = useCrm();
   const [open, setOpen] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -108,7 +108,8 @@ export function ImportLeadsDialog() {
   }
 
   async function confirmImport() {
-    const currentAgent = user?.name || user?.email || "Admin Manager";
+    // IMPORTANT: Use email as the agent identifier (consistent with dashboard filter)
+    const currentAgent = user?.email || user?.name || "admin@nexa-crm.com";
     const seenEmails = new Set<string>();
 
     const created: Lead[] = [];
@@ -198,10 +199,12 @@ export function ImportLeadsDialog() {
       console.log("Database sync completed.");
     }
 
-    toast.success(`${created.length} leads imported successfully from your file!`);
-    setOpen(false);
-    setRows([]);
-    setFileName(null);
+      toast.success(`${created.length} leads imported successfully from your file!`);
+      setOpen(false);
+      setRows([]);
+      setFileName(null);
+      // Trigger instant refresh in parent component
+      if (typeof onImportDone === "function") onImportDone();
   }
 
   return (

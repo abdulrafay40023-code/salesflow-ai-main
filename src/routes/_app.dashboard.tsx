@@ -91,12 +91,21 @@ function DashboardPage() {
   async function fetchLive() {
     setLoading(true);
     try {
+      const isAdmin = !user || user.role === "admin" || user.email === "garryamelia6265@gmail.com";
+
+      let leadsQuery = supabase
+        .from("leads")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      // Working agent sees only their own leads
+      if (!isAdmin && user?.email) {
+        leadsQuery = leadsQuery.eq("assigned_agent_name", user.email);
+      }
+
       const [leadsRes, emailsRes, meetingsRes] = await Promise.allSettled([
-        supabase
-          .from("leads")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(100),
+        leadsQuery,
         supabase
           .from("emails_sent")
           .select("id,subject,status,sequence_type,sent_at")
