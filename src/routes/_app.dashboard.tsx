@@ -225,16 +225,19 @@ function DashboardPage() {
   const meetingsBooked = dbLeads.filter((l) => l.status === "meeting").length;
   const wonLeads = dbLeads.filter((l) => l.status === "won").length;
 
-  // Active uncompleted meetings from DB
-  const uncompletedMeetings = dbMeetings.filter((m) => !m.completed);
-  const meetingsToday = uncompletedMeetings.length || (meetingsBooked > 0 ? 1 : 0);
+  // Active uncompleted meetings scheduled strictly for TODAY (local date match)
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
 
-  // Email stats from Supabase
-  const emailSent = dbEmails.filter((e) => e.status === "sent" || e.status === "opened").length;
-  const emailReplied = dbEmails.filter((e) => e.status === "opened" || e.type === "meeting_confirmed").length;
-  const emailPending = dbEmails.filter((e) => e.status === "pending").length;
-  const emailNoResp = dbEmails.filter((e) => e.status === "failed").length;
-  const emailTotal = dbEmails.length || 1;
+  const uncompletedMeetings = dbMeetings.filter((m) => !m.completed);
+  const todayMeetings = uncompletedMeetings.filter((m) => {
+    const mDate = new Date(m.scheduled_time);
+    return mDate >= todayStart && mDate <= todayEnd;
+  });
+
+  const meetingsToday = todayMeetings.length;
 
   // Latest 5 leads from Supabase
   const latestLeads = dbLeads.slice(0, 5);
@@ -271,26 +274,13 @@ function DashboardPage() {
         }
       />
 
-      {/* Row 1 Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Leads" value={total} icon={Users} hint="in database" />
-        <StatCard label="Contacted" value={contacted} icon={Mail} tone="info" hint="welcome email sent" />
-        <StatCard label="Meetings Booked" value={meetingsBooked} icon={CalendarCheck} tone="warning" hint="responses" />
-        <StatCard label="Won Deals" value={wonLeads} icon={CheckCircle2} tone="success" hint="closed" />
-      </div>
-
-      {/* Row 2 Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Meetings Today" value={meetingsToday} icon={CalendarCheck} tone="primary" hint={meetingsToday > 0 ? "active scheduled" : "completed"} />
-        <StatCard
-          label="Follow-ups Open"
-          value={0}
-          icon={Clock}
-          tone="warning"
-          hint="scheduled"
-        />
-        <StatCard label="Emails Sent" value={emailSent} icon={ActivityIcon} tone="info" hint="via automation" />
-        <StatCard label="Reminders Due" value={0} icon={BellRing} tone="destructive" hint="next 7 days" />
+      {/* Primary Metrics Grid (5 Clean Cards) */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <StatCard label="Total Leads" value={total} icon={Users} hint="in workspace" />
+        <StatCard label="Contacted" value={contacted} icon={Mail} tone="info" hint="calls & outreach" />
+        <StatCard label="Meetings Booked" value={meetingsBooked} icon={CalendarCheck} tone="warning" hint="total booked" />
+        <StatCard label="Meetings Today" value={meetingsToday} icon={CalendarCheck} tone="primary" hint="scheduled today" />
+        <StatCard label="Won Deals" value={wonLeads} icon={CheckCircle2} tone="success" hint="closed won" />
       </div>
 
       {/* Active Meetings Banner — Mark Done */}

@@ -27,7 +27,6 @@ import { useCrm } from "@/lib/crm-store";
 const primaryNav = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Leads", url: "/leads", icon: Users },
-  { title: "Follow-ups", url: "/follow-ups", icon: CalendarClock },
   { title: "Email Automation", url: "/email", icon: Mail },
   { title: "Reports", url: "/reports", icon: BarChart3 },
 ];

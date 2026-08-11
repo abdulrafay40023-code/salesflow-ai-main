@@ -142,32 +142,19 @@ function EmailPage() {
 
   const counts = useMemo(() => {
     const list = emails || [];
-    const totalOutreachLeadsCount = Math.max(
-      new Set(list.map((e) => e.lead_id || e.lead_email).filter(Boolean)).size,
-      leads.length
-    );
-
-    const repliedLeadsCount = (leads || []).filter(
-      (l) => l.status === "meeting" || l.status === "won" || (l.email && repliedLeadKeys.has(l.email.toLowerCase()))
-    ).length || (repliedLeadKeys.size > 0 ? 1 : 0);
-
-    const noResponseCount = Math.max(0, totalOutreachLeadsCount - repliedLeadsCount);
-
     return {
-      sent: list.length,
-      pending: list.filter((e) => e?.status === "pending").length,
-      replied: repliedLeadsCount,
-      none: noResponseCount,
+      welcome: list.filter((e) => e?.type === "welcome").length,
+      bookingConfirmed: list.filter((e) => e?.type === "meeting_confirmed").length,
+      reminders: list.filter((e) => e?.type === "reminder" || e?.type === "followup_24h" || e?.type === "followup_48h" || e?.type === "reminder_24h" || e?.type === "reminder_1h").length,
+      meetingNow: list.filter((e) => e?.type === "meeting_now" || e?.type === "starting_now" || (e?.subject && e.subject.toLowerCase().includes("starting now"))).length,
     };
-  }, [emails, leads, repliedLeadKeys]);
+  }, [emails]);
 
   function filterEmails(tab: string) {
     const list = emails || [];
     if (tab === "all") return list;
     if (tab === "sent") return list.filter((e) => e?.status === "sent" || e?.type === "welcome");
-    if (tab === "pending") return list.filter((e) => e?.status === "pending");
     if (tab === "replied") return list.filter(isReply);
-    if (tab === "no-response") return list.filter((e) => !isReply(e) && e?.status !== "pending" && e?.status !== "failed");
     return list;
   }
 
@@ -259,10 +246,10 @@ function EmailPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Sent"        value={counts.sent}    icon={Send}        />
-        <StatCard label="Pending"     value={counts.pending} icon={Clock}       tone="warning"     />
-        <StatCard label="Replied"     value={counts.replied} icon={CheckCircle2} tone="success"    />
-        <StatCard label="No response" value={counts.none}    icon={MailQuestion} tone="destructive"/>
+        <StatCard label="Welcome Emails" value={counts.welcome} icon={Sparkles} tone="primary" hint="sent on import" />
+        <StatCard label="Booking Confirmations" value={counts.bookingConfirmed} icon={CheckCircle2} tone="success" hint="meeting confirmed" />
+        <StatCard label="Meeting Reminders" value={counts.reminders} icon={Clock} tone="warning" hint="24h & 1h nudges" />
+        <StatCard label="Meeting Starting NOW" value={counts.meetingNow} icon={Send} tone="info" hint="live session alerts" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
