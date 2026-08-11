@@ -1,14 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-  Activity as ActivityIcon,
-  BellRing,
   CalendarCheck,
   CheckCircle2,
-  Clock,
-  Inbox,
   Mail,
   RefreshCw,
-  Sparkles,
   TrendingUp,
   UserPlus,
   Users,
@@ -68,6 +63,7 @@ type DbMeeting = {
   title: string;
   scheduled_time: string;
   completed: boolean;
+  lead_id?: string;
 };
 
 function EmptyState({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
@@ -80,7 +76,7 @@ function EmptyState({ icon: Icon, text }: { icon: React.ElementType; text: strin
 }
 
 function DashboardPage() {
-  const { user, visibleFollowUps } = useCrm();
+  const { user } = useCrm();
 
   const [dbLeads, setDbLeads] = useState<DbLead[]>([]);
   const [dbEmails, setDbEmails] = useState<DbEmailLog[]>([]);
@@ -239,13 +235,19 @@ function DashboardPage() {
 
   const meetingsToday = todayMeetings.length;
 
+  // Email stats (recomputed from dbEmails)
+  const emailSent = dbEmails.filter((e) => e.status === "sent" || e.status === "opened").length;
+  const emailPending = dbEmails.filter((e) => e.status === "pending").length;
+  const emailNoResp = dbEmails.filter((e) => e.status === "failed").length;
+  const emailTotal = dbEmails.length || 1;
+
   // Latest 5 leads from Supabase
   const latestLeads = dbLeads.slice(0, 5);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Good afternoon, ${user?.name.split(" ")[0] ?? "there"}`}
+        title={`Good afternoon, ${user?.name?.split(" ")[0] ?? "there"}`}
         subtitle={
           user?.role === "agent"
             ? "Here is everything assigned to you today."
@@ -422,7 +424,7 @@ function DashboardPage() {
 
           {latestLeads.length === 0 ? (
             <EmptyState
-              icon={Inbox}
+              icon={Users}
               text="No leads in database yet. Click 'Import Leads' to add your first lead."
             />
           ) : (
@@ -473,7 +475,7 @@ function DashboardPage() {
         <div className="panel overflow-hidden">
           <div className="mesh-bg bg-primary/90 p-5 text-primary-foreground">
             <div className="flex items-center gap-2">
-              <Sparkles className="size-4" />
+              <CalendarCheck className="size-4" />
               <h2 className="font-display text-base font-bold">AI Automation</h2>
             </div>
             <p className="mt-1 text-xs text-primary-foreground/80">

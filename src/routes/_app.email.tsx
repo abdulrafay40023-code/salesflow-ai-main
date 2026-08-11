@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
   BadgeCheck, Bot, CheckCircle2, Clock,
-  Inbox, Mail, MailQuestion, RefreshCw, Send, Sparkles, Calendar,
+  RefreshCw, Send, Sparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/crm/Topbar";
@@ -296,7 +296,7 @@ function EmailPage() {
                 <TabsContent key={t} value={t} className="mt-4">
                   {rows.length === 0 ? (
                     <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
-                      <Inbox className="h-8 w-8 opacity-30" />
+                      <Send className="h-8 w-8 opacity-30" />
                       <p className="text-sm">No email records yet. Import leads to send welcome emails.</p>
                     </div>
                   ) : (
@@ -343,7 +343,7 @@ function EmailPage() {
                                       onClick={() => handleSendBookingLink(e.lead_id, lead?.email || "")}
                                       title="Send Booking Form Email"
                                     >
-                                      <Calendar className="h-3.5 w-3.5 mr-1" /> Booking Form
+                                      <Clock className="h-3.5 w-3.5 mr-1" /> Booking Form
                                     </Button>
                                     <Button
                                       size="sm"
@@ -375,7 +375,7 @@ function EmailPage() {
           <p className="text-sm text-muted-foreground">Today's automated activity</p>
           {timelineItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-10 text-center text-muted-foreground">
-              <Mail className="h-8 w-8 opacity-30" />
+              <Sparkles className="h-8 w-8 opacity-30" />
               <p className="text-sm">No automation activity yet. Import leads to start automation.</p>
             </div>
           ) : (
