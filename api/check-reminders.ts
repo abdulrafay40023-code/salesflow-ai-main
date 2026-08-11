@@ -98,7 +98,7 @@ export default async function handler(req: any, res: any) {
 
     const { data: meetings, error } = await supabase
       .from("meetings")
-      .select("id, lead_id, scheduled_time, reminder_24h_sent, reminder_1h_sent, completed")
+      .select("id, lead_id, title, scheduled_time, reminder_24h_sent, reminder_1h_sent, completed")
       .eq("completed", false);
 
     if (error) {
