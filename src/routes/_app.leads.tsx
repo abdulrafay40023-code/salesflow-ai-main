@@ -71,7 +71,7 @@ function LeadsPage() {
   async function fetchLeads() {
     setLoading(true);
     try {
-      const isAdmin = !user || user.role === "admin" || user.email === "garryamelia6265@gmail.com";
+      const isAdmin = Boolean(user && (user.role === "admin" || user.email === "garryamelia6265@gmail.com"));
 
       let query = supabase
         .from("leads")
@@ -79,8 +79,14 @@ function LeadsPage() {
         .order("created_at", { ascending: false });
 
       // Working agent sees only their own imported leads
-      if (!isAdmin && user?.email) {
-        query = query.eq("assigned_agent_name", user.email);
+      if (!isAdmin) {
+        const agentEmail = user?.email || "";
+        const agentName = user?.name || "";
+        if (agentEmail || agentName) {
+          query = query.or(`assigned_agent_name.eq.${agentEmail},assigned_agent_name.eq.${agentName}`);
+        } else {
+          query = query.eq("id", "00000000-0000-0000-0000-000000000000");
+        }
       }
 
       const { data } = await query;
@@ -100,6 +106,8 @@ function LeadsPage() {
           value: l.value || 0,
         }));
         setDbLeads(mapped);
+      } else {
+        setDbLeads([]);
       }
     } catch (e) {
       console.error("Leads fetch error:", e);
@@ -118,7 +126,7 @@ function LeadsPage() {
     return () => {
       sub.unsubscribe();
     };
-  }, []);
+  }, [user?.email, user?.role, user?.name]);
 
   const agentOptions = useMemo(
     () => Array.from(new Set(dbLeads.map((l) => l.agent).filter(Boolean))),

@@ -91,7 +91,7 @@ function DashboardPage() {
   async function fetchLive() {
     setLoading(true);
     try {
-      const isAdmin = !user || user.role === "admin" || user.email === "garryamelia6265@gmail.com";
+      const isAdmin = Boolean(user && (user.role === "admin" || user.email === "garryamelia6265@gmail.com"));
 
       let leadsQuery = supabase
         .from("leads")
@@ -100,37 +100,67 @@ function DashboardPage() {
         .limit(100);
 
       // Working agent sees only their own leads
-      if (!isAdmin && user?.email) {
-        leadsQuery = leadsQuery.eq("assigned_agent_name", user.email);
+      if (!isAdmin) {
+        const agentEmail = user?.email || "";
+        const agentName = user?.name || "";
+        if (agentEmail || agentName) {
+          leadsQuery = leadsQuery.or(`assigned_agent_name.eq.${agentEmail},assigned_agent_name.eq.${agentName}`);
+        } else {
+          leadsQuery = leadsQuery.eq("id", "00000000-0000-0000-0000-000000000000");
+        }
       }
 
       const [leadsRes, emailsRes, meetingsRes] = await Promise.allSettled([
         leadsQuery,
         supabase
           .from("emails_sent")
-          .select("id,subject,status,sequence_type,sent_at")
+          .select("id,subject,status,sequence_type,sent_at,lead_id,lead_email")
           .order("sent_at", { ascending: false })
           .limit(50),
         supabase
           .from("meetings")
-          .select("id,title,scheduled_time,completed")
+          .select("id,title,scheduled_time,completed,lead_id")
           .eq("completed", false)
           .order("scheduled_time", { ascending: true })
           .limit(20),
       ]);
 
+      let fetchedLeads: DbLead[] = [];
       if (leadsRes.status === "fulfilled" && leadsRes.value.data) {
-        setDbLeads(leadsRes.value.data as DbLead[]);
+        fetchedLeads = leadsRes.value.data as DbLead[];
+        setDbLeads(fetchedLeads);
+      } else {
+        setDbLeads([]);
       }
+
       if (emailsRes.status === "fulfilled" && emailsRes.value.data) {
-        const emails = emailsRes.value.data.filter(
+        let emails = (emailsRes.value.data as any[]).filter(
           (e: { sequence_type: string }) =>
             e.sequence_type !== "agent_presence" && e.sequence_type !== "agent_login",
         );
+
+        if (!isAdmin && fetchedLeads.length > 0) {
+          const leadIds = new Set(fetchedLeads.map((l) => l.id));
+          const leadEmails = new Set(fetchedLeads.map((l) => l.email));
+          emails = emails.filter(
+            (e) => leadIds.has(e.lead_id) || leadEmails.has(e.lead_email)
+          );
+        } else if (!isAdmin) {
+          emails = [];
+        }
+
         setDbEmails(emails as DbEmailLog[]);
       }
+
       if (meetingsRes.status === "fulfilled" && meetingsRes.value.data) {
-        setDbMeetings(meetingsRes.value.data as DbMeeting[]);
+        let meetings = meetingsRes.value.data as DbMeeting[];
+        if (!isAdmin && fetchedLeads.length > 0) {
+          const leadIds = new Set(fetchedLeads.map((l) => l.id));
+          meetings = meetings.filter((m) => m.lead_id && leadIds.has(m.lead_id));
+        } else if (!isAdmin) {
+          meetings = [];
+        }
+        setDbMeetings(meetings);
       }
     } catch (e) {
       console.error("Dashboard fetch error", e);
@@ -169,7 +199,7 @@ function DashboardPage() {
       meetingSub.unsubscribe();
       clearInterval(interval);
     };
-  }, []);
+  }, [user?.email, user?.role, user?.name]);
 
   async function handleUpdateLeadStatus(leadId: string, newStatus: string) {
     try {
