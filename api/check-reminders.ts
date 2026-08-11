@@ -23,7 +23,7 @@ async function sendEmail(to: string | string[], subject: string, html: string) {
   const recipients = Array.isArray(to) ? to.filter(Boolean) : [to].filter(Boolean);
   if (recipients.length === 0) return;
   await transporter.sendMail({
-    from: `"Nexa CRM Meetings" <${GMAIL_USER}>`,
+    from: `"Teals CRM Meetings" <${GMAIL_USER}>`,
     to: recipients.join(", "),
     subject,
     html,
@@ -46,7 +46,7 @@ function meetingNowHtml(meetingTime: string) {
       </div>
     </div>
     <div style="background:#f8fafc;padding:16px;text-align:center;font-size:12px;color:#94a3b8;border-radius:0 0 8px 8px">
-      © ${new Date().getFullYear()} Nexa CRM. All rights reserved.
+      © ${new Date().getFullYear()} Teals CRM. All rights reserved.
     </div>
   </div>`;
 }
@@ -63,7 +63,7 @@ function reminder1hHtml(meetingTime: string) {
       <p>Please prepare your notes and be ready on time.</p>
     </div>
     <div style="background:#f8fafc;padding:16px;text-align:center;font-size:12px;color:#94a3b8;border-radius:0 0 8px 8px">
-      © ${new Date().getFullYear()} Nexa CRM. All rights reserved.
+      © ${new Date().getFullYear()} Teals CRM. All rights reserved.
     </div>
   </div>`;
 }
@@ -80,7 +80,7 @@ function reminder24hHtml(meetingDate: string, meetingTime: string) {
       <p>Please review your materials and be prepared for the discussion.</p>
     </div>
     <div style="background:#f8fafc;padding:16px;text-align:center;font-size:12px;color:#94a3b8;border-radius:0 0 8px 8px">
-      © ${new Date().getFullYear()} Nexa CRM. All rights reserved.
+      © ${new Date().getFullYear()} Teals CRM. All rights reserved.
     </div>
   </div>`;
 }
@@ -223,7 +223,7 @@ export default async function handler(req: any, res: any) {
         // Follow-up 1 (24 Hours after import)
         if (hoursSinceImport >= 24 && !sentTypes.has("followup_24h")) {
           const mailOptions = {
-            from: `"Nexa CRM" <${GMAIL_USER}>`,
+            from: `"Teals CRM" <${GMAIL_USER}>`,
             to: lead.email,
             subject: "Quick Follow-up: Checking in on your inquiry",
             html: `
@@ -256,9 +256,9 @@ export default async function handler(req: any, res: any) {
         // Follow-up 2 (48 Hours after import)
         else if (hoursSinceImport >= 48 && !sentTypes.has("followup_48h")) {
           const mailOptions = {
-            from: `"Nexa CRM" <${GMAIL_USER}>`,
+            from: `"Teals CRM" <${GMAIL_USER}>`,
             to: lead.email,
-            subject: "Following up on our previous note — Nexa CRM",
+            subject: "Following up on our previous note — Teals CRM",
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; background-color: #ffffff;">
                 <div style="padding: 24px; color: #334155; line-height: 1.6;">
@@ -278,7 +278,7 @@ export default async function handler(req: any, res: any) {
           await supabase.from("emails_sent").insert({
             lead_id: lead.id,
             lead_email: lead.email,
-            subject: "Following up on our previous note — Nexa CRM",
+            subject: "Following up on our previous note — Teals CRM",
             sequence_type: "followup_48h",
             status: "sent",
             sent_at: now.toISOString(),

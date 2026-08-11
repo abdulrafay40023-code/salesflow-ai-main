@@ -10,7 +10,7 @@ import { confirmMeetingBookingFn } from "@/lib/server-actions";
 export const Route = createFileRoute("/book")({
   head: () => ({
     meta: [
-      { title: "Schedule a Sales Meeting — Nexa CRM" },
+      { title: "Schedule a Sales Meeting — Teals CRM" },
       { name: "description", content: "Select your preferred date & time for a meeting with our sales team." },
     ],
   }),
@@ -120,7 +120,7 @@ function BookingPage() {
           <span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground">
             <Sparkles className="size-4.5" />
           </span>
-          <span className="font-display text-xl font-bold">Nexa CRM</span>
+          <span className="font-display text-xl font-bold">Teals CRM</span>
         </div>
 
         {booked ? (

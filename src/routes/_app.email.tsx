@@ -25,9 +25,9 @@ import {
 export const Route = createFileRoute("/_app/email")({
   head: () => ({
     meta: [
-      { title: "AI Email Automation — Nexa CRM" },
+      { title: "AI Email Automation — Teals CRM" },
       { name: "description", content: "Welcome emails, reminder sequences, delivery history and AI automation timeline." },
-      { property: "og:title", content: "AI Email Automation — Nexa CRM" },
+      { property: "og:title", content: "AI Email Automation — Teals CRM" },
     ],
   }),
   component: EmailPage,

@@ -32,13 +32,13 @@ export async function sendWelcomeEmail({
     : `${SITE_URL}/book?email=${encodeURIComponent(toEmail)}`;
 
   const mailOptions = {
-    from: `"Nexa CRM" <${GMAIL_USER}>`,
+    from: `"Teals CRM" <${GMAIL_USER}>`,
     to: toEmail,
-    subject: "Welcome to Nexa CRM - Automated Sales Solution",
+    subject: "Welcome to Teals CRM - Automated Sales Solution",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded: 12px; background-color: #ffffff;">
         <div style="background-color: #4f46e5; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Nexa CRM</h1>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Teals CRM</h1>
           <p style="color: #e0e7ff; margin: 4px 0 0 0; font-size: 14px;">AI-Powered Sales Workspace</p>
         </div>
         <div style="padding: 24px; color: #334155; line-height: 1.6;">
@@ -53,7 +53,7 @@ export async function sendWelcomeEmail({
           <p style="font-size: 13px; color: #64748b;">If you have any questions, feel free to reply directly to this email.</p>
         </div>
         <div style="background-color: #f8fafc; padding: 16px; text-align: center; font-size: 12px; color: #94a3b8; border-radius: 0 0 8px 8px;">
-          &copy; ${new Date().getFullYear()} Nexa CRM. All rights reserved.
+          &copy; ${new Date().getFullYear()} Teals CRM. All rights reserved.
         </div>
       </div>
     `,
@@ -74,14 +74,14 @@ export async function sendReminderEmail({
 }) {
   const subjects = [
     "Quick Follow-up: Checking in on your inquiry",
-    "Following up on our previous note — Nexa CRM",
+    "Following up on our previous note — Teals CRM",
     "Tailored sales automation for your team",
     "Final follow-up regarding your inquiry",
   ];
   const subject = subjects[reminderNumber - 1] || "Quick Follow-up regarding your inquiry";
 
   const mailOptions = {
-    from: `"Nexa CRM" <${GMAIL_USER}>`,
+    from: `"Teals CRM" <${GMAIL_USER}>`,
     to: toEmail,
     subject: subject,
     html: `
@@ -121,7 +121,7 @@ export async function sendBookingFormEmail({
     : `${SITE_URL}/book?email=${encodeURIComponent(toEmail)}`;
 
   const mailOptions = {
-    from: `"Nexa CRM" <${GMAIL_USER}>`,
+    from: `"Teals CRM" <${GMAIL_USER}>`,
     to: toEmail,
     subject: "Meeting Booking Link — Select Your Convenient Slot",
     html: `
@@ -163,7 +163,7 @@ export async function sendMeetingConfirmationEmail({
   const recipients = Array.from(new Set([leadEmail, agentEmail].filter(Boolean))).join(", ");
 
   const mailOptions = {
-    from: `"Nexa CRM Meetings" <${GMAIL_USER}>`,
+    from: `"Teals CRM Meetings" <${GMAIL_USER}>`,
     to: recipients,
     subject: `✅ Meeting Confirmed: ${meetingDate} at ${meetingTime}`,
     html: `
@@ -204,7 +204,7 @@ export async function send1DayMeetingReminderEmail({
   const recipients = Array.from(new Set([leadEmail, agentEmail].filter(Boolean))).join(", ");
 
   const mailOptions = {
-    from: `"Nexa CRM Reminders" <${GMAIL_USER}>`,
+    from: `"Teals CRM Reminders" <${GMAIL_USER}>`,
     to: recipients,
     subject: `📌 24-Hour Reminder: Upcoming Sales Meeting Tomorrow (${meetingTime})`,
     html: `
@@ -224,7 +224,7 @@ export async function send1DayMeetingReminderEmail({
           <p style="font-size: 13px; color: #64748b;">Need to reschedule? Reply directly to this email.</p>
         </div>
         <div style="background-color: #f8fafc; padding: 16px; text-align: center; font-size: 12px; color: #94a3b8; border-radius: 0 0 8px 8px;">
-          &copy; ${new Date().getFullYear()} Nexa CRM. All rights reserved.
+          &copy; ${new Date().getFullYear()} Teals CRM. All rights reserved.
         </div>
       </div>
     `,
@@ -248,7 +248,7 @@ export async function send1HourMeetingReminderEmail({
   const recipients = Array.from(new Set([leadEmail, agentEmail].filter(Boolean))).join(", ");
 
   const mailOptions = {
-    from: `"Nexa CRM Reminders" <${GMAIL_USER}>`,
+    from: `"Teals CRM Reminders" <${GMAIL_USER}>`,
     to: recipients,
     subject: `⏰ 1-Hour Reminder: Your Sales Meeting Starts in 60 Minutes (${meetingTime})`,
     html: `
@@ -266,7 +266,7 @@ export async function send1HourMeetingReminderEmail({
           <p>Please ensure you are ready to join the session on time.</p>
         </div>
         <div style="background-color: #f8fafc; padding: 16px; text-align: center; font-size: 12px; color: #94a3b8; border-radius: 0 0 8px 8px;">
-          &copy; ${new Date().getFullYear()} Nexa CRM. All rights reserved.
+          &copy; ${new Date().getFullYear()} Teals CRM. All rights reserved.
         </div>
       </div>
     `,
@@ -290,7 +290,7 @@ export async function sendMeetingStartedNowEmail({
   const recipients = Array.from(new Set([leadEmail, agentEmail].filter(Boolean))).join(", ");
 
   const mailOptions = {
-    from: `"Nexa CRM Live Session" <${GMAIL_USER}>`,
+    from: `"Teals CRM Live Session" <${GMAIL_USER}>`,
     to: recipients,
     subject: `🔔 Meeting Time Arrived! Your Sales Session is Starting Now (${meetingTime})`,
     html: `
@@ -307,10 +307,10 @@ export async function sendMeetingStartedNowEmail({
             <p style="margin: 4px 0; color: #065f46;"><strong>Participants:</strong> ${leadEmail} & Sales Representative (${agentEmail})</p>
           </div>
           <p>Please join the meeting or connect with your sales representative now.</p>
-          <p style="font-size: 13px; color: #64748b;">Thank you for choosing Nexa CRM for your sales automation.</p>
+          <p style="font-size: 13px; color: #64748b;">Thank you for choosing Teals CRM for your sales automation.</p>
         </div>
         <div style="background-color: #f8fafc; padding: 16px; text-align: center; font-size: 12px; color: #94a3b8; border-radius: 0 0 8px 8px;">
-          &copy; ${new Date().getFullYear()} Nexa CRM. All rights reserved.
+          &copy; ${new Date().getFullYear()} Teals CRM. All rights reserved.
         </div>
       </div>
     `,

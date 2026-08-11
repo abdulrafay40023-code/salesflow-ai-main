@@ -27,7 +27,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 export const Route = createFileRoute("/_app/admin")({
   head: () => ({
     meta: [
-      { title: "Admin Panel — Nexa CRM" },
+      { title: "Admin Panel — Teals CRM" },
       {
         name: "description",
         content: "Live admin dashboard — agent activity, leads, emails, pipeline analytics.",

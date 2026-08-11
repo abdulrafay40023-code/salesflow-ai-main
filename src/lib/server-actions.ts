@@ -23,7 +23,7 @@ export const triggerWelcomeEmailFn = createServerFn({ method: "POST" })
         await supabase.from("emails_sent").insert({
           lead_id: data.leadId,
           lead_email: data.email,
-          subject: "Welcome to Nexa CRM",
+          subject: "Welcome to Teals CRM",
           sequence_type: "welcome",
           status: "sent",
           sent_at: new Date().toISOString(),

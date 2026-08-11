@@ -42,7 +42,7 @@ type CrmContextValue = {
 
 const CrmContext = createContext<CrmContextValue | null>(null);
 
-const STORAGE_KEY = "nexa-crm-session";
+const STORAGE_KEY = "teals-crm-session";
 
 const defaultAdminUser: SessionUser = {
   name: "Garry Amelia",
@@ -71,7 +71,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       } else {
         const { data: signUpData } = await supabase.auth.signUp({
           email: u.email,
-          password: "NexaAgentPassword123!",
+          password: "TealsAgentPassword123!",
         });
         userId = signUpData?.user?.id ?? null;
       }
@@ -104,7 +104,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       } else {
         syncProfileToSupabase(defaultAdminUser);
       }
-      const t = window.localStorage.getItem("nexa-crm-theme");
+      const t = window.localStorage.getItem("teals-crm-theme");
       if (t === "dark" || t === "light") setTheme(t);
     } catch {
       /* ignore */
@@ -152,7 +152,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
     try {
-      window.localStorage.setItem("nexa-crm-theme", theme);
+      window.localStorage.setItem("teals-crm-theme", theme);
     } catch {
       /* ignore */
     }

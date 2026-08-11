@@ -18,9 +18,9 @@ import { supabase } from "@/lib/supabase";
 export const Route = createFileRoute("/_app/settings")({
   head: () => ({
     meta: [
-      { title: "Settings — Nexa CRM" },
+      { title: "Settings — Teals CRM" },
       { name: "description", content: "Manage your profile, team members, roles, notifications, email and AI settings." },
-      { property: "og:title", content: "Settings — Nexa CRM" },
+      { property: "og:title", content: "Settings — Teals CRM" },
     ],
   }),
   component: SettingsPage,
@@ -102,7 +102,7 @@ function SettingsPage() {
                 <p className="font-display text-lg font-bold">{user?.name}</p>
                 {/* Only show "Admin" for admin, nothing for regular users */}
                 {isAdmin && (
-                  <p className="text-sm text-muted-foreground">Admin · Nexa CRM</p>
+                  <p className="text-sm text-muted-foreground">Admin · Teals CRM</p>
                 )}
               </div>
             </div>

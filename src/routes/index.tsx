@@ -7,13 +7,13 @@ import { signInWithGoogle } from "@/lib/supabase";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Sign in — Nexa CRM | AI Sales Workspace" },
+      { title: "Sign in — Teals CRM | AI Sales Workspace" },
       {
         name: "description",
         content:
-          "Sign in to Nexa CRM, the AI-powered sales workspace for lead management, follow-ups and automated outreach.",
+          "Sign in to Teals CRM, the AI-powered sales workspace for lead management, follow-ups and automated outreach.",
       },
-      { property: "og:title", content: "Sign in — Nexa CRM" },
+      { property: "og:title", content: "Sign in — Teals CRM" },
       {
         property: "og:description",
         content: "AI-powered CRM for modern sales teams: leads, follow-ups, and automated email.",
@@ -52,7 +52,7 @@ function LoginPage() {
           <span className="grid size-9 place-items-center rounded-xl bg-primary-foreground/15">
             <Sparkles className="size-4.5" />
           </span>
-          <span className="font-display text-lg font-bold">Nexa CRM</span>
+          <span className="font-display text-lg font-bold">Teals CRM</span>
         </div>
 
         <div className="max-w-lg">
@@ -89,7 +89,7 @@ function LoginPage() {
             <span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground">
               <Sparkles className="size-4.5" />
             </span>
-            <span className="font-display text-lg font-bold text-white">Nexa CRM</span>
+            <span className="font-display text-lg font-bold text-white">Teals CRM</span>
           </div>
 
           <div>

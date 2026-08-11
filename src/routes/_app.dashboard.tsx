@@ -22,13 +22,13 @@ import { supabase } from "@/lib/supabase";
 export const Route = createFileRoute("/_app/dashboard")({
   head: () => ({
     meta: [
-      { title: "Dashboard — Nexa CRM" },
+      { title: "Dashboard — Teals CRM" },
       {
         name: "description",
         content:
           "Pipeline overview: total leads, new leads, follow-ups, meetings today, email status and AI automation activity.",
       },
-      { property: "og:title", content: "Dashboard — Nexa CRM" },
+      { property: "og:title", content: "Dashboard — Teals CRM" },
       {
         property: "og:description",
         content: "Live pipeline overview for your sales team, powered by AI automation.",

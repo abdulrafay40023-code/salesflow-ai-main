@@ -53,7 +53,7 @@ export function AppSidebar() {
             <Sparkles className="size-4.5" />
           </div>
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-            <p className="truncate font-display text-sm font-bold">Nexa CRM</p>
+            <p className="truncate font-display text-sm font-bold">Teals CRM</p>
             <p className="truncate text-xs text-muted-foreground">AI Sales Suite</p>
           </div>
         </div>

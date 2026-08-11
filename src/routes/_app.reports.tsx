@@ -11,9 +11,9 @@ import { supabase } from "@/lib/supabase";
 export const Route = createFileRoute("/_app/reports")({
   head: () => ({
     meta: [
-      { title: "Reports & Analytics — Nexa CRM" },
+      { title: "Reports & Analytics — Teals CRM" },
       { name: "description", content: "Lead conversion, response rate, follow-up success, agent performance." },
-      { property: "og:title", content: "Reports & Analytics — Nexa CRM" },
+      { property: "og:title", content: "Reports & Analytics — Teals CRM" },
     ],
   }),
   component: ReportsPage,

@@ -109,7 +109,7 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
 
   async function confirmImport() {
     // IMPORTANT: Use email as the agent identifier (consistent with dashboard filter)
-    const currentAgent = user?.email || user?.name || "admin@nexa-crm.com";
+    const currentAgent = user?.email || user?.name || "admin@teals-crm.com";
     const seenEmails = new Set<string>();
 
     const created: Lead[] = [];
