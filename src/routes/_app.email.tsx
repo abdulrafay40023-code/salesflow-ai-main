@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { useCrm } from "@/lib/crm-store";
 import {
   triggerBookingFormEmailFn,
   triggerReminderEmailFn,
@@ -55,6 +56,8 @@ type DbEmailLog = {
 type DbLead = { id: string; name: string; company: string; email: string; status?: string };
 
 function EmailPage() {
+  const { user } = useCrm();
+  const isAdmin = user?.role === "admin";
   const [mounted, setMounted] = useState(false);
   const [emails, setEmails]   = useState<DbEmailLog[]>([]);
   const [leads, setLeads]     = useState<DbLead[]>([]);
@@ -68,25 +71,39 @@ function EmailPage() {
   async function fetchData() {
     setLoading(true);
     try {
+      let leadsQuery = supabase.from("leads").select("id,name,company,email,status,assigned_agent_name");
+      if (!isAdmin && user?.email) {
+        leadsQuery = leadsQuery.eq("assigned_agent_name", user.email);
+      }
       const [{ data: e }, { data: l }] = await Promise.all([
         supabase.from("emails_sent").select("id,lead_id,lead_email,subject,sequence_type,status,sent_at").order("sent_at", { ascending: false }),
-        supabase.from("leads").select("id,name,company,email,status"),
+        leadsQuery,
       ]);
+      if (l) setLeads(l as DbLead[]);
       if (e) {
-        const mapped = e
-          .filter((item: any) => item && item.sequence_type !== "agent_presence" && item.sequence_type !== "agent_login")
-          .map((item: any) => ({
-            id: item.id || `em-${Math.random()}`,
-            lead_id: item.lead_id || "",
-            lead_email: item.lead_email || "",
-            subject: item.subject || "",
-            type: item.sequence_type || "automation",
-            status: item.status || "sent",
-            sent_at: item.sent_at || "",
-          }));
+        // Filter emails: for agents, only show emails related to their leads
+        const agentLeadIds = new Set((l || []).map((lead: any) => lead.id).filter(Boolean));
+        const agentLeadEmails = new Set((l || []).map((lead: any) => (lead.email || "").toLowerCase()).filter(Boolean));
+        const filtered = e.filter((item: any) => {
+          if (!item) return false;
+          if (item.sequence_type === "agent_presence" || item.sequence_type === "agent_login") return false;
+          if (isAdmin) return true;
+          // For agents: only show emails linked to their leads
+          if (item.lead_id && agentLeadIds.has(item.lead_id)) return true;
+          if (item.lead_email && agentLeadEmails.has(item.lead_email.toLowerCase())) return true;
+          return false;
+        });
+        const mapped = filtered.map((item: any) => ({
+          id: item.id || `em-${Math.random()}`,
+          lead_id: item.lead_id || "",
+          lead_email: item.lead_email || "",
+          subject: item.subject || "",
+          type: item.sequence_type || "automation",
+          status: item.status || "sent",
+          sent_at: item.sent_at || "",
+        }));
         setEmails(mapped as DbEmailLog[]);
       }
-      if (l) setLeads(l as DbLead[]);
     } catch (err) {
       console.error("Email fetch error", err);
     }
@@ -95,14 +112,14 @@ function EmailPage() {
   }
 
   useEffect(() => {
-    fetchData();
+    if (user?.email || user?.role === "admin") fetchData();
     const sub = supabase
       .channel("email-page")
       .on("postgres_changes", { event: "*", schema: "public", table: "emails_sent" }, () => fetchData())
       .subscribe();
     const interval = setInterval(fetchData, 30000);
     return () => { sub.unsubscribe(); clearInterval(interval); };
-  }, []);
+  }, [user?.email, user?.role]);
 
   const leadMap = useMemo(() => {
     const map: Record<string, DbLead> = {};

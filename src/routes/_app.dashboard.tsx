@@ -9,6 +9,7 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { StatCard } from "@/components/crm/StatCard";
 import { PageHeader } from "@/components/crm/Topbar";
 import { Button } from "@/components/ui/button";
@@ -192,9 +193,17 @@ function DashboardPage() {
 
     const meetingSub = supabase
       .channel("dash-meetings")
-      .on("postgres_changes", { event: "*", schema: "public", table: "meetings" }, () =>
-        fetchLive(),
-      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "meetings" }, (payload) => {
+        fetchLive();
+        // Show toast notification when meeting starts (completed becomes true)
+        if (payload?.new?.completed === true && payload?.old?.completed === false) {
+          const title = payload?.new?.title || "Your meeting";
+          toast(`🔴 Meeting Started! ${title}`, {
+            description: "Check your email — meeting start notification was sent.",
+            duration: 12000,
+          });
+        }
+      })
       .subscribe();
 
     const interval = setInterval(fetchLive, 30000);

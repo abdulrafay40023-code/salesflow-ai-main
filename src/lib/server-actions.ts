@@ -151,25 +151,14 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         meetingTime: data.time,
       });
 
-      // 3. Update existing lead or create only if truly new
+      // 3. Update existing lead status if they were already imported — do NOT create phantom leads
       if (leadId) {
         await supabase
           .from("leads")
           .update({ status: "meeting", assigned_agent_name: realAgentEmail })
           .eq("id", leadId);
-      } else {
-        const { data: newLead } = await supabase
-          .from("leads")
-          .insert({
-            name: data.leadName || data.leadEmail.split("@")[0],
-            email: cleanLeadEmail,
-            status: "meeting",
-            assigned_agent_name: realAgentEmail,
-          })
-          .select("id")
-          .single();
-        leadId = newLead?.id;
       }
+      // If no existing lead (direct booking without prior import), just save meeting with email in title — no phantom lead created
 
       // 4. Log confirmation email in emails_sent
       await supabase.from("emails_sent").insert({
