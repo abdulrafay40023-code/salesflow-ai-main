@@ -119,45 +119,54 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
-      const agentEmail = data.agentEmail || "garryamelia6265@gmail.com";
+      let leadId = data.leadId;
+      let realAgentEmail = data.agentEmail || "";
 
-      // 1. Send immediate Confirmation Email to BOTH Lead & Agent
+      // 1. Look up lead in Supabase leads table to find assigned agent email
+      const { data: existingLead } = await supabase
+        .from("leads")
+        .select("id, assigned_agent_name, agent")
+        .eq("email", data.leadEmail)
+        .single();
+
+      if (existingLead) {
+        if (existingLead.id) leadId = existingLead.id;
+        const agentField = existingLead.assigned_agent_name || existingLead.agent;
+        if (agentField) {
+          realAgentEmail = agentField;
+        }
+      }
+
+      if (!realAgentEmail || realAgentEmail === "Unassigned") {
+        realAgentEmail = "garryamelia6265@gmail.com";
+      }
+
+      // 2. Send immediate Confirmation Email to Lead, Working Agent & Admin
       await sendMeetingConfirmationEmail({
         leadEmail: data.leadEmail,
-        agentEmail: agentEmail,
+        agentEmail: realAgentEmail,
         meetingDate: data.date,
         meetingTime: data.time,
       });
 
-      // 2. Ensure lead exists in Supabase leads table
-      let leadId = data.leadId;
+      // 3. Ensure lead exists in Supabase leads table with status = 'meeting'
       if (!leadId) {
-        const { data: existingLead } = await supabase
+        const { data: newLead } = await supabase
           .from("leads")
+          .insert({
+            name: data.leadName || data.leadEmail.split("@")[0],
+            email: data.leadEmail,
+            status: "meeting",
+            assigned_agent_name: realAgentEmail,
+          })
           .select("id")
-          .eq("email", data.leadEmail)
           .single();
-
-        if (existingLead?.id) {
-          leadId = existingLead.id;
-        } else {
-          const { data: newLead } = await supabase
-            .from("leads")
-            .insert({
-              name: data.leadName || data.leadEmail.split("@")[0],
-              email: data.leadEmail,
-              status: "meeting",
-              assigned_agent_name: agentEmail,
-            })
-            .select("id")
-            .single();
-          leadId = newLead?.id;
-        }
+        leadId = newLead?.id;
       } else {
         await supabase.from("leads").update({ status: "meeting" }).eq("id", leadId);
       }
 
-      // 3. Log confirmation email in emails_sent
+      // 4. Log confirmation email in emails_sent
       await supabase.from("emails_sent").insert({
         lead_id: leadId || null,
         lead_email: data.leadEmail,
@@ -167,7 +176,7 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         sent_at: new Date().toISOString(),
       });
 
-      // 4. Calculate exact scheduled ISO timestamp & short-notice flags
+      // 5. Calculate exact scheduled ISO timestamp & short-notice flags
       const now = new Date();
       const rawTime = data.rawTime || "10:00";
       const isoStr = data.scheduledIso || `${data.date}T${rawTime}:00+05:00`;
@@ -181,7 +190,7 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
       const isWithin24h = diffMs <= 24 * 60 * 60 * 1000;
       const isWithin1h = diffMs <= 60 * 60 * 1000;
 
-      // 5. Insert meeting into Supabase meetings table ALWAYS with appropriate flags!
+      // 6. Insert meeting into Supabase meetings table
       const { data: insertedMeeting } = await supabase
         .from("meetings")
         .insert({
@@ -195,11 +204,11 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         .select("id")
         .single();
 
-      // 6. If scheduled meeting time is starting right now or within 2 minutes, fire Meeting Starting NOW email immediately!
+      // 7. If scheduled meeting time is starting right now or within 2 minutes, fire immediately!
       if (diffMs <= 2 * 60 * 1000) {
         await sendMeetingStartedNowEmail({
           leadEmail: data.leadEmail,
-          agentEmail: agentEmail,
+          agentEmail: realAgentEmail,
           meetingTime: data.time,
         });
 
@@ -209,6 +218,32 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
             .update({ completed: true })
             .eq("id", insertedMeeting.id);
         }
+      } else if (diffMs > 2 * 60 * 1000 && diffMs <= 45 * 60 * 1000 && insertedMeeting?.id) {
+        // Schedule precise server-side timer to fire exact Meeting Starting NOW email when meeting time arrives!
+        const meetingId = insertedMeeting.id;
+        setTimeout(async () => {
+          try {
+            const { data: freshMeeting } = await supabase
+              .from("meetings")
+              .select("completed")
+              .eq("id", meetingId)
+              .single();
+
+            if (freshMeeting && !freshMeeting.completed) {
+              await sendMeetingStartedNowEmail({
+                leadEmail: data.leadEmail,
+                agentEmail: realAgentEmail,
+                meetingTime: data.time,
+              });
+              await supabase
+                .from("meetings")
+                .update({ completed: true })
+                .eq("id", meetingId);
+            }
+          } catch (e) {
+            console.error("Scheduled meeting email trigger error:", e);
+          }
+        }, diffMs);
       }
 
       return { success: true };
