@@ -10,6 +10,16 @@ export const Route = createFileRoute("/_app")({
 });
 
 function AppLayout() {
+  useEffect(() => {
+    // Background reminder checker — runs check-reminders API every 45s automatically
+    const checkReminders = () => {
+      fetch("/api/check-reminders").catch(() => {});
+    };
+    checkReminders();
+    const interval = setInterval(checkReminders, 45000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background">

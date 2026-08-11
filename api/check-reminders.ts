@@ -146,8 +146,24 @@ export default async function handler(req: any, res: any) {
         }
       }
 
+      // Fallback for direct bookings without lead_id
+      if (!leadEmail && meeting.title) {
+        const emailMatch = meeting.title.match(/[\w.-]+@[\w.-]+\.\w+/);
+        if (emailMatch) {
+          leadEmail = emailMatch[0];
+          const { data: matchedLead } = await supabase
+            .from("leads")
+            .select("assigned_agent_name")
+            .ilike("email", leadEmail)
+            .single();
+          if (matchedLead?.assigned_agent_name) {
+            agentEmail = matchedLead.assigned_agent_name;
+          }
+        }
+      }
+
       if (!leadEmail) {
-        results.push(`Meeting ${meeting.id}: no lead email, skipped`);
+        results.push(`Meeting ${meeting.id}: no lead email found, skipped`);
         continue;
       }
 
