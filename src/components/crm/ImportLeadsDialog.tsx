@@ -25,7 +25,8 @@ import { useCrm } from "@/lib/crm-store";
 import { supabase } from "@/lib/supabase";
 import * as XLSX from "xlsx";
 
-const columns = ["Name", "Company", "Email", "Phone", "Status", "Assigned Agent"];
+// Preview columns — Company removed
+const columns = ["Name", "Email", "Phone"];
 
 export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void } = {}) {
   const { user, addLeads } = useCrm();
@@ -38,64 +39,45 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
   async function parseFile(file: File) {
     setFileName(file.name);
     setIsParsing(true);
-
     try {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const firstSheetName = workbook.SheetNames[0];
-
       if (!firstSheetName) {
         toast.error("No worksheet found in file");
         setIsParsing(false);
         return;
       }
-
       const worksheet = workbook.Sheets[firstSheetName];
       const rawData = XLSX.utils.sheet_to_json<(string | number)[]>(worksheet, {
         header: 1,
         defval: "",
       });
-
-      // Convert all values to trimmed string
       const stringRows: string[][] = rawData.map((row) =>
         row.map((cell) => String(cell ?? "").trim())
       );
-
-      // Filter out completely empty rows
       let validRows = stringRows.filter((r) => r.some((cell) => cell.length > 0));
-
       if (!validRows.length) {
         toast.error("The selected file is empty or has no readable rows.");
         setIsParsing(false);
         return;
       }
-
-      // Detect and filter out header row if present
+      // Skip header row if detected
       const firstRow = validRows[0] || [];
       const isHeader = firstRow.some((cell) => {
         const lower = cell.toLowerCase();
         return (
-          lower === "name" ||
-          lower === "email" ||
-          lower === "company" ||
-          lower === "phone" ||
-          lower === "status" ||
-          lower === "lead name" ||
-          lower === "agent" ||
-          lower === "assigned agent"
+          lower === "name" || lower === "email" || lower === "company" ||
+          lower === "phone" || lower === "status" || lower === "lead name" ||
+          lower === "agent" || lower === "assigned agent"
         );
       });
-
-      if (isHeader) {
-        validRows = validRows.slice(1);
-      }
-
+      if (isHeader) validRows = validRows.slice(1);
       if (!validRows.length) {
         toast.error("No data rows found below the file header.");
         setIsParsing(false);
         return;
       }
-
       setRows(validRows);
       toast.success(`Loaded ${validRows.length} rows from ${file.name}`);
     } catch (err) {
@@ -107,37 +89,42 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
     }
   }
 
+  /** Parse a single sheet row → { name, email, phone } */
+  function parseRow(r: string[], i: number) {
+    // Email: first cell containing '@'
+    const foundEmail = r.find((c) => c.includes("@")) || "";
+    const lowerEmail = foundEmail.toLowerCase().trim();
+
+    // Phone: first cell matching phone-number pattern
+    const foundPhone = r.find((c) => /^\+?[0-9][\d\s\-().]{5,}$/.test(c)) ?? "";
+
+    // Name: first non-email, non-phone cell
+    let foundName = "";
+    for (const cell of r) {
+      if (!cell) continue;
+      if (cell.includes("@")) continue;
+      if (/^\+?[0-9][\d\s\-().]{5,}$/.test(cell)) continue;
+      foundName = cell;
+      break;
+    }
+    if (!foundName) {
+      foundName = lowerEmail ? lowerEmail.split("@")[0]! : `Lead #${i + 1}`;
+    }
+
+    return { name: foundName, email: lowerEmail, phone: foundPhone };
+  }
+
   async function confirmImport() {
-    // IMPORTANT: Use email as the agent identifier (consistent with dashboard filter)
     const currentAgent = user?.email || user?.name || "admin@teals-crm.com";
     const seenEmails = new Set<string>();
-
     const created: Lead[] = [];
 
     rows.forEach((r, i) => {
-      // Find email column (any cell with '@')
-      const foundEmail = r.find((c) => c.includes("@")) || "";
-      const lowerEmail = foundEmail.toLowerCase().trim();
+      const { name, email, phone } = parseRow(r, i);
+      if (!email) return; // skip rows with no email
+      if (seenEmails.has(email)) return; // deduplicate
+      seenEmails.add(email);
 
-      // Deduplicate within the same import batch if email exists
-      if (lowerEmail && seenEmails.has(lowerEmail)) return;
-      if (lowerEmail) seenEmails.add(lowerEmail);
-
-      // Determine Name
-      let foundName = r[0] && !r[0].includes("@") ? r[0] : "";
-      if (!foundName) {
-        // Find first non-email cell
-        const nonEmailCell = r.find((c) => c && !c.includes("@") && !/^\+?[0-9\s-]{7,}$/.test(c));
-        foundName = nonEmailCell || (lowerEmail ? lowerEmail.split("@")[0]! : `Lead #${i + 1}`);
-      }
-
-      // Determine Company
-      const foundCompany = r[1] && !r[1].includes("@") ? r[1] : r[2] && !r[2].includes("@") ? r[2] : "—";
-
-      // Determine Phone
-      const foundPhone = r.find((c) => /^\+?[0-9\s-]{7,}$/.test(c)) ?? (r[3] || "—");
-
-      // Determine Status
       const statusCell = r.find((c) =>
         ["new", "contacted", "qualified", "meeting", "won", "lost"].includes(c.toLowerCase())
       );
@@ -145,10 +132,10 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
 
       created.push({
         id: `LD-${Date.now()}-${i}`,
-        name: foundName,
-        company: foundCompany,
-        email: lowerEmail || `lead${i + 1}@imported.com`,
-        phone: foundPhone,
+        name,
+        company: "",      // no company
+        email,
+        phone,            // empty string "" if no phone found
         status,
         agent: currentAgent,
         lastContact: new Date().toISOString(),
@@ -159,31 +146,27 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
     });
 
     if (!created.length) {
-      toast.error("No valid leads could be created from file rows.");
+      toast.error("No valid leads could be created. Make sure your file has email addresses.");
       return;
     }
 
-    // Add to CRM state
     addLeads(created);
 
-    // Sync to Supabase Database 'leads' table
     try {
       const payload = created.map((l) => ({
         name: l.name,
         company: l.company,
         email: l.email,
-        phone: l.phone,
+        phone: l.phone || null,  // null if empty
         status: l.status,
         assigned_agent_name: l.agent,
         value: l.value,
         notes: l.notes,
       }));
       const { data: inserted, error } = await supabase.from("leads").insert(payload).select("id, email");
-      if (error) {
-        console.log("Supabase lead insertion error:", error.message);
-      }
+      if (error) console.log("Supabase lead insertion error:", error.message);
 
-      // Send automated Welcome email via SMTP
+      // Send Welcome emails
       if (inserted && inserted.length) {
         import("@/lib/server-actions").then(({ triggerWelcomeEmailFn }) => {
           inserted.forEach((item) => {
@@ -199,12 +182,17 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
       console.log("Database sync completed.");
     }
 
-      toast.success(`${created.length} leads imported successfully from your file!`);
-      setOpen(false);
-      setRows([]);
-      setFileName(null);
-      // Trigger instant refresh in parent component
-      if (typeof onImportDone === "function") onImportDone();
+    toast.success(`${created.length} leads imported successfully!`);
+    setOpen(false);
+    setRows([]);
+    setFileName(null);
+    if (typeof onImportDone === "function") onImportDone();
+  }
+
+  /** Preview cells for a row: [name, email, phone] */
+  function getPreviewCells(r: string[], i: number): string[] {
+    const { name, email, phone } = parseRow(r, i);
+    return [name, email, phone];
   }
 
   return (
@@ -218,7 +206,8 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
         <DialogHeader>
           <DialogTitle className="font-display">Import leads</DialogTitle>
           <DialogDescription>
-            Upload your CSV or Excel file (.xlsx, .xls) to import your real leads into the CRM.
+            Upload your CSV or Excel file. Only <strong>Name</strong> and{" "}
+            <strong>Email</strong> are required — Phone is optional.
           </DialogDescription>
         </DialogHeader>
 
@@ -240,9 +229,9 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
             <span className="grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary">
               <FileSpreadsheet className="size-6" />
             </span>
-            <p className="mt-4 text-sm font-semibold">Drag & drop your Excel or CSV file here</p>
+            <p className="mt-4 text-sm font-semibold">Drag &amp; drop your Excel or CSV file here</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Supports .csv, .xlsx, .xls files
+              Supports .csv, .xlsx, .xls — Required: <strong>Name, Email</strong> &nbsp;|&nbsp; Optional: <strong>Phone</strong>
             </p>
             <div className="mt-5 flex flex-wrap justify-center gap-2">
               <Button variant="outline" className="rounded-xl" onClick={() => inputRef.current?.click()}>
@@ -274,10 +263,7 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
                 variant="ghost"
                 size="sm"
                 className="rounded-lg"
-                onClick={() => {
-                  setRows([]);
-                  setFileName(null);
-                }}
+                onClick={() => { setRows([]); setFileName(null); }}
               >
                 <X className="size-4" /> Clear
               </Button>
@@ -288,22 +274,23 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
                 <TableHeader>
                   <TableRow>
                     {columns.map((c) => (
-                      <TableHead key={c} className="whitespace-nowrap">
-                        {c}
-                      </TableHead>
+                      <TableHead key={c} className="whitespace-nowrap">{c}</TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((r, i) => (
-                    <TableRow key={i}>
-                      {columns.map((_, ci) => (
-                        <TableCell key={ci} className="whitespace-nowrap text-sm">
-                          {r[ci] || "—"}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
+                  {rows.map((r, i) => {
+                    const cells = getPreviewCells(r, i);
+                    return (
+                      <TableRow key={i}>
+                        {cells.map((val, ci) => (
+                          <TableCell key={ci} className="whitespace-nowrap text-sm">
+                            {val || <span className="text-muted-foreground italic">—</span>}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -322,4 +309,3 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
     </Dialog>
   );
 }
-
