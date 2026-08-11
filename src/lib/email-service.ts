@@ -160,7 +160,7 @@ export async function sendMeetingConfirmationEmail({
   meetingDate: string;
   meetingTime: string;
 }) {
-  const recipients = [leadEmail, agentEmail, GMAIL_USER].filter(Boolean).join(",");
+  const recipients = Array.from(new Set([leadEmail, agentEmail].filter(Boolean))).join(", ");
 
   const mailOptions = {
     from: `"Nexa CRM Meetings" <${GMAIL_USER}>`,
@@ -201,7 +201,7 @@ export async function send1DayMeetingReminderEmail({
   meetingDate: string;
   meetingTime: string;
 }) {
-  const recipients = [leadEmail, agentEmail, GMAIL_USER].filter(Boolean).join(",");
+  const recipients = Array.from(new Set([leadEmail, agentEmail].filter(Boolean))).join(", ");
 
   const mailOptions = {
     from: `"Nexa CRM Reminders" <${GMAIL_USER}>`,
@@ -245,7 +245,7 @@ export async function send1HourMeetingReminderEmail({
   agentEmail: string;
   meetingTime: string;
 }) {
-  const recipients = [leadEmail, agentEmail, GMAIL_USER].filter(Boolean).join(",");
+  const recipients = Array.from(new Set([leadEmail, agentEmail].filter(Boolean))).join(", ");
 
   const mailOptions = {
     from: `"Nexa CRM Reminders" <${GMAIL_USER}>`,
@@ -287,7 +287,7 @@ export async function sendMeetingStartedNowEmail({
   agentEmail: string;
   meetingTime: string;
 }) {
-  const recipients = [leadEmail, agentEmail, GMAIL_USER].filter(Boolean).join(",");
+  const recipients = Array.from(new Set([leadEmail, agentEmail].filter(Boolean))).join(", ");
 
   const mailOptions = {
     from: `"Nexa CRM Live Session" <${GMAIL_USER}>`,

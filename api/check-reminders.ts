@@ -151,7 +151,7 @@ export default async function handler(req: any, res: any) {
         continue;
       }
 
-      const recipients = [leadEmail, agentEmail, GMAIL_USER].filter(
+      const recipients = [leadEmail, agentEmail].filter(
         (e, i, arr) => e && arr.indexOf(e) === i
       );
 
