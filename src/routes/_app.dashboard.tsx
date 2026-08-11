@@ -96,23 +96,11 @@ function DashboardPage() {
         .order("created_at", { ascending: false })
         .limit(100);
 
-      // Working agent sees only their own leads
+      // Working agent sees only their own leads — use simple eq filter (email is stored as assigned_agent_name)
       if (!isAdmin) {
         const agentEmail = (user?.email || "").trim();
-        const agentName = (user?.name || "").trim();
-
-        const filterClauses: string[] = [];
         if (agentEmail) {
-          filterClauses.push(`assigned_agent_name.ilike."${agentEmail}"`);
-          filterClauses.push(`agent.ilike."${agentEmail}"`);
-        }
-        if (agentName) {
-          filterClauses.push(`assigned_agent_name.ilike."${agentName}"`);
-          filterClauses.push(`agent.ilike."${agentName}"`);
-        }
-
-        if (filterClauses.length > 0) {
-          leadsQuery = leadsQuery.or(filterClauses.join(","));
+          leadsQuery = leadsQuery.eq("assigned_agent_name", agentEmail);
         } else {
           leadsQuery = leadsQuery.eq("id", "00000000-0000-0000-0000-000000000000");
         }
@@ -137,13 +125,12 @@ function DashboardPage() {
       if (leadsRes.status === "fulfilled" && leadsRes.value.data) {
         fetchedLeads = leadsRes.value.data as DbLead[];
 
-        // Double-check isolation on client side
+        // Client-side double-check: only show leads assigned to this agent's email
         if (!isAdmin) {
           const myEmail = (user?.email || "").trim().toLowerCase();
-          const myName = (user?.name || "").trim().toLowerCase();
           fetchedLeads = fetchedLeads.filter((l) => {
-            const assigned = (l.assigned_agent_name || l.agent || "").trim().toLowerCase();
-            return assigned === myEmail || (myName && assigned === myName);
+            const assigned = (l.assigned_agent_name || "").trim().toLowerCase();
+            return assigned === myEmail;
           });
         }
 
@@ -260,6 +247,7 @@ function DashboardPage() {
 
   // Email stats (recomputed from dbEmails)
   const emailSent = dbEmails.filter((e) => e.status === "sent" || e.status === "opened").length;
+  const emailReplied = dbEmails.filter((e) => e.status === "replied" || e.status === "opened").length;
   const emailPending = dbEmails.filter((e) => e.status === "pending").length;
   const emailNoResp = dbEmails.filter((e) => e.status === "failed").length;
   const emailTotal = dbEmails.length || 1;

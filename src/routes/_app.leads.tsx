@@ -81,20 +81,8 @@ function LeadsPage() {
       // Working agent sees only their own imported leads
       if (!isAdmin) {
         const agentEmail = (user?.email || "").trim();
-        const agentName = (user?.name || "").trim();
-
-        const filterClauses: string[] = [];
         if (agentEmail) {
-          filterClauses.push(`assigned_agent_name.ilike."${agentEmail}"`);
-          filterClauses.push(`agent.ilike."${agentEmail}"`);
-        }
-        if (agentName) {
-          filterClauses.push(`assigned_agent_name.ilike."${agentName}"`);
-          filterClauses.push(`agent.ilike."${agentName}"`);
-        }
-
-        if (filterClauses.length > 0) {
-          query = query.or(filterClauses.join(","));
+          query = query.eq("assigned_agent_name", agentEmail);
         } else {
           query = query.eq("id", "00000000-0000-0000-0000-000000000000");
         }
@@ -105,13 +93,12 @@ function LeadsPage() {
       if (data) {
         let rawLeads: DbLead[] = data as DbLead[];
 
-        // Double-check isolation on client side
+        // Client-side double-check isolation by email
         if (!isAdmin) {
           const myEmail = (user?.email || "").trim().toLowerCase();
-          const myName = (user?.name || "").trim().toLowerCase();
           rawLeads = rawLeads.filter((l) => {
-            const assigned = (l.assigned_agent_name || l.agent || "").trim().toLowerCase();
-            return assigned === myEmail || (myName && assigned === myName);
+            const assigned = (l.assigned_agent_name || "").trim().toLowerCase();
+            return assigned === myEmail;
           });
         }
 
