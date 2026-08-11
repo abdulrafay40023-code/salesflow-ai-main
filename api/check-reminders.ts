@@ -181,6 +181,98 @@ export default async function handler(req: any, res: any) {
       }
     }
 
+    // ── AUTOMATIC LEAD FOLLOW-UPS (For leads that have NOT booked a meeting) ──
+    const { data: pendingLeads } = await supabase
+      .from("leads")
+      .select("id, name, email, status, created_at, assigned_agent_name")
+      .neq("status", "meeting")
+      .neq("status", "won")
+      .neq("status", "lost");
+
+    if (pendingLeads && pendingLeads.length > 0) {
+      for (const lead of pendingLeads) {
+        if (!lead.email || !lead.email.includes("@")) continue;
+
+        const createdAt = new Date(lead.created_at || now.toISOString());
+        const hoursSinceImport = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+
+        // Fetch sent emails for this lead to avoid duplicates
+        const { data: sentEmails } = await supabase
+          .from("emails_sent")
+          .select("sequence_type")
+          .eq("lead_id", lead.id);
+
+        const sentTypes = new Set((sentEmails || []).map((e) => e.sequence_type));
+
+        // Follow-up 1 (24 Hours after import)
+        if (hoursSinceImport >= 24 && !sentTypes.has("followup_24h")) {
+          const mailOptions = {
+            from: `"Nexa CRM" <${GMAIL_USER}>`,
+            to: lead.email,
+            subject: "Quick Follow-up: Checking in on your inquiry",
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; background-color: #ffffff;">
+                <div style="padding: 24px; color: #334155; line-height: 1.6;">
+                  <h2 style="color: #1e293b; margin-top: 0;">Checking In</h2>
+                  <p>Hi ${lead.name || "there"},</p>
+                  <p>We are following up on our previous message to see if you have any questions or if you'd like to schedule a quick discussion with our team.</p>
+                  <div style="margin: 25px 0; text-align: center;">
+                    <a href="https://salesflow-ai-main.vercel.app/book" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                      Schedule a Meeting
+                    </a>
+                  </div>
+                </div>
+              </div>
+            `,
+          };
+          await transporter.sendMail(mailOptions);
+          await supabase.from("emails_sent").insert({
+            lead_id: lead.id,
+            lead_email: lead.email,
+            subject: "Quick Follow-up: Checking in on your inquiry",
+            sequence_type: "followup_24h",
+            status: "sent",
+            sent_at: now.toISOString(),
+          });
+          count++;
+          results.push(`24h Lead Follow-up sent to ${lead.email}`);
+        }
+        // Follow-up 2 (48 Hours after import)
+        else if (hoursSinceImport >= 48 && !sentTypes.has("followup_48h")) {
+          const mailOptions = {
+            from: `"Nexa CRM" <${GMAIL_USER}>`,
+            to: lead.email,
+            subject: "Following up on our previous note — Nexa CRM",
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; background-color: #ffffff;">
+                <div style="padding: 24px; color: #334155; line-height: 1.6;">
+                  <h2 style="color: #1e293b; margin-top: 0;">Following Up</h2>
+                  <p>Hi ${lead.name || "there"},</p>
+                  <p>We wanted to send one more quick note regarding your inquiry. Our team is ready to help you streamline your sales pipeline.</p>
+                  <div style="margin: 25px 0; text-align: center;">
+                    <a href="https://salesflow-ai-main.vercel.app/book" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                      Schedule a Meeting Now
+                    </a>
+                  </div>
+                </div>
+              </div>
+            `,
+          };
+          await transporter.sendMail(mailOptions);
+          await supabase.from("emails_sent").insert({
+            lead_id: lead.id,
+            lead_email: lead.email,
+            subject: "Following up on our previous note — Nexa CRM",
+            sequence_type: "followup_48h",
+            status: "sent",
+            sent_at: now.toISOString(),
+          });
+          count++;
+          results.push(`48h Lead Follow-up sent to ${lead.email}`);
+        }
+      }
+    }
+
     return res.status(200).json({ success: true, processed: count, results });
   } catch (err: any) {
     console.error("check-reminders error:", err);
