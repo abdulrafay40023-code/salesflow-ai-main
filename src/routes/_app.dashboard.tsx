@@ -47,6 +47,7 @@ type DbLead = {
   email: string;
   status: string;
   agent: string;
+  assigned_agent_name?: string;
   created_at: string;
 };
 
@@ -97,10 +98,21 @@ function DashboardPage() {
 
       // Working agent sees only their own leads
       if (!isAdmin) {
-        const agentEmail = user?.email || "";
-        const agentName = user?.name || "";
-        if (agentEmail || agentName) {
-          leadsQuery = leadsQuery.or(`assigned_agent_name.eq.${agentEmail},assigned_agent_name.eq.${agentName}`);
+        const agentEmail = (user?.email || "").trim();
+        const agentName = (user?.name || "").trim();
+
+        const filterClauses: string[] = [];
+        if (agentEmail) {
+          filterClauses.push(`assigned_agent_name.ilike."${agentEmail}"`);
+          filterClauses.push(`agent.ilike."${agentEmail}"`);
+        }
+        if (agentName) {
+          filterClauses.push(`assigned_agent_name.ilike."${agentName}"`);
+          filterClauses.push(`agent.ilike."${agentName}"`);
+        }
+
+        if (filterClauses.length > 0) {
+          leadsQuery = leadsQuery.or(filterClauses.join(","));
         } else {
           leadsQuery = leadsQuery.eq("id", "00000000-0000-0000-0000-000000000000");
         }
@@ -124,6 +136,17 @@ function DashboardPage() {
       let fetchedLeads: DbLead[] = [];
       if (leadsRes.status === "fulfilled" && leadsRes.value.data) {
         fetchedLeads = leadsRes.value.data as DbLead[];
+
+        // Double-check isolation on client side
+        if (!isAdmin) {
+          const myEmail = (user?.email || "").trim().toLowerCase();
+          const myName = (user?.name || "").trim().toLowerCase();
+          fetchedLeads = fetchedLeads.filter((l) => {
+            const assigned = (l.assigned_agent_name || l.agent || "").trim().toLowerCase();
+            return assigned === myEmail || (myName && assigned === myName);
+          });
+        }
+
         setDbLeads(fetchedLeads);
       } else {
         setDbLeads([]);

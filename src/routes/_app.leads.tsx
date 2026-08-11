@@ -80,10 +80,21 @@ function LeadsPage() {
 
       // Working agent sees only their own imported leads
       if (!isAdmin) {
-        const agentEmail = user?.email || "";
-        const agentName = user?.name || "";
-        if (agentEmail || agentName) {
-          query = query.or(`assigned_agent_name.eq.${agentEmail},assigned_agent_name.eq.${agentName}`);
+        const agentEmail = (user?.email || "").trim();
+        const agentName = (user?.name || "").trim();
+
+        const filterClauses: string[] = [];
+        if (agentEmail) {
+          filterClauses.push(`assigned_agent_name.ilike."${agentEmail}"`);
+          filterClauses.push(`agent.ilike."${agentEmail}"`);
+        }
+        if (agentName) {
+          filterClauses.push(`assigned_agent_name.ilike."${agentName}"`);
+          filterClauses.push(`agent.ilike."${agentName}"`);
+        }
+
+        if (filterClauses.length > 0) {
+          query = query.or(filterClauses.join(","));
         } else {
           query = query.eq("id", "00000000-0000-0000-0000-000000000000");
         }
@@ -92,7 +103,19 @@ function LeadsPage() {
       const { data } = await query;
 
       if (data) {
-        const mapped: Lead[] = data.map((l: DbLead) => ({
+        let rawLeads: DbLead[] = data as DbLead[];
+
+        // Double-check isolation on client side
+        if (!isAdmin) {
+          const myEmail = (user?.email || "").trim().toLowerCase();
+          const myName = (user?.name || "").trim().toLowerCase();
+          rawLeads = rawLeads.filter((l) => {
+            const assigned = (l.assigned_agent_name || l.agent || "").trim().toLowerCase();
+            return assigned === myEmail || (myName && assigned === myName);
+          });
+        }
+
+        const mapped: Lead[] = rawLeads.map((l: DbLead) => ({
           id: l.id,
           name: l.name || "Unnamed",
           company: l.company || "—",

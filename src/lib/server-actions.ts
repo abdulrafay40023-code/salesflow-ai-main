@@ -209,8 +209,8 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         .select("id")
         .single();
 
-      // 7. If scheduled meeting time is starting right now or within 2 minutes, fire immediately!
-      if (diffMs <= 2 * 60 * 1000) {
+      // 7. If scheduled meeting time is starting right now or already past, fire immediately!
+      if (diffMs <= 0) {
         await sendMeetingStartedNowEmail({
           leadEmail: data.leadEmail,
           agentEmail: realAgentEmail,
@@ -223,8 +223,8 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
             .update({ completed: true })
             .eq("id", insertedMeeting.id);
         }
-      } else if (diffMs > 2 * 60 * 1000 && diffMs <= 45 * 60 * 1000 && insertedMeeting?.id) {
-        // Schedule precise server-side timer to fire exact Meeting Starting NOW email when meeting time arrives!
+      } else if (diffMs > 0 && diffMs <= 45 * 60 * 1000 && insertedMeeting?.id) {
+        // Schedule precise server-side timer to fire at the EXACT minute when meeting time arrives!
         const meetingId = insertedMeeting.id;
         setTimeout(async () => {
           try {
