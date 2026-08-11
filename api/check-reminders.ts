@@ -172,7 +172,7 @@ export default async function handler(req: any, res: any) {
       );
 
       // Stage 3: Meeting Starting NOW (mark completed so it only fires once)
-      if (!meeting.completed && now.getTime() >= meetingTime.getTime()) {
+      if (!meeting.completed && now.getTime() >= (meetingTime.getTime() - 45000)) {
         await sendEmail(recipients, `🔴 Your Meeting is Starting NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
         await supabase.from("meetings").update({ completed: true }).eq("id", meeting.id);
         count++;

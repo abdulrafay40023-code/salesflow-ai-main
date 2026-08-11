@@ -209,8 +209,8 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         .select("id")
         .single();
 
-      // 7. If scheduled meeting time is starting right now or already past, fire immediately!
-      if (diffMs <= 0) {
+      // 7. If scheduled meeting time is starting right now or within 1 minute, fire immediately!
+      if (diffMs <= 60 * 1000) {
         await sendMeetingStartedNowEmail({
           leadEmail: data.leadEmail,
           agentEmail: realAgentEmail,
