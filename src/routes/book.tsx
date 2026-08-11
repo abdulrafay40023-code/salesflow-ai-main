@@ -104,6 +104,17 @@ function BookingPage() {
       if (res.success) {
         setBooked(true);
         toast.success("Meeting booked & confirmation emails sent!");
+
+        // Trigger reminder check immediately
+        fetch("/api/check-reminders").catch(() => {});
+
+        // If meeting is within 60 minutes, set browser timer to trigger at exact start minute
+        const diffMs = localMeetingDate.getTime() - Date.now();
+        if (diffMs > 0 && diffMs <= 60 * 60 * 1000) {
+          setTimeout(() => {
+            fetch("/api/check-reminders").catch(() => {});
+          }, diffMs);
+        }
       } else {
         toast.error(res.error || "Failed to book meeting");
       }
