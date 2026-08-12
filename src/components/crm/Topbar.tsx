@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Bell, CheckCheck, LogOut, Mail, Moon, Search, Sun, UserPlus, Zap } from "lucide-react";
+import { Bell, CheckCheck, LogOut, Mail, Search, UserPlus, Zap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -135,7 +135,7 @@ function useNotifications() {
 }
 
 export function Topbar() {
-  const { user, signOut, theme, toggleTheme } = useCrm();
+  const { user, signOut } = useCrm();
   const { notifs, unreadCount, markAllRead } = useNotifications();
   const [notifOpen, setNotifOpen] = useState(false);
 
@@ -164,12 +164,6 @@ export function Topbar() {
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
-        <Button variant="ghost" size="icon" className="rounded-xl" onClick={toggleTheme}>
-          {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
-          <span className="sr-only">Toggle theme</span>
-        </Button>
-
-
 
         {/* User Menu */}
         <DropdownMenu>

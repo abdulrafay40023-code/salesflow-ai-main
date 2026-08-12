@@ -55,7 +55,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser>(defaultAdminUser);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme] = useState<"dark">("dark");
 
   const syncProfileToSupabase = useCallback(async (u: SessionUser) => {
     if (!u.email) return;
@@ -95,6 +95,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    // Enforce dark mode permanently
+    document.documentElement.classList.add("dark");
+
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -104,13 +107,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       } else {
         syncProfileToSupabase(defaultAdminUser);
       }
-      const t = window.localStorage.getItem("teals-crm-theme");
-      if (t === "dark" || t === "light") setTheme(t);
     } catch {
       /* ignore */
     }
-
-    // Note: Database is managed manually via Supabase dashboard or SQL editor
 
     // Listen for Real Google Auth Callback via Supabase
     let subscription: { unsubscribe: () => void } | null = null;
@@ -123,7 +122,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             session.user.user_metadata?.name ||
             email.split("@")[0] ||
             "Working Agent";
-          // Only garryamelia6265@gmail.com is admin, everyone else is agent
           const role: "admin" | "agent" = email === "garryamelia6265@gmail.com" ? "admin" : "agent";
           const googleUser: SessionUser = {
             name,
@@ -150,13 +148,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   }, [syncProfileToSupabase]);
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-    try {
-      window.localStorage.setItem("teals-crm-theme", theme);
-    } catch {
-      /* ignore */
-    }
-  }, [theme]);
+    document.documentElement.classList.add("dark");
+  }, []);
 
   const signIn = useCallback((email: string, role: "admin" | "agent") => {
     const defaultName = role === "admin" ? "Garry Amelia" : email.split("@")[0] || "Sales Agent";
@@ -206,7 +199,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           prev.map((f) => (f.id === id ? { ...f, completed: !f.completed } : f)),
         ),
       theme,
-      toggleTheme: () => setTheme((t) => (t === "dark" ? "light" : "dark")),
+      toggleTheme: () => {},
     };
   }, [user, leads, followUps, theme, signIn, signOut]);
 
