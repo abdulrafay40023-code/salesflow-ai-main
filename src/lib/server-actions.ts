@@ -9,6 +9,7 @@ import {
   sendWelcomeEmail,
 } from "./email-service";
 import { supabase } from "./supabase";
+import { createZoomMeeting } from "./zoom-service";
 
 /**
  * 1. Trigger Welcome Email
@@ -143,12 +144,21 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         realAgentEmail = "garryamelia6265@gmail.com";
       }
 
-      // 2. Send immediate Confirmation Email to Lead, Working Agent & Admin
+      // 1.5 Auto-create live unique Zoom Meeting room via Zoom Server-to-Server OAuth API
+      const zoomRes = await createZoomMeeting({
+        topic: `Sales Meeting with ${data.leadName || data.leadEmail}`,
+        startTimeIso: data.scheduledIso,
+        durationMinutes: 30,
+      });
+      const zoomJoinUrl = zoomRes.joinUrl;
+
+      // 2. Send immediate Confirmation Email to Lead, Working Agent & Admin with Zoom Join Link
       await sendMeetingConfirmationEmail({
         leadEmail: data.leadEmail,
         agentEmail: realAgentEmail,
         meetingDate: data.date,
         meetingTime: data.time,
+        zoomJoinUrl,
       });
 
       // 3. Update lead status in Supabase to "booked" by leadId or leadEmail
@@ -206,12 +216,13 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         .select("id")
         .single();
 
-      // 7. If scheduled meeting time is starting right now, fire email ONCE to BOTH lead & agent!
+      // 7. If scheduled meeting time is starting right now, fire email ONCE to BOTH lead & agent with Zoom Link!
       if (isRightNow) {
         await sendMeetingStartedNowEmail({
           leadEmail: data.leadEmail,
           agentEmail: realAgentEmail,
           meetingTime: data.time,
+          zoomJoinUrl,
         });
       } else if (diffMs > 0 && diffMs <= 45 * 60 * 1000 && insertedMeeting?.id) {
         // Schedule precise server-side timer to fire at the EXACT minute when meeting time arrives!
@@ -229,6 +240,7 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
                 leadEmail: data.leadEmail,
                 agentEmail: realAgentEmail,
                 meetingTime: data.time,
+                zoomJoinUrl,
               });
               await supabase
                 .from("meetings")

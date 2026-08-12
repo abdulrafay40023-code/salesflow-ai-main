@@ -89,7 +89,22 @@ function checkGmailRepliesForLeads(leadEmails: string[]): Promise<Set<string>> {
 }
 
 // ── Email Templates ────────────────────────────────────────────────────────
-function meetingNowHtml(meetingTime: string) {
+function meetingNowHtml(meetingTime: string, zoomJoinUrl?: string) {
+  const zoomBtn = zoomJoinUrl
+    ? `
+    <div style="margin: 25px 0; text-align: center;">
+      <a href="${zoomJoinUrl}" style="background-color: #dc2626; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(220,38,38,0.3);">
+        🔴 Click Here to Join Zoom Meeting NOW
+      </a>
+      <p style="margin-top: 8px; font-size: 12px; color: #64748b;">Direct Link: <a href="${zoomJoinUrl}" style="color: #dc2626;">${zoomJoinUrl}</a></p>
+    </div>`
+    : `
+    <div style="margin: 25px 0; text-align: center;">
+      <a href="https://zoom.us/j/5539578967" style="background-color: #2563eb; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">
+        📹 Join Zoom Meeting Room
+      </a>
+    </div>`;
+
   return `
   <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #e2e8f0;background:#fff;border-radius:12px">
     <div style="background:linear-gradient(135deg,#dc2626,#ef4444);padding:24px;text-align:center;border-radius:8px 8px 0 0">
@@ -102,6 +117,7 @@ function meetingNowHtml(meetingTime: string) {
       <div style="background:#fef2f2;border-left:4px solid #dc2626;padding:16px;margin:20px 0;border-radius:4px">
         <strong style="color:#dc2626">⏰ Meeting Time: ${meetingTime}</strong>
       </div>
+      ${zoomBtn}
     </div>
     <div style="background:#f8fafc;padding:16px;text-align:center;font-size:12px;color:#94a3b8;border-radius:0 0 8px 8px">
       © ${new Date().getFullYear()} Teals CRM. All rights reserved.

@@ -154,13 +154,24 @@ export async function sendMeetingConfirmationEmail({
   agentEmail,
   meetingDate,
   meetingTime,
+  zoomJoinUrl,
 }: {
   leadEmail: string;
   agentEmail: string;
   meetingDate: string;
   meetingTime: string;
+  zoomJoinUrl?: string;
 }) {
   const recipients = Array.from(new Set([leadEmail, agentEmail].filter(Boolean))).join(", ");
+  const zoomBtn = zoomJoinUrl
+    ? `
+    <div style="margin: 25px 0; text-align: center;">
+      <a href="${zoomJoinUrl}" style="background-color: #2563eb; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(37,99,235,0.2);">
+        📹 Join Zoom Meeting
+      </a>
+      <p style="margin-top: 8px; font-size: 12px; color: #64748b;">Direct Link: <a href="${zoomJoinUrl}" style="color: #2563eb;">${zoomJoinUrl}</a></p>
+    </div>`
+    : "";
 
   const mailOptions = {
     from: `"Teals CRM Meetings" <${GMAIL_USER}>`,
@@ -178,6 +189,7 @@ export async function sendMeetingConfirmationEmail({
             <p style="margin: 4px 0;"><strong>Time:</strong> ${meetingTime}</p>
             <p style="margin: 4px 0;"><strong>Attendees:</strong> ${leadEmail} & Sales Agent (${agentEmail})</p>
           </div>
+          ${zoomBtn}
           <p>Reminders will be sent 1 day and 1 hour before the scheduled meeting.</p>
         </div>
       </div>
@@ -282,12 +294,23 @@ export async function sendMeetingStartedNowEmail({
   leadEmail,
   agentEmail,
   meetingTime,
+  zoomJoinUrl,
 }: {
   leadEmail: string;
   agentEmail: string;
   meetingTime: string;
+  zoomJoinUrl?: string;
 }) {
   const recipients = Array.from(new Set([leadEmail, agentEmail].filter(Boolean))).join(", ");
+  const zoomBtn = zoomJoinUrl
+    ? `
+    <div style="margin: 25px 0; text-align: center;">
+      <a href="${zoomJoinUrl}" style="background-color: #dc2626; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(220,38,38,0.3);">
+        🔴 Click Here to Join Zoom Meeting NOW
+      </a>
+      <p style="margin-top: 8px; font-size: 12px; color: #64748b;">Direct Link: <a href="${zoomJoinUrl}" style="color: #dc2626;">${zoomJoinUrl}</a></p>
+    </div>`
+    : "";
 
   const mailOptions = {
     from: `"Teals CRM Live Session" <${GMAIL_USER}>`,
@@ -306,7 +329,7 @@ export async function sendMeetingStartedNowEmail({
             <p style="margin: 4px 0; color: #065f46;"><strong>Scheduled Time:</strong> ${meetingTime}</p>
             <p style="margin: 4px 0; color: #065f46;"><strong>Participants:</strong> ${leadEmail} & Sales Representative (${agentEmail})</p>
           </div>
-          <p>Please join the meeting or connect with your sales representative now.</p>
+          ${zoomBtn}
           <p style="font-size: 13px; color: #64748b;">Thank you for choosing Teals CRM for your sales automation.</p>
         </div>
         <div style="background-color: #f8fafc; padding: 16px; text-align: center; font-size: 12px; color: #94a3b8; border-radius: 0 0 8px 8px;">

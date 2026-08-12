@@ -471,6 +471,14 @@ function DashboardPage() {
                     <p className="text-sm font-semibold">{title}</p>
                     <p className="text-xs text-muted-foreground">{subtitle}</p>
                   </div>
+                  <a
+                    href="https://zoom.us/j/5539578967"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors"
+                  >
+                    📹 Join Zoom
+                  </a>
                   <button
                     onClick={() => dismissNotif(n.id)}
                     className="ml-auto shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
