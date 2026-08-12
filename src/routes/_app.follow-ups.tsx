@@ -87,6 +87,9 @@ function FollowUpsPage() {
   async function fetchLive() {
     setLoading(true);
     try {
+      // Trigger background Gmail IMAP reply detection & reminder check
+      fetch("/api/check-reminders").catch(() => {});
+
       // 1. Fetch leads that have NOT booked a meeting and NOT replied
       let query = supabase
         .from("leads")

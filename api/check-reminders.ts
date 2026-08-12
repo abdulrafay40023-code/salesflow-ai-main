@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
+import tls from "tls";
 
 // ── Supabase credentials (same as app) ────────────────────────────────────
 const SUPABASE_URL = "https://nyjhbeqpjfdhhvqvjzyy.supabase.co";
@@ -30,6 +31,65 @@ async function sendEmail(to: string | string[], subject: string, html: string) {
   });
 }
 
+// ── Automatic Gmail IMAP Reply Checker ─────────────────────────────────────
+function checkGmailRepliesForLeads(leadEmails: string[]): Promise<Set<string>> {
+  return new Promise((resolve) => {
+    const foundEmails = new Set<string>();
+    if (!leadEmails || leadEmails.length === 0) return resolve(foundEmails);
+
+    const targets = new Set(leadEmails.map((e) => e.trim().toLowerCase()));
+
+    const timeout = setTimeout(() => resolve(foundEmails), 7000); // 7s timeout
+
+    try {
+      const client = tls.connect(993, "imap.gmail.com", { rejectUnauthorized: false }, () => {
+        client.write(`A1 LOGIN ${GMAIL_USER} ${GMAIL_APP_PASS}\r\n`);
+      });
+
+      let step = 0;
+      let buffer = "";
+
+      client.on("data", (chunk) => {
+        buffer += chunk.toString();
+
+        if (step === 0 && buffer.includes("A1 OK")) {
+          buffer = "";
+          step = 1;
+          client.write("A2 SELECT INBOX\r\n");
+        } else if (step === 1 && buffer.includes("A2 OK")) {
+          buffer = "";
+          step = 2;
+          // Fetch headers of latest 35 emails in INBOX
+          client.write("A3 FETCH *:-35 (BODY[HEADER.FIELDS (FROM)])\r\n");
+        } else if (step === 2 && buffer.includes("A3 OK")) {
+          const fromLines = buffer.match(/From:[^\r\n]+/gi) || [];
+          for (const line of fromLines) {
+            const emailMatch = line.match(/<([^>]+)>/) || line.match(/From:\s*(\S+@\S+)/i);
+            if (emailMatch && emailMatch[1]) {
+              const email = emailMatch[1].trim().toLowerCase();
+              if (targets.has(email) && email !== GMAIL_USER.toLowerCase()) {
+                foundEmails.add(email);
+              }
+            }
+          }
+          client.write("A4 LOGOUT\r\n");
+          client.end();
+          clearTimeout(timeout);
+          resolve(foundEmails);
+        }
+      });
+
+      client.on("error", () => {
+        clearTimeout(timeout);
+        resolve(foundEmails);
+      });
+    } catch {
+      clearTimeout(timeout);
+      resolve(foundEmails);
+    }
+  });
+}
+
 // ── Email Templates ────────────────────────────────────────────────────────
 function meetingNowHtml(meetingTime: string) {
   return `
@@ -54,7 +114,7 @@ function meetingNowHtml(meetingTime: string) {
 function reminder1hHtml(meetingTime: string) {
   return `
   <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #e2e8f0;background:#fff;border-radius:12px">
-    <div style="background:linear-gradient(135deg,#d97706,#f59e0b);padding:24px;text-align:center;border-radius:8px 8px 0 0">
+    <div style="background:gradient(135deg,#d97706,#f59e0b);padding:24px;text-align:center;border-radius:8px 8px 0 0">
       <h1 style="color:#fff;margin:0;font-size:26px">⏰ Meeting in 1 Hour!</h1>
     </div>
     <div style="padding:28px;color:#334155;line-height:1.7">
@@ -96,133 +156,112 @@ export default async function handler(req: any, res: any) {
     const oneDayLater = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
 
-    const { data: meetings, error } = await supabase
-      .from("meetings")
-      .select("id, lead_id, title, scheduled_time, reminder_24h_sent, reminder_1h_sent, completed, agent_email")
-      .eq("completed", false);
-
-    if (error) {
-      console.error("Supabase fetch error:", error);
-      return res.status(500).json({ error: error.message });
-    }
-
-    if (!meetings || meetings.length === 0) {
-      return res.status(200).json({ success: true, processed: 0, message: "No pending meetings" });
-    }
-
     let count = 0;
     const results: string[] = [];
 
-    for (const meeting of meetings) {
-      const meetingTime = new Date(meeting.scheduled_time);
-      const formattedTime = meetingTime.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-        timeZone: "Asia/Karachi",
-      });
-      const formattedDate = meetingTime.toLocaleDateString("en-US", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        timeZone: "Asia/Karachi",
-      });
+    // ── 1. MEETING REMINDERS (NOW, 1H, 24H) ──────────────────────────────────
+    const { data: meetings, error } = await supabase
+      .from("meetings")
+      .select("*")
+      .eq("completed", false);
 
-      // Fetch lead info
-      let leadEmail = "";
-      let agentEmail = GMAIL_USER;
+    if (error) {
+      console.error("Fetch meetings error:", error);
+    }
 
-      // Use agent_email stored on meeting row first
-      if ((meeting as any).agent_email) {
-        agentEmail = (meeting as any).agent_email;
-      }
+    if (meetings && meetings.length > 0) {
+      for (const meeting of meetings) {
+        if (!meeting.scheduled_time) continue;
+        const meetingTime = new Date(meeting.scheduled_time);
+        const formattedTime = meetingTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const formattedDate = meetingTime.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
 
-      if (meeting.lead_id) {
-        const { data: lead } = await supabase
-          .from("leads")
-          .select("email, assigned_agent_name")
-          .eq("id", meeting.lead_id)
-          .single();
+        const recipients = [meeting.lead_email, meeting.agent_email].filter(Boolean) as string[];
+        if (recipients.length === 0) continue;
 
-        if (lead?.email) {
-          leadEmail = lead.email;
-          agentEmail = lead.assigned_agent_name || agentEmail;
-        }
-      }
+        // Stage 3: Meeting Starting NOW
+        if (!meeting.meeting_now_sent && meetingTime.getTime() <= (now.getTime() + 2 * 60 * 1000) && meetingTime.getTime() >= (now.getTime() - 15 * 60 * 1000)) {
+          await sendEmail(recipients, `🔴 MEETING STARTING NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
+          await supabase.from("meetings").update({ meeting_now_sent: true }).eq("id", meeting.id);
 
-      // Fallback: extract email from meeting title
-      if (!leadEmail && meeting.title) {
-        const emailMatch = meeting.title.match(/[\w.-]+@[\w.-]+\.\w+/);
-        if (emailMatch) {
-          leadEmail = emailMatch[0];
-          // Try to find agent from leads table
-          const { data: matchedLead } = await supabase
-            .from("leads")
-            .select("assigned_agent_name")
-            .ilike("email", leadEmail)
-            .single();
-          if (matchedLead?.assigned_agent_name) {
-            agentEmail = matchedLead.assigned_agent_name;
-          }
-        }
-      }
+          await supabase.from("emails_sent").insert({
+            lead_id: meeting.lead_id || "",
+            lead_email: meeting.lead_email || "",
+            subject: `🔴 MEETING STARTING NOW — ${formattedTime}`,
+            sequence_type: "starting_now",
+            status: "sent",
+            sent_at: now.toISOString(),
+          });
 
-      if (!leadEmail) {
-        results.push(`Meeting ${meeting.id}: no lead email found, skipped`);
-        continue;
-      }
-
-      const recipients = [leadEmail, agentEmail].filter(
-        (e, i, arr) => e && arr.indexOf(e) === i
-      );
-
-      // Stage 3: Meeting Starting NOW
-      // Fire ONLY when now >= meetingTime (at or after exact meeting time), within a 5-minute window
-      // Mark completed FIRST to prevent any duplicate sends from concurrent polls
-      const nowMs = now.getTime();
-      const meetMs = meetingTime.getTime();
-      const isPastOrNow = nowMs >= meetMs;
-      const isWithin5Min = nowMs <= meetMs + 5 * 60 * 1000;
-      if (!meeting.completed && isPastOrNow && isWithin5Min) {
-        // Atomically mark completed first — prevents duplicate if two polls race
-        const { data: updated } = await supabase
-          .from("meetings")
-          .update({ completed: true })
-          .eq("id", meeting.id)
-          .eq("completed", false) // only update if still false (atomic guard)
-          .select("id");
-
-        if (updated && updated.length > 0) {
-          await sendEmail(recipients, `🔴 Your Meeting is Starting NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
           count++;
-          results.push(`NOW email → ${recipients.join(", ")} at ${formattedTime}`);
+          results.push(`NOW notification → ${recipients.join(", ")} at ${formattedTime}`);
+
+          if (now.getTime() > meetingTime.getTime() + 30 * 60 * 1000) {
+            await supabase.from("meetings").update({ completed: true }).eq("id", meeting.id);
+          }
+          continue;
         }
-        continue;
-      }
 
-      // Stage 2: 1-Hour Reminder (Only if meeting is more than 2 minutes in future and within 1 hour)
-      if (!meeting.reminder_1h_sent && meetingTime.getTime() <= oneHourLater.getTime() && meetingTime.getTime() > (now.getTime() + 2 * 60 * 1000)) {
-        await sendEmail(recipients, `⏰ Your Meeting Starts in 1 Hour — ${formattedTime}`, reminder1hHtml(formattedTime));
-        await supabase.from("meetings").update({ reminder_1h_sent: true }).eq("id", meeting.id);
-        count++;
-        results.push(`1h reminder → ${recipients.join(", ")} at ${formattedTime}`);
-      }
+        // Stage 2: 1-Hour Reminder
+        if (!meeting.reminder_1h_sent && meetingTime.getTime() <= oneHourLater.getTime() && meetingTime.getTime() > (now.getTime() + 2 * 60 * 1000)) {
+          await sendEmail(recipients, `⏰ Your Meeting Starts in 1 Hour — ${formattedTime}`, reminder1hHtml(formattedTime));
+          await supabase.from("meetings").update({ reminder_1h_sent: true }).eq("id", meeting.id);
+          count++;
+          results.push(`1h reminder → ${recipients.join(", ")} at ${formattedTime}`);
+        }
 
-      // Stage 1: 24-Hour Reminder (Only if meeting is more than 1 hour in future and within 24 hours)
-      if (!meeting.reminder_24h_sent && meetingTime.getTime() <= oneDayLater.getTime() && meetingTime.getTime() > oneHourLater.getTime()) {
-        await sendEmail(recipients, `📅 Meeting Tomorrow — ${formattedDate} at ${formattedTime}`, reminder24hHtml(formattedDate, formattedTime));
-        await supabase.from("meetings").update({ reminder_24h_sent: true }).eq("id", meeting.id);
-        count++;
-        results.push(`24h reminder → ${recipients.join(", ")} at ${formattedTime}`);
+        // Stage 1: 24-Hour Reminder
+        if (!meeting.reminder_24h_sent && meetingTime.getTime() <= oneDayLater.getTime() && meetingTime.getTime() > oneHourLater.getTime()) {
+          await sendEmail(recipients, `📅 Meeting Tomorrow — ${formattedDate} at ${formattedTime}`, reminder24hHtml(formattedDate, formattedTime));
+          await supabase.from("meetings").update({ reminder_24h_sent: true }).eq("id", meeting.id);
+          count++;
+          results.push(`24h reminder → ${recipients.join(", ")} at ${formattedTime}`);
+        }
       }
     }
 
-    // ── AUTOMATIC LEAD FOLLOW-UPS (For leads that have NOT booked a meeting and NOT replied) ──
+    // ── 2. AUTOMATIC GMAIL REPLIES CHECKER (IMAP) ────────────────────────────
+    const { data: activeLeads } = await supabase
+      .from("leads")
+      .select("id, name, email, status")
+      .neq("status", "meeting")
+      .neq("status", "booked")
+      .neq("status", "won")
+      .neq("status", "lost")
+      .neq("status", "replied");
+
+    if (activeLeads && activeLeads.length > 0) {
+      const activeEmails = activeLeads.map((l) => l.email).filter(Boolean);
+      const repliedEmailsSet = await checkGmailRepliesForLeads(activeEmails);
+
+      if (repliedEmailsSet.size > 0) {
+        for (const lead of activeLeads) {
+          if (lead.email && repliedEmailsSet.has(lead.email.trim().toLowerCase())) {
+            // Auto update lead status to replied
+            await supabase.from("leads").update({ status: "replied" }).eq("id", lead.id);
+
+            await supabase.from("emails_sent").insert({
+              lead_id: lead.id,
+              lead_email: lead.email,
+              subject: "Direct Email Reply Received",
+              sequence_type: "reply",
+              status: "replied",
+              sent_at: now.toISOString(),
+            });
+
+            count++;
+            results.push(`[Auto-Detect] ${lead.email} automatically marked as REPLIED via Gmail IMAP!`);
+          }
+        }
+      }
+    }
+
+    // ── 3. AUTOMATIC LEAD FOLLOW-UPS (24h, 48h, 72h, 10d) ────────────────────
     const { data: pendingLeads } = await supabase
       .from("leads")
       .select("id, name, email, status, created_at, assigned_agent_name")
       .neq("status", "meeting")
+      .neq("status", "booked")
       .neq("status", "won")
       .neq("status", "lost")
       .neq("status", "replied");
@@ -234,7 +273,6 @@ export default async function handler(req: any, res: any) {
         const createdAt = new Date(lead.created_at || now.toISOString());
         const hoursSinceImport = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
 
-        // Fetch sent emails for this lead to avoid duplicates
         const { data: sentEmails } = await supabase
           .from("emails_sent")
           .select("sequence_type")
