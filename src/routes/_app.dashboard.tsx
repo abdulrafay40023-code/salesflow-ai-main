@@ -140,17 +140,16 @@ function DashboardPage() {
         setDbLeads([]);
       }
 
-      if (emailsRes.status === "fulfilled" && emailsRes.value.data) {
-        let emails = (emailsRes.value.data as any[]).filter(
-          (e: { sequence_type: string }) =>
-            e.sequence_type !== "agent_presence" && e.sequence_type !== "agent_login",
+      if (emailsRes.status === "fulfilled" && Array.isArray(emailsRes.value.data)) {
+        let emails = emailsRes.value.data.filter(
+          (e: any) => e && e.sequence_type !== "agent_presence" && e.sequence_type !== "agent_login",
         );
 
         if (!isAdmin && fetchedLeads.length > 0) {
-          const leadIds = new Set(fetchedLeads.map((l) => l.id));
-          const leadEmails = new Set(fetchedLeads.map((l) => l.email));
+          const leadIds = new Set(fetchedLeads.map((l) => l?.id).filter(Boolean));
+          const leadEmails = new Set(fetchedLeads.map((l) => (l?.email || "").toLowerCase()).filter(Boolean));
           emails = emails.filter(
-            (e) => leadIds.has(e.lead_id) || leadEmails.has(e.lead_email)
+            (e: any) => e && ((e.lead_id && leadIds.has(e.lead_id)) || (e.lead_email && leadEmails.has(e.lead_email.toLowerCase())))
           );
         } else if (!isAdmin) {
           emails = [];
@@ -159,18 +158,16 @@ function DashboardPage() {
         setDbEmails(emails as DbEmailLog[]);
       }
 
-      if (meetingsRes.status === "fulfilled" && meetingsRes.value.data) {
+      if (meetingsRes.status === "fulfilled" && Array.isArray(meetingsRes.value.data)) {
         let meetings = meetingsRes.value.data as DbMeeting[];
         if (!isAdmin) {
           const agentEmail = (user?.email || "").trim().toLowerCase();
-          const leadIds = new Set(fetchedLeads.map((l) => l.id));
-          const leadEmails = new Set(fetchedLeads.map((l) => (l.email || "").toLowerCase()));
+          const leadIds = new Set(fetchedLeads.map((l) => l?.id).filter(Boolean));
+          const leadEmails = new Set(fetchedLeads.map((l) => (l?.email || "").toLowerCase()).filter(Boolean));
           meetings = meetings.filter((m) => {
-            // Match by lead_id
+            if (!m) return false;
             if (m.lead_id && leadIds.has(m.lead_id)) return true;
-            // Match by agent_email stored on meeting
             if ((m as any).agent_email && (m as any).agent_email.toLowerCase() === agentEmail) return true;
-            // Match by lead email extracted from title
             if (m.title) {
               const emailMatch = m.title.match(/[\w.-]+@[\w.-]+\.\w+/);
               if (emailMatch && leadEmails.has(emailMatch[0].toLowerCase())) return true;
@@ -246,35 +243,36 @@ function DashboardPage() {
   }
 
   // Stats from Supabase (live)
-  const total = dbLeads.length;
-  const contacted = dbLeads.filter((l) => l.status === "contacted").length;
-  // Meetings booked = actual rows in meetings table (not lead status)
-  const meetingsBooked = dbMeetings.length;
-  const wonLeads = dbLeads.filter((l) => l.status === "won").length;
+  const safeLeads = (dbLeads || []).filter(Boolean);
+  const safeMeetings = (dbMeetings || []).filter(Boolean);
+  const safeEmails = (dbEmails || []).filter(Boolean);
 
-  // Active uncompleted meetings scheduled strictly for TODAY (local date match)
+  const total = safeLeads.length;
+  const contacted = safeLeads.filter((l) => l.status === "contacted").length;
+  const meetingsBooked = safeMeetings.length;
+  const wonLeads = safeLeads.filter((l) => l.status === "won").length;
+
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date();
   todayEnd.setHours(23, 59, 59, 999);
 
-  const uncompletedMeetings = dbMeetings.filter((m) => !m.completed);
+  const uncompletedMeetings = safeMeetings.filter((m) => !m.completed);
   const todayMeetings = uncompletedMeetings.filter((m) => {
+    if (!m.scheduled_time) return false;
     const mDate = new Date(m.scheduled_time);
-    return mDate >= todayStart && mDate <= todayEnd;
+    return !isNaN(mDate.getTime()) && mDate >= todayStart && mDate <= todayEnd;
   });
 
   const meetingsToday = todayMeetings.length;
 
-  // Email stats (recomputed from dbEmails)
-  const emailSent = dbEmails.filter((e) => e.status === "sent" || e.status === "opened").length;
-  const emailReplied = dbEmails.filter((e) => e.status === "replied" || e.status === "opened").length;
-  const emailPending = dbEmails.filter((e) => e.status === "pending").length;
-  const emailNoResp = dbEmails.filter((e) => e.status === "failed").length;
-  const emailTotal = dbEmails.length || 1;
+  const emailSent = safeEmails.filter((e) => e && (e.status === "sent" || e.status === "opened")).length;
+  const emailReplied = safeEmails.filter((e) => e && (e.status === "replied" || e.status === "opened")).length;
+  const emailPending = safeEmails.filter((e) => e && e.status === "pending").length;
+  const emailNoResp = safeEmails.filter((e) => e && e.status === "failed").length;
+  const emailTotal = safeEmails.length || 1;
 
-  // Latest 5 leads from Supabase
-  const latestLeads = dbLeads.slice(0, 5);
+  const latestLeads = safeLeads.slice(0, 5);
 
   return (
     <div className="space-y-6">
