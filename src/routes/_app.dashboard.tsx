@@ -279,6 +279,12 @@ function DashboardPage() {
   const emailBooked = safeMeetings.length;
   const emailTotal = Math.max(emailSent + emailReplied + emailBooked, 1);
 
+  // Automated Follow-up Sequence Counts
+  const fu24Count = safeEmails.filter((e) => e && (e.sequence_type === "followup_24h" || (e.subject && e.subject.toLowerCase().includes("quick follow-up")))).length;
+  const fu48Count = safeEmails.filter((e) => e && (e.sequence_type === "followup_48h" || (e.subject && e.subject.toLowerCase().includes("following up")))).length;
+  const fu72Count = safeEmails.filter((e) => e && (e.sequence_type === "followup_72h" || (e.subject && e.subject.toLowerCase().includes("demo")))).length;
+  const fu10dCount = safeEmails.filter((e) => e && (e.sequence_type === "followup_10d" || (e.subject && e.subject.toLowerCase().includes("final check-in")))).length;
+
   const latestLeads = safeLeads.slice(0, 5);
 
   return (
@@ -523,37 +529,37 @@ function DashboardPage() {
           )}
         </div>
 
-        {/* AI Automation panel */}
+        {/* Automated Follow-up Sequences panel */}
         <div className="panel overflow-hidden">
           <div className="mesh-bg bg-primary/90 p-5 text-primary-foreground">
             <div className="flex items-center gap-2">
-              <CalendarCheck className="size-4" />
-              <h2 className="font-display text-base font-bold">AI Automation</h2>
+              <Sparkles className="size-4" />
+              <h2 className="font-display text-base font-bold">Automated Follow-up Sequences</h2>
             </div>
             <p className="mt-1 text-xs text-primary-foreground/80">
-              {total > 0
-                ? `Monitoring ${total} leads · last sync ${lastSync.toLocaleTimeString()}`
-                : "Waiting for leads to monitor"}
+              Live tracking across 4 follow-up stages
             </p>
           </div>
           <div className="space-y-4 p-5">
             {[
-              ["Welcome sequence", total > 0 ? Math.min(100, Math.round((emailSent / Math.max(total, 1)) * 100)) : 0],
-              ["Reminder emails", emailSent > 0 ? Math.round((emailBooked / Math.max(emailSent, 1)) * 100) : 0],
-              ["Lead scoring", total > 0 ? 100 : 0],
-              ["Meeting suggestions", total > 0 ? Math.round((wonLeads / Math.max(total, 1)) * 100) : 0],
-            ].map(([label, pct]) => (
+              ["24h Check-in Email", fu24Count, total > 0 ? Math.min(100, Math.round((fu24Count / total) * 100)) : 0],
+              ["48h Value Touchpoint", fu48Count, total > 0 ? Math.min(100, Math.round((fu48Count / total) * 100)) : 0],
+              ["72h Demo Invitation", fu72Count, total > 0 ? Math.min(100, Math.round((fu72Count / total) * 100)) : 0],
+              ["10d Final Touchpoint", fu10dCount, total > 0 ? Math.min(100, Math.round((fu10dCount / total) * 100)) : 0],
+            ].map(([label, count, pct]) => (
               <div key={label as string}>
                 <div className="flex items-center justify-between text-sm">
-                  <span>{label as string}</span>
-                  <span className="text-muted-foreground tabular-nums">{pct as number}%</span>
+                  <span className="font-medium">{label as string}</span>
+                  <span className="text-xs text-muted-foreground tabular-nums font-semibold">
+                    {count as number} sent <span className="opacity-70">({pct as number}%)</span>
+                  </span>
                 </div>
                 <Progress value={pct as number} className="mt-2 h-1.5" />
               </div>
             ))}
             {total === 0 && (
               <p className="text-center text-xs text-muted-foreground pt-2">
-                Import leads to activate AI automation
+                Import leads to activate automated follow-up tracking
               </p>
             )}
           </div>
