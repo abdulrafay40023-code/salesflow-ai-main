@@ -260,11 +260,9 @@ function EmailPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         <StatCard label="Welcome Emails" value={counts.welcome} icon={Sparkles} tone="primary" hint="sent on import" />
         <StatCard label="Booking Confirmations" value={counts.bookingConfirmed} icon={CheckCircle2} tone="success" hint="meeting confirmed" />
-        <StatCard label="Meeting Reminders" value={counts.reminders} icon={Clock} tone="warning" hint="24h & 1h nudges" />
-        <StatCard label="Meeting Starting NOW" value={counts.meetingNow} icon={Send} tone="info" hint="live session alerts" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

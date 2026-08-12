@@ -8,8 +8,12 @@ import {
   TrendingUp,
   UserPlus,
   Users,
+  X,
+  Bell,
+  Clock,
+  AlertCircle,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { toast } from "sonner";
 import { StatCard } from "@/components/crm/StatCard";
 import { PageHeader } from "@/components/crm/Topbar";
@@ -88,6 +92,32 @@ function DashboardPage() {
   const [dbMeetings, setDbMeetings] = useState<DbMeeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastSync, setLastSync] = useState<Date>(new Date());
+  const [dismissedNotifs, setDismissedNotifs] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem("crm_dismissed_notifs");
+      if (!stored) return new Set<string>();
+      const parsed: Array<{id: string; time: number}> = JSON.parse(stored);
+      const now = Date.now();
+      // Only keep dismissals from last 24h
+      const valid = parsed.filter((d) => now - d.time < 24 * 60 * 60 * 1000);
+      localStorage.setItem("crm_dismissed_notifs", JSON.stringify(valid));
+      return new Set(valid.map((d) => d.id));
+    } catch { return new Set<string>(); }
+  });
+
+  function dismissNotif(id: string) {
+    setDismissedNotifs((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      try {
+        const stored = localStorage.getItem("crm_dismissed_notifs");
+        const existing: Array<{id: string; time: number}> = stored ? JSON.parse(stored) : [];
+        existing.push({ id, time: Date.now() });
+        localStorage.setItem("crm_dismissed_notifs", JSON.stringify(existing));
+      } catch {}
+      return next;
+    });
+  }
 
   async function fetchLive() {
     setLoading(true);
@@ -329,49 +359,131 @@ function DashboardPage() {
         <StatCard label="Won Deals" value={wonLeads} icon={CheckCircle2} tone="success" hint="closed won" />
       </div>
 
-      {/* Active Meetings Banner — Mark Done (Only for working agents, not admin) */}
+      {/* ── Booking Notification Banner (NO mark done button, NO cross) ── */}
       {!isAdmin && uncompletedMeetings.length > 0 && (
         <div className="space-y-2">
           {uncompletedMeetings.map((m) => (
             <div
               key={m.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-orange-500/25 bg-orange-500/8 px-4 py-3"
+              className="flex flex-wrap items-center gap-3 rounded-xl border border-orange-500/25 bg-orange-500/8 px-4 py-3"
             >
-              <div className="flex items-center gap-2.5">
-                <span className="grid size-8 place-items-center rounded-lg bg-orange-500/15">
-                  <CalendarCheck className="size-4 text-orange-400" />
-                </span>
-                <div>
-                  <p className="text-sm font-semibold">{m.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {(() => {
-                      if (!m?.scheduled_time) return "Scheduled";
-                      const d = new Date(m.scheduled_time);
-                      return isNaN(d.getTime())
-                        ? "Scheduled"
-                        : d.toLocaleString([], {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: true,
-                          });
-                    })()}
-                  </p>
-                </div>
+              <span className="grid size-8 place-items-center rounded-lg bg-orange-500/15 shrink-0">
+                <CalendarCheck className="size-4 text-orange-400" />
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold">{m.title}</p>
+                <p className="text-xs text-muted-foreground">
+                  {(() => {
+                    if (!m?.scheduled_time) return "Scheduled";
+                    const d = new Date(m.scheduled_time);
+                    return isNaN(d.getTime())
+                      ? "Scheduled"
+                      : d.toLocaleString([], {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: true,
+                        });
+                  })()}
+                </p>
               </div>
-              <Button
-                size="sm"
-                className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs h-8 gap-1.5"
-                onClick={() => handleToggleMeetingDone(m.id, m.completed)}
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" /> Mark Meeting Done
-              </Button>
             </div>
           ))}
         </div>
       )}
+
+      {/* ── Smart CRM Notifications (24h, 1h, NOW) with X dismiss ── */}
+      {(() => {
+        const now = new Date();
+        const notifs: Array<{id: string; type: "now"|"1h"|"24h"; meeting: DbMeeting; label: string}> = [];
+
+        for (const m of safeMeetings) {
+          if (!m.scheduled_time) continue;
+          const mt = new Date(m.scheduled_time);
+          if (isNaN(mt.getTime())) continue;
+          const diffMs = mt.getTime() - now.getTime();
+
+          // Extract time label from title
+          let timeLabel = "";
+          if (m.title && m.title.includes("@ ")) {
+            timeLabel = m.title.split("@ ")[1]?.trim() || "";
+          }
+          if (!timeLabel) {
+            timeLabel = mt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+          }
+
+          // NOW: meeting time arrived (within last 5 min)
+          if (diffMs <= 0 && diffMs >= -5 * 60 * 1000) {
+            const id = `now-${m.id}`;
+            if (!dismissedNotifs.has(id)) {
+              notifs.push({ id, type: "now", meeting: m, label: timeLabel });
+            }
+          }
+          // 1H: within next 0–65 minutes
+          else if (diffMs > 0 && diffMs <= 65 * 60 * 1000) {
+            const id = `1h-${m.id}`;
+            if (!dismissedNotifs.has(id)) {
+              notifs.push({ id, type: "1h", meeting: m, label: timeLabel });
+            }
+          }
+          // 24H: within next 1h–25h
+          else if (diffMs > 65 * 60 * 1000 && diffMs <= 25 * 60 * 60 * 1000) {
+            const id = `24h-${m.id}`;
+            if (!dismissedNotifs.has(id)) {
+              notifs.push({ id, type: "24h", meeting: m, label: timeLabel });
+            }
+          }
+        }
+
+        if (notifs.length === 0) return null;
+
+        return (
+          <div className="space-y-2">
+            {notifs.map((n) => {
+              const isNow = n.type === "now";
+              const is1h = n.type === "1h";
+              const borderColor = isNow ? "border-red-500/30 bg-red-500/8" : is1h ? "border-yellow-500/30 bg-yellow-500/8" : "border-blue-500/30 bg-blue-500/8";
+              const iconColor = isNow ? "text-red-400" : is1h ? "text-yellow-400" : "text-blue-400";
+              const iconBg = isNow ? "bg-red-500/15" : is1h ? "bg-yellow-500/15" : "bg-blue-500/15";
+              const Icon = isNow ? AlertCircle : is1h ? Clock : Bell;
+              const title = isNow
+                ? `🔴 Meeting Starting NOW — ${n.label}`
+                : is1h
+                ? `⏰ Meeting in 1 Hour — ${n.label}`
+                : `📅 Meeting Tomorrow — ${n.label}`;
+              const subtitle = isNow
+                ? "Your meeting is happening right now!"
+                : is1h
+                ? "Prepare your notes — meeting starts in less than 1 hour."
+                : "Meeting scheduled for tomorrow — be prepared.";
+
+              return (
+                <div
+                  key={n.id}
+                  className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 ${borderColor} transition-all duration-300`}
+                >
+                  <span className={`grid size-8 place-items-center rounded-lg shrink-0 ${iconBg}`}>
+                    <Icon className={`size-4 ${iconColor}`} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold">{title}</p>
+                    <p className="text-xs text-muted-foreground">{subtitle}</p>
+                  </div>
+                  <button
+                    onClick={() => dismissNotif(n.id)}
+                    className="ml-auto shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+                    title="Dismiss"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Charts Row */}
       <div className="grid gap-4 lg:grid-cols-3">
