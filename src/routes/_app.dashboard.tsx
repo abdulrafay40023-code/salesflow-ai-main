@@ -394,8 +394,8 @@ function DashboardPage() {
         </div>
       )}
 
-      {/* ── Smart CRM Notifications (24h, 1h, NOW) with X dismiss ── */}
-      {(() => {
+      {/* ── Smart CRM Notifications (24h, 1h, NOW) with X dismiss (ONLY for working agents, NOT admin) ── */}
+      {!isAdmin && (() => {
         const now = new Date();
         const notifs: Array<{id: string; type: "now"|"1h"|"24h"; meeting: DbMeeting; label: string}> = [];
 
