@@ -79,6 +79,7 @@ function EmptyState({ icon: Icon, text }: { icon: React.ElementType; text: strin
 
 function DashboardPage() {
   const { user } = useCrm();
+  const isAdmin = Boolean(user && (user.role === "admin" || user.email === "garryamelia6265@gmail.com"));
 
   const [dbLeads, setDbLeads] = useState<DbLead[]>([]);
   const [dbEmails, setDbEmails] = useState<DbEmailLog[]>([]);
@@ -89,7 +90,6 @@ function DashboardPage() {
   async function fetchLive() {
     setLoading(true);
     try {
-      const isAdmin = Boolean(user && (user.role === "admin" || user.email === "garryamelia6265@gmail.com"));
 
       let leadsQuery = supabase
         .from("leads")
