@@ -131,30 +131,24 @@ function EmailPage() {
     return map;
   }, [leads]);
 
-  // Set of all lead emails/IDs that have booked a meeting or replied
+  // Set of lead IDs/emails that have GENUINELY replied (not bookings)
   const repliedLeadKeys = useMemo(() => {
     const keys = new Set<string>();
+    // Only leads whose status is explicitly "replied" (typed a real reply)
     (leads || []).forEach((l) => {
-      if (l.status === "meeting" || l.status === "won") {
+      if (l.status === "replied") {
         if (l.id) keys.add(l.id);
         if (l.email) keys.add(l.email.toLowerCase());
       }
     });
-    (emails || []).forEach((e) => {
-      if (e?.type === "meeting_confirmed" || e?.status === "replied" || e?.status === "opened") {
-        if (e.lead_id) keys.add(e.lead_id);
-        if (e.lead_email) keys.add(e.lead_email.toLowerCase());
-      }
-    });
     return keys;
-  }, [leads, emails]);
+  }, [leads]);
 
+  // isReply: true only if lead genuinely replied (NOT booking/meeting_confirmed)
   const isReply = (e: DbEmailLog) => {
-    if (e?.type === "meeting_confirmed" || e?.status === "replied" || e?.status === "opened") return true;
+    // Check by lead_id or email if the lead's status is "replied"
     if (e?.lead_id && repliedLeadKeys.has(e.lead_id)) return true;
     if (e?.lead_email && repliedLeadKeys.has(e.lead_email.toLowerCase())) return true;
-    const l = e?.lead_id ? leadMap[e.lead_id] : (e?.lead_email ? leadMap[e.lead_email.toLowerCase()] : null);
-    if (l?.email && repliedLeadKeys.has(l.email.toLowerCase())) return true;
     return false;
   };
 

@@ -92,6 +92,7 @@ function FollowUpsPage() {
         .from("leads")
         .select("*")
         .neq("status", "meeting")
+        .neq("status", "booked")
         .neq("status", "won")
         .neq("status", "lost")
         .neq("status", "replied")
