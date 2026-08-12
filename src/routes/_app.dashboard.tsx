@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Mail,
   RefreshCw,
+  Sparkles,
   TrendingUp,
   UserPlus,
   Users,
