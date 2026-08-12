@@ -536,7 +536,7 @@ function DashboardPage() {
           <div className="space-y-4 p-5">
             {[
               ["Welcome sequence", total > 0 ? Math.min(100, Math.round((emailSent / Math.max(total, 1)) * 100)) : 0],
-              ["Reminder emails", emailPending > 0 ? Math.round(((emailSent - emailPending) / Math.max(emailSent, 1)) * 100) : 0],
+              ["Reminder emails", emailSent > 0 ? Math.round((emailBooked / Math.max(emailSent, 1)) * 100) : 0],
               ["Lead scoring", total > 0 ? 100 : 0],
               ["Meeting suggestions", total > 0 ? Math.round((wonLeads / Math.max(total, 1)) * 100) : 0],
             ].map(([label, pct]) => (
