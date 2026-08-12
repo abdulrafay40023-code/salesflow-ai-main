@@ -98,7 +98,7 @@ export default async function handler(req: any, res: any) {
 
     const { data: meetings, error } = await supabase
       .from("meetings")
-      .select("id, lead_id, title, scheduled_time, reminder_24h_sent, reminder_1h_sent, completed")
+      .select("id, lead_id, title, scheduled_time, reminder_24h_sent, reminder_1h_sent, completed, agent_email")
       .eq("completed", false);
 
     if (error) {
@@ -133,6 +133,11 @@ export default async function handler(req: any, res: any) {
       let leadEmail = "";
       let agentEmail = GMAIL_USER;
 
+      // Use agent_email stored on meeting row first
+      if ((meeting as any).agent_email) {
+        agentEmail = (meeting as any).agent_email;
+      }
+
       if (meeting.lead_id) {
         const { data: lead } = await supabase
           .from("leads")
@@ -142,15 +147,16 @@ export default async function handler(req: any, res: any) {
 
         if (lead?.email) {
           leadEmail = lead.email;
-          agentEmail = lead.assigned_agent_name || GMAIL_USER;
+          agentEmail = lead.assigned_agent_name || agentEmail;
         }
       }
 
-      // Fallback for direct bookings without lead_id
+      // Fallback: extract email from meeting title
       if (!leadEmail && meeting.title) {
         const emailMatch = meeting.title.match(/[\w.-]+@[\w.-]+\.\w+/);
         if (emailMatch) {
           leadEmail = emailMatch[0];
+          // Try to find agent from leads table
           const { data: matchedLead } = await supabase
             .from("leads")
             .select("assigned_agent_name")
@@ -171,12 +177,25 @@ export default async function handler(req: any, res: any) {
         (e, i, arr) => e && arr.indexOf(e) === i
       );
 
-      // Stage 3: Meeting Starting NOW (mark completed so it only fires once)
-      if (!meeting.completed && now.getTime() >= (meetingTime.getTime() - 45000)) {
-        await sendEmail(recipients, `🔴 Your Meeting is Starting NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
-        await supabase.from("meetings").update({ completed: true }).eq("id", meeting.id);
-        count++;
-        results.push(`NOW email → ${recipients.join(", ")} at ${formattedTime}`);
+      // Stage 3: Meeting Starting NOW
+      // Fire ONLY when now >= meetingTime (at or after exact meeting time), within a 5-minute window
+      // Mark completed FIRST to prevent any duplicate sends from concurrent polls
+      const nowMs = now.getTime();
+      const meetMs = meetingTime.getTime();
+      const isPastOrNow = nowMs >= meetMs;
+      const isWithin5Min = nowMs <= meetMs + 5 * 60 * 1000;
+      if (!meeting.completed && isPastOrNow && isWithin5Min) {
+        // Atomically mark completed first — prevents duplicate if two polls race
+        const { error: updateErr } = await supabase
+          .from("meetings")
+          .update({ completed: true })
+          .eq("id", meeting.id)
+          .eq("completed", false); // only update if still false (atomic guard)
+        if (!updateErr) {
+          await sendEmail(recipients, `🔴 Your Meeting is Starting NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
+          count++;
+          results.push(`NOW email → ${recipients.join(", ")} at ${formattedTime}`);
+        }
         continue;
       }
 

@@ -116,7 +116,7 @@ function DashboardPage() {
           .limit(50),
         supabase
           .from("meetings")
-          .select("id,title,scheduled_time,completed,lead_id")
+          .select("id,title,scheduled_time,completed,lead_id,agent_email")
           .eq("completed", false)
           .order("scheduled_time", { ascending: true })
           .limit(20),
@@ -161,11 +161,22 @@ function DashboardPage() {
 
       if (meetingsRes.status === "fulfilled" && meetingsRes.value.data) {
         let meetings = meetingsRes.value.data as DbMeeting[];
-        if (!isAdmin && fetchedLeads.length > 0) {
+        if (!isAdmin) {
+          const agentEmail = (user?.email || "").trim().toLowerCase();
           const leadIds = new Set(fetchedLeads.map((l) => l.id));
-          meetings = meetings.filter((m) => m.lead_id && leadIds.has(m.lead_id));
-        } else if (!isAdmin) {
-          meetings = [];
+          const leadEmails = new Set(fetchedLeads.map((l) => (l.email || "").toLowerCase()));
+          meetings = meetings.filter((m) => {
+            // Match by lead_id
+            if (m.lead_id && leadIds.has(m.lead_id)) return true;
+            // Match by agent_email stored on meeting
+            if ((m as any).agent_email && (m as any).agent_email.toLowerCase() === agentEmail) return true;
+            // Match by lead email extracted from title
+            if (m.title) {
+              const emailMatch = m.title.match(/[\w.-]+@[\w.-]+\.\w+/);
+              if (emailMatch && leadEmails.has(emailMatch[0].toLowerCase())) return true;
+            }
+            return false;
+          });
         }
         setDbMeetings(meetings);
       }
