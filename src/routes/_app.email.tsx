@@ -169,10 +169,13 @@ function EmailPage() {
 
   function filterEmails(tab: string) {
     const list = emails || [];
-    if (tab === "all") return list;
-    if (tab === "sent") return list.filter((e) => e?.status === "sent" || e?.type === "welcome");
-    if (tab === "replied") return list.filter(isReply);
-    return list;
+    // All tab = only welcome emails (leads who received welcome email)
+    if (tab === "all") return list.filter((e) => e?.type === "welcome");
+    // Booked tab = meeting confirmed emails
+    if (tab === "booked") return list.filter((e) => e?.type === "meeting_confirmed");
+    // Replied tab = leads who booked (booking = they replied/responded)
+    if (tab === "replied") return list.filter((e) => isReply(e));
+    return list.filter((e) => e?.type === "welcome");
   }
 
   async function handleSendBookingLink(leadId: string, email: string) {
@@ -301,20 +304,24 @@ function EmailPage() {
           </div>
           <Tabs defaultValue="all" className="p-5">
             <TabsList className="rounded-xl">
-              {["all", "sent", "pending", "replied", "no-response"].map((t) => (
+              {(["all", "booked", "replied"] as const).map((t) => (
                 <TabsTrigger key={t} value={t} className="rounded-lg capitalize">
-                  {t === "no-response" ? "No response" : t}
+                  {t === "all" ? "Welcome Sent" : t === "booked" ? "Booked" : "Replied"}
                 </TabsTrigger>
               ))}
             </TabsList>
-            {["all", "sent", "pending", "replied", "no-response"].map((t) => {
+            {(["all", "booked", "replied"] as const).map((t) => {
               const rows = filterEmails(t);
               return (
                 <TabsContent key={t} value={t} className="mt-4">
                   {rows.length === 0 ? (
                     <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
                       <Send className="h-8 w-8 opacity-30" />
-                      <p className="text-sm">No email records yet. Import leads to send welcome emails.</p>
+                      <p className="text-sm">
+                        {t === "all" ? "No welcome emails sent yet. Import leads to start." :
+                         t === "booked" ? "No bookings yet." :
+                         "No replies yet."}
+                      </p>
                     </div>
                   ) : (
                     <div className="overflow-x-auto rounded-xl border border-border">
@@ -323,27 +330,36 @@ function EmailPage() {
                           <TableRow className="bg-surface-2/60">
                             <TableHead>Recipient</TableHead>
                             <TableHead>Subject</TableHead>
-                            <TableHead>Type</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {rows.map((e) => {
-                            const lead = e.lead_id ? leadMap[e.lead_id] : null;
+                            // Resolve lead: first by id, then by email
+                            const lead = e.lead_id
+                              ? leadMap[e.lead_id]
+                              : e.lead_email
+                              ? leadMap[e.lead_email.toLowerCase()]
+                              : null;
+                            const displayName = lead?.name || (e.lead_email ? e.lead_email.split("@")[0] : "Lead");
+                            const displayEmail = lead?.email || e.lead_email || "";
                             return (
                               <TableRow key={e.id}>
                                 <TableCell className="whitespace-nowrap">
-                                  <p className="font-medium">{lead?.name ?? "Lead"}</p>
-                                  <p className="text-xs text-muted-foreground">{lead?.email ?? "—"}</p>
+                                  <p className="font-medium">{displayName}</p>
+                                  <p className="text-xs text-muted-foreground">{displayEmail}</p>
                                 </TableCell>
                                 <TableCell className="max-w-48 truncate">{e.subject || "—"}</TableCell>
-                                <TableCell className="whitespace-nowrap text-muted-foreground capitalize">{e.type}</TableCell>
                                 <TableCell>
                                   {(() => {
                                     const replied = isReply(e);
-                                    const displayLabel = e.type === "meeting_confirmed" ? "booked" : (replied ? "replied" : e.status);
-                                    const toneClass = replied ? stateTone.replied : (stateTone[e.status] ?? stateTone.sent);
+                                    const displayLabel =
+                                      e.type === "meeting_confirmed" ? "Booked" :
+                                      replied ? "Replied" : "Sent";
+                                    const toneClass =
+                                      e.type === "meeting_confirmed" ? stateTone.meeting_confirmed :
+                                      replied ? stateTone.replied : stateTone.sent;
                                     return (
                                       <Badge variant="outline" className={`rounded-full capitalize ${toneClass}`}>
                                         {displayLabel}
@@ -352,26 +368,15 @@ function EmailPage() {
                                   })()}
                                 </TableCell>
                                 <TableCell>
-                                  <div className="flex items-center gap-1.5">
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-7 text-xs rounded-lg text-emerald-600 hover:text-emerald-500"
-                                      onClick={() => handleSendBookingLink(e.lead_id, lead?.email || "")}
-                                      title="Send Booking Form Email"
-                                    >
-                                      <Clock className="h-3.5 w-3.5 mr-1" /> Booking Form
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-7 text-xs rounded-lg text-blue-600 hover:text-blue-500"
-                                      onClick={() => handleSend24hReminder(e.lead_id, lead?.email || "")}
-                                      title="Send 24h Follow-up Reminder"
-                                    >
-                                      <Clock className="h-3.5 w-3.5 mr-1" /> 24h Nudge
-                                    </Button>
-                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 text-xs rounded-lg text-emerald-600 hover:text-emerald-500"
+                                    onClick={() => handleSendBookingLink(e.lead_id, displayEmail)}
+                                    title="Send Booking Form Email"
+                                  >
+                                    <Clock className="h-3.5 w-3.5 mr-1" /> Booking Form
+                                  </Button>
                                 </TableCell>
                               </TableRow>
                             );
