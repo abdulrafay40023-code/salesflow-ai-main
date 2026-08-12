@@ -217,35 +217,43 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         .single();
 
       // 7. If scheduled meeting time is starting right now, fire email ONCE to BOTH lead & agent with Zoom Link!
-      if (isRightNow) {
-        await sendMeetingStartedNowEmail({
-          leadEmail: data.leadEmail,
-          agentEmail: realAgentEmail,
-          meetingTime: data.time,
-          zoomJoinUrl,
-        });
+      if (isRightNow && insertedMeeting?.id) {
+        // Atomic claim: set completed = true BEFORE sending email so no other thread sends duplicates
+        const { data: claimed } = await supabase
+          .from("meetings")
+          .update({ completed: true })
+          .eq("id", insertedMeeting.id)
+          .eq("completed", false)
+          .select("id");
+
+        if (claimed && claimed.length > 0) {
+          await sendMeetingStartedNowEmail({
+            leadEmail: data.leadEmail,
+            agentEmail: realAgentEmail,
+            meetingTime: data.time,
+            zoomJoinUrl,
+          });
+        }
       } else if (diffMs > 0 && diffMs <= 45 * 60 * 1000 && insertedMeeting?.id) {
         // Schedule precise server-side timer to fire at the EXACT minute when meeting time arrives!
         const meetingId = insertedMeeting.id;
         setTimeout(async () => {
           try {
-            const { data: freshMeeting } = await supabase
+            // Atomic claim: set completed = true BEFORE sending email
+            const { data: claimed } = await supabase
               .from("meetings")
-              .select("completed")
+              .update({ completed: true })
               .eq("id", meetingId)
-              .single();
+              .eq("completed", false)
+              .select("id");
 
-            if (freshMeeting && !freshMeeting.completed) {
+            if (claimed && claimed.length > 0) {
               await sendMeetingStartedNowEmail({
                 leadEmail: data.leadEmail,
                 agentEmail: realAgentEmail,
                 meetingTime: data.time,
                 zoomJoinUrl,
               });
-              await supabase
-                .from("meetings")
-                .update({ completed: true })
-                .eq("id", meetingId);
             }
           } catch (e) {
             console.error("Scheduled meeting email trigger error:", e);

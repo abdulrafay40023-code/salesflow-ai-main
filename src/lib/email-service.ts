@@ -314,7 +314,6 @@ export async function sendMeetingStartedNowEmail({
 
   const mailOptions = {
     from: `"Teals CRM Live Session" <${GMAIL_USER}>`,
-    to: recipients,
     subject: `🔔 Meeting Time Arrived! Your Sales Session is Starting Now (${meetingTime})`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; background-color: #ffffff;">
@@ -339,6 +338,11 @@ export async function sendMeetingStartedNowEmail({
     `,
   };
 
-  return await transporter.sendMail(mailOptions);
+  if (leadEmail) {
+    await transporter.sendMail({ ...mailOptions, to: leadEmail });
+  }
+  if (agentEmail && agentEmail.toLowerCase() !== leadEmail.toLowerCase()) {
+    await transporter.sendMail({ ...mailOptions, to: agentEmail });
+  }
 }
 

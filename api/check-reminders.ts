@@ -221,16 +221,27 @@ export default async function handler(req: any, res: any) {
         // Stage 3: Meeting Time Has Arrived (Starting NOW)
         // ONLY trigger when current time `now` reaches or passes meeting time
         if (now.getTime() >= meetingTime.getTime()) {
-          // Send SEPARATE individual emails to BOTH client & working agent
+          // ATOMIC CLAIM: Update completed = true BEFORE sending email!
+          // If another request already claimed it, claimed array will be empty and we stop immediately!
+          const { data: claimed } = await supabase
+            .from("meetings")
+            .update({ completed: true })
+            .eq("id", meeting.id)
+            .eq("completed", false)
+            .select("id");
+
+          if (!claimed || claimed.length === 0) {
+            // Already sent by another thread! Skip!
+            continue;
+          }
+
+          // Send EXACTLY 1 email to client and 1 email to agent
           if (leadEmail) {
             await sendEmail([leadEmail], `🔴 MEETING STARTING NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
           }
-          if (agentEmail) {
+          if (agentEmail && agentEmail.toLowerCase() !== leadEmail.toLowerCase()) {
             await sendEmail([agentEmail], `🔴 MEETING STARTING NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
           }
-
-          // Mark completed IMMEDIATELY in Supabase so it NEVER fires again!
-          await supabase.from("meetings").update({ completed: true }).eq("id", meeting.id);
 
           await supabase.from("emails_sent").insert({
             lead_id: meeting.lead_id || "",
@@ -242,7 +253,7 @@ export default async function handler(req: any, res: any) {
           });
 
           count++;
-          results.push(`NOW notification sent → Client: ${leadEmail} | Agent: ${agentEmail} at ${formattedTime}`);
+          results.push(`NOW notification sent ONCE → Client: ${leadEmail} | Agent: ${agentEmail} at ${formattedTime}`);
           continue;
         }
 
