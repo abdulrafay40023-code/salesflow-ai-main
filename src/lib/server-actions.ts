@@ -200,7 +200,7 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
       // isRightNow: Only true if the meeting start time is current minute or up to 1 min in past
       const isRightNow = diffMs <= 60 * 1000 && diffMs >= -2 * 60 * 1000;
 
-      // 6. Insert meeting into Supabase meetings table (mark completed immediately if right now to prevent duplicate background triggers)
+      // 6. Insert meeting into Supabase — always completed:false so check-reminders handles timing
       const { data: insertedMeeting } = await supabase
         .from("meetings")
         .insert({
@@ -210,55 +210,14 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
           scheduled_time: scheduledIso,
           reminder_24h_sent: isWithin24h ? true : false,
           reminder_1h_sent: isWithin1h ? true : false,
-          completed: isRightNow,
+          completed: false,
         })
         .select("id")
         .single();
 
-      // 7. If scheduled meeting time is starting right now, fire email ONCE to BOTH lead & agent with Zoom Link!
-      if (isRightNow && insertedMeeting?.id) {
-        // Atomic claim: set completed = true BEFORE sending email so no other thread sends duplicates
-        const { data: claimed } = await supabase
-          .from("meetings")
-          .update({ completed: true })
-          .eq("id", insertedMeeting.id)
-          .eq("completed", false)
-          .select("id");
-
-        if (claimed && claimed.length > 0) {
-          await sendMeetingStartedNowEmail({
-            leadEmail: data.leadEmail,
-            agentEmail: realAgentEmail,
-            meetingTime: data.time,
-            zoomJoinUrl,
-          });
-        }
-      } else if (diffMs > 0 && diffMs <= 45 * 60 * 1000 && insertedMeeting?.id) {
-        // Schedule precise server-side timer to fire at the EXACT minute when meeting time arrives!
-        const meetingId = insertedMeeting.id;
-        setTimeout(async () => {
-          try {
-            // Atomic claim: set completed = true BEFORE sending email
-            const { data: claimed } = await supabase
-              .from("meetings")
-              .update({ completed: true })
-              .eq("id", meetingId)
-              .eq("completed", false)
-              .select("id");
-
-            if (claimed && claimed.length > 0) {
-              await sendMeetingStartedNowEmail({
-                leadEmail: data.leadEmail,
-                agentEmail: realAgentEmail,
-                meetingTime: data.time,
-                zoomJoinUrl,
-              });
-            }
-          } catch (e) {
-            console.error("Scheduled meeting email trigger error:", e);
-          }
-        }, diffMs);
-      }
+      // 7. Email sending is handled SOLELY by /api/check-reminders (called every 15s from frontend).
+      //    No setTimeout here — that caused duplicate emails. check-reminders uses atomic DB claim
+      //    to guarantee exactly ONE email is sent when meeting time arrives.
 
       return { success: true };
     } catch (err: any) {
