@@ -334,14 +334,20 @@ function DashboardPage() {
                 <div>
                   <p className="text-sm font-semibold">{m.title}</p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(m.scheduled_time).toLocaleString([], {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      hour12: true,
-                    })}
+                    {(() => {
+                      if (!m?.scheduled_time) return "Scheduled";
+                      const d = new Date(m.scheduled_time);
+                      return isNaN(d.getTime())
+                        ? "Scheduled"
+                        : d.toLocaleString([], {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: true,
+                          });
+                    })()}
                   </p>
                 </div>
               </div>
@@ -379,7 +385,7 @@ function DashboardPage() {
             <div className="mt-6 space-y-3">
               {(["new", "contacted", "qualified", "meeting", "won", "lost"] as const).map((s) => {
                 const count = dbLeads.filter((l) => l.status === s).length;
-                const pct = Math.round((count / total) * 100);
+                const pct = total > 0 ? Math.round((count / total) * 100) : 0;
                 const colors: Record<string, string> = {
                   new: "bg-blue-500",
                   contacted: "bg-purple-500",
