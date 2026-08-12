@@ -203,10 +203,15 @@ export default async function handler(req: any, res: any) {
         if (recipients.length === 0) continue;
 
         // Stage 3: Meeting Time Has Arrived (Starting NOW)
-        // ONLY trigger when current time `now` reaches or passes meeting time (meetingTime - 60s)
+        // ONLY trigger when current time `now` reaches or passes meeting time
         if (now.getTime() >= meetingTime.getTime()) {
-          // Send 1 email to BOTH client & working agent
-          await sendEmail(recipients, `🔴 MEETING STARTING NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
+          // Send SEPARATE individual emails to BOTH client & working agent
+          if (leadEmail) {
+            await sendEmail([leadEmail], `🔴 MEETING STARTING NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
+          }
+          if (agentEmail) {
+            await sendEmail([agentEmail], `🔴 MEETING STARTING NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
+          }
 
           // Mark completed IMMEDIATELY in Supabase so it NEVER fires again!
           await supabase.from("meetings").update({ completed: true }).eq("id", meeting.id);
@@ -221,9 +226,10 @@ export default async function handler(req: any, res: any) {
           });
 
           count++;
-          results.push(`NOW notification sent ONCE → ${recipients.join(", ")} at ${formattedTime}`);
+          results.push(`NOW notification sent → Client: ${leadEmail} | Agent: ${agentEmail} at ${formattedTime}`);
           continue;
         }
+
 
         // Stage 2: 1-Hour Reminder
         if (!meeting.reminder_1h_sent && meetingTime.getTime() <= oneHourLater.getTime() && meetingTime.getTime() > (now.getTime() + 2 * 60 * 1000)) {
