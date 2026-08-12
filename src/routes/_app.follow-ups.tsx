@@ -262,8 +262,8 @@ function FollowUpsPage() {
         }
       />
 
-      {/* Overview Stat Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Overview Stat Cards (5 Cards) */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="panel p-5">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground font-medium">Awaiting Response</p>
@@ -297,13 +297,24 @@ function FollowUpsPage() {
 
         <div className="panel p-5">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground font-medium">72h & 10d Sequences</p>
-            <Sparkles className="h-4 w-4 text-emerald-400" />
+            <p className="text-sm text-muted-foreground font-medium">72h Follow-up</p>
+            <Sparkles className="h-4 w-4 text-cyan-400" />
+          </div>
+          <p className="mt-2 font-display text-3xl font-bold text-cyan-400">
+            {leads.filter((l) => isStageSent(l, "followup_72h")).length}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Demo invitation sent</p>
+        </div>
+
+        <div className="panel p-5">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground font-medium">10 Days Follow-up</p>
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
           </div>
           <p className="mt-2 font-display text-3xl font-bold text-emerald-400">
-            {leads.filter((l) => isStageSent(l, "followup_72h") || isStageSent(l, "followup_10d")).length}
+            {leads.filter((l) => isStageSent(l, "followup_10d")).length}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">Late stage sequences</p>
+          <p className="mt-1 text-xs text-muted-foreground">Final check-in sent</p>
         </div>
       </div>
 
