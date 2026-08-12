@@ -57,6 +57,7 @@ type DbEmailLog = {
   subject: string;
   status: string;
   type: string;
+  sequence_type?: string;
   sent_at: string;
 };
 
@@ -266,11 +267,14 @@ function DashboardPage() {
 
   const meetingsToday = todayMeetings.length;
 
-  const emailSent = safeEmails.filter((e) => e && (e.status === "sent" || e.status === "opened")).length;
-  const emailReplied = safeEmails.filter((e) => e && (e.status === "replied" || e.status === "opened")).length;
-  const emailPending = safeEmails.filter((e) => e && e.status === "pending").length;
-  const emailNoResp = safeEmails.filter((e) => e && e.status === "failed").length;
-  const emailTotal = safeEmails.length || 1;
+  // Email Status counts
+  // Sent = only welcome emails (sequence_type === "welcome")
+  const emailSent = safeEmails.filter((e) => e && e.sequence_type === "welcome").length;
+  // Replied = leads whose email has replied status
+  const emailReplied = safeEmails.filter((e) => e && e.status === "replied").length;
+  // Booked = meetings booked count (from meetings table)
+  const emailBooked = safeMeetings.length;
+  const emailTotal = Math.max(emailSent + emailReplied + emailBooked, 1);
 
   const latestLeads = safeLeads.slice(0, 5);
 
@@ -416,9 +420,8 @@ function DashboardPage() {
             <div className="mt-5 space-y-4">
               {[
                 ["Sent", emailSent, "bg-primary"],
-                ["Opened/Replied", emailReplied, "bg-success"],
-                ["Pending", emailPending, "bg-warning"],
-                ["Failed", emailNoResp, "bg-destructive"],
+                ["Replied", emailReplied, "bg-success"],
+                ["Booked", emailBooked, "bg-violet-500"],
               ].map(([label, count, color]) => (
                 <div key={label as string}>
                   <div className="flex items-center justify-between text-sm">
