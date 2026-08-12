@@ -317,8 +317,8 @@ function DashboardPage() {
         <StatCard label="Won Deals" value={wonLeads} icon={CheckCircle2} tone="success" hint="closed won" />
       </div>
 
-      {/* Active Meetings Banner — Mark Done */}
-      {uncompletedMeetings.length > 0 && (
+      {/* Active Meetings Banner — Mark Done (Only for working agents, not admin) */}
+      {!isAdmin && uncompletedMeetings.length > 0 && (
         <div className="space-y-2">
           {uncompletedMeetings.map((m) => (
             <div

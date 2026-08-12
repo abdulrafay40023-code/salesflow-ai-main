@@ -186,12 +186,14 @@ export default async function handler(req: any, res: any) {
       const isWithin5Min = nowMs <= meetMs + 5 * 60 * 1000;
       if (!meeting.completed && isPastOrNow && isWithin5Min) {
         // Atomically mark completed first — prevents duplicate if two polls race
-        const { error: updateErr } = await supabase
+        const { data: updated } = await supabase
           .from("meetings")
           .update({ completed: true })
           .eq("id", meeting.id)
-          .eq("completed", false); // only update if still false (atomic guard)
-        if (!updateErr) {
+          .eq("completed", false) // only update if still false (atomic guard)
+          .select("id");
+
+        if (updated && updated.length > 0) {
           await sendEmail(recipients, `🔴 Your Meeting is Starting NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
           count++;
           results.push(`NOW email → ${recipients.join(", ")} at ${formattedTime}`);

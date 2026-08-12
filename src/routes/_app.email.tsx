@@ -169,12 +169,12 @@ function EmailPage() {
 
   function filterEmails(tab: string) {
     const list = emails || [];
-    // All tab = only welcome emails (leads who received welcome email)
+    // Welcome Sent tab = only welcome emails
     if (tab === "all") return list.filter((e) => e?.type === "welcome");
-    // Booked tab = meeting confirmed emails
+    // Booked tab = only meeting_confirmed emails
     if (tab === "booked") return list.filter((e) => e?.type === "meeting_confirmed");
-    // Replied tab = leads who booked (booking = they replied/responded)
-    if (tab === "replied") return list.filter((e) => isReply(e));
+    // Replied tab = only welcome emails for leads who booked/replied (no meeting_confirmed rows here)
+    if (tab === "replied") return list.filter((e) => e?.type === "welcome" && isReply(e));
     return list.filter((e) => e?.type === "welcome");
   }
 
@@ -353,13 +353,12 @@ function EmailPage() {
                                 <TableCell className="max-w-48 truncate">{e.subject || "—"}</TableCell>
                                 <TableCell>
                                   {(() => {
-                                    const replied = isReply(e);
                                     const displayLabel =
-                                      e.type === "meeting_confirmed" ? "Booked" :
-                                      replied ? "Replied" : "Sent";
+                                      t === "booked" || e.type === "meeting_confirmed" ? "Booked" :
+                                      t === "replied" ? "Replied" : "Sent";
                                     const toneClass =
-                                      e.type === "meeting_confirmed" ? stateTone.meeting_confirmed :
-                                      replied ? stateTone.replied : stateTone.sent;
+                                      t === "booked" || e.type === "meeting_confirmed" ? stateTone.meeting_confirmed :
+                                      t === "replied" ? stateTone.replied : stateTone.sent;
                                     return (
                                       <Badge variant="outline" className={`rounded-full capitalize ${toneClass}`}>
                                         {displayLabel}
