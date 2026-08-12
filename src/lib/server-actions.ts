@@ -188,7 +188,8 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
       const diffMs = meetingDateTime.getTime() - now.getTime();
       const isWithin24h = diffMs <= 24 * 60 * 60 * 1000;
       const isWithin1h = diffMs <= 60 * 60 * 1000;
-      const isRightNow = diffMs <= 60 * 1000;
+      // isRightNow: Only true if the meeting start time is current minute or up to 1 min in past
+      const isRightNow = diffMs <= 60 * 1000 && diffMs >= -2 * 60 * 1000;
 
       // 6. Insert meeting into Supabase meetings table (mark completed immediately if right now to prevent duplicate background triggers)
       const { data: insertedMeeting } = await supabase
@@ -196,7 +197,7 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         .insert({
           lead_id: leadId || null,
           agent_email: realAgentEmail,
-          title: `Sales Meeting with ${data.leadName || data.leadEmail} (${data.leadEmail})`,
+          title: `Sales Meeting with ${data.leadName || data.leadEmail} (${data.leadEmail}) @ ${data.time}`,
           scheduled_time: scheduledIso,
           reminder_24h_sent: isWithin24h ? true : false,
           reminder_1h_sent: isWithin1h ? true : false,
@@ -205,13 +206,14 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         .select("id")
         .single();
 
-      // 7. If scheduled meeting time is starting right now, fire email ONCE!
+      // 7. If scheduled meeting time is starting right now, fire email ONCE to BOTH lead & agent!
       if (isRightNow) {
         await sendMeetingStartedNowEmail({
           leadEmail: data.leadEmail,
           agentEmail: realAgentEmail,
           meetingTime: data.time,
         });
+      }
       } else if (diffMs > 0 && diffMs <= 45 * 60 * 1000 && insertedMeeting?.id) {
         // Schedule precise server-side timer to fire at the EXACT minute when meeting time arrives!
         const meetingId = insertedMeeting.id;

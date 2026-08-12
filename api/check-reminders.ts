@@ -171,8 +171,25 @@ export default async function handler(req: any, res: any) {
       for (const meeting of meetings) {
         if (!meeting.scheduled_time) continue;
         const meetingTime = new Date(meeting.scheduled_time);
-        const formattedTime = meetingTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        const formattedDate = meetingTime.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+
+        // Format time & date in Asia/Karachi timezone (+05:00) or extract exact label from title
+        let formattedTime = "";
+        if (meeting.title && meeting.title.includes("@ ")) {
+          formattedTime = meeting.title.split("@ ")[1]?.trim() || "";
+        }
+        if (!formattedTime) {
+          formattedTime = meetingTime.toLocaleTimeString("en-US", {
+            timeZone: "Asia/Karachi",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        }
+        const formattedDate = meetingTime.toLocaleDateString("en-US", {
+          timeZone: "Asia/Karachi",
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+        });
 
         // Extract client email from meeting title using Regex
         let leadEmail = "";
@@ -186,10 +203,11 @@ export default async function handler(req: any, res: any) {
         if (recipients.length === 0) continue;
 
         // Stage 3: Meeting Time Has Arrived (Starting NOW)
-        if (meetingTime.getTime() <= (now.getTime() + 2 * 60 * 1000)) {
+        // ONLY trigger when current time `now` reaches or passes meeting time (meetingTime - 60s)
+        if (now.getTime() >= (meetingTime.getTime() - 60 * 1000)) {
           // Send 1 email to BOTH client & working agent
           await sendEmail(recipients, `🔴 MEETING STARTING NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
-          
+
           // Mark completed IMMEDIATELY in Supabase so it NEVER fires again!
           await supabase.from("meetings").update({ completed: true }).eq("id", meeting.id);
 
