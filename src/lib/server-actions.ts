@@ -182,6 +182,7 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
 
       const diffMs = meetingDateTime.getTime() - now.getTime();
       const isWithin24h = diffMs <= 24 * 60 * 60 * 1000;
+      const isWithin1h = diffMs <= 60 * 60 * 1000;
       const isRightNow = diffMs <= 60 * 1000;
 
       // 6. Insert meeting into Supabase meetings table (mark completed immediately if right now to prevent duplicate background triggers)
