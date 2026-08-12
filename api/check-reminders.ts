@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
 import tls from "tls";
-import { createZoomMeeting } from "../src/lib/zoom-service";
+
 
 // ── Supabase credentials (same as app) ────────────────────────────────────
 const SUPABASE_URL = "https://nyjhbeqpjfdhhvqvjzyy.supabase.co";
@@ -245,18 +245,9 @@ export default async function handler(req: any, res: any) {
             continue;
           }
 
-          // Use stored Zoom link from meeting title (created at booking time), or create a new one as fallback
-          let zoomJoinUrl: string;
-          if (storedZoomUrl) {
-            zoomJoinUrl = storedZoomUrl;
-          } else {
-            const zoomRes = await createZoomMeeting({
-              topic: `Sales Meeting with ${leadEmail || "Client"}`,
-              startTimeIso: meetingTime.toISOString(),
-              durationMinutes: 30,
-            });
-            zoomJoinUrl = zoomRes.joinUrl;
-          }
+          // Use stored Zoom link from meeting title (created at booking time)
+          // Fall back to personal room only if title has no stored URL
+          const zoomJoinUrl = storedZoomUrl || "https://zoom.us/j/5539578967";
 
           // Send EXACTLY 1 email to client and 1 email to agent with Zoom link!
           if (leadEmail) {
