@@ -189,10 +189,19 @@ export default async function handler(req: any, res: any) {
         if (!meeting.scheduled_time) continue;
         const meetingTime = new Date(meeting.scheduled_time);
 
-        // Format time & date in Asia/Karachi timezone (+05:00) or extract exact label from title
+        // Strip ZOOM suffix from title to get clean title
+        const cleanTitle = meeting.title ? meeting.title.split("|| ZOOM:")[0].trim() : "";
+
+        // Extract Zoom join URL from title if present
+        let storedZoomUrl: string | undefined;
+        if (meeting.title && meeting.title.includes("|| ZOOM: ")) {
+          storedZoomUrl = meeting.title.split("|| ZOOM: ")[1]?.trim() || undefined;
+        }
+
+        // Format time & date in Asia/Karachi timezone (+05:00) or extract exact label from clean title
         let formattedTime = "";
-        if (meeting.title && meeting.title.includes("@ ")) {
-          formattedTime = meeting.title.split("@ ")[1]?.trim() || "";
+        if (cleanTitle && cleanTitle.includes("@ ")) {
+          formattedTime = cleanTitle.split("@ ")[1]?.trim() || "";
         }
         if (!formattedTime) {
           formattedTime = meetingTime.toLocaleTimeString("en-US", {
@@ -208,10 +217,10 @@ export default async function handler(req: any, res: any) {
           day: "numeric",
         });
 
-        // Extract client email from meeting title using Regex
+        // Extract client email from CLEAN title (without ZOOM suffix)
         let leadEmail = "";
-        if (meeting.title) {
-          const match = meeting.title.match(/\(([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\)/);
+        if (cleanTitle) {
+          const match = cleanTitle.match(/\(([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\)/);
           if (match && match[1]) leadEmail = match[1].trim();
         }
         const agentEmail = meeting.agent_email || "adrianajames267263@gmail.com";
@@ -236,13 +245,18 @@ export default async function handler(req: any, res: any) {
             continue;
           }
 
-          // Create live Zoom Meeting link for this session
-          const zoomRes = await createZoomMeeting({
-            topic: `Sales Meeting with ${leadEmail || "Client"}`,
-            startTimeIso: meetingTime.toISOString(),
-            durationMinutes: 30,
-          });
-          const zoomJoinUrl = zoomRes.joinUrl;
+          // Use stored Zoom link from meeting title (created at booking time), or create a new one as fallback
+          let zoomJoinUrl: string;
+          if (storedZoomUrl) {
+            zoomJoinUrl = storedZoomUrl;
+          } else {
+            const zoomRes = await createZoomMeeting({
+              topic: `Sales Meeting with ${leadEmail || "Client"}`,
+              startTimeIso: meetingTime.toISOString(),
+              durationMinutes: 30,
+            });
+            zoomJoinUrl = zoomRes.joinUrl;
+          }
 
           // Send EXACTLY 1 email to client and 1 email to agent with Zoom link!
           if (leadEmail) {
