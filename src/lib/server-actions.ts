@@ -206,7 +206,7 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         .insert({
           lead_id: leadId || null,
           agent_email: realAgentEmail,
-          title: `Sales Meeting with ${data.leadName || data.leadEmail} (${data.leadEmail}) @ ${data.time}`,
+          title: `Sales Meeting with ${data.leadName || data.leadEmail} (${data.leadEmail}) @ ${data.time} || ZOOM: ${zoomJoinUrl}`,
           scheduled_time: scheduledIso,
           reminder_24h_sent: isWithin24h ? true : false,
           reminder_1h_sent: isWithin1h ? true : false,

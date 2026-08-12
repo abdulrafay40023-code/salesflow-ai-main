@@ -11,12 +11,12 @@ export const Route = createFileRoute("/_app")({
 
 function AppLayout() {
   useEffect(() => {
-    // Background reminder checker — runs check-reminders API every 45s automatically
+    // Background reminder checker — runs check-reminders API every 15s automatically
     const checkReminders = () => {
       fetch("/api/check-reminders").catch(() => {});
     };
     checkReminders();
-    const interval = setInterval(checkReminders, 45000);
+    const interval = setInterval(checkReminders, 15000);
     return () => clearInterval(interval);
   }, []);
 

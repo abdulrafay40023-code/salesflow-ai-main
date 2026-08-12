@@ -362,35 +362,38 @@ function DashboardPage() {
       {/* ── Booking Notification Banner (NO mark done button, NO cross) ── */}
       {!isAdmin && uncompletedMeetings.length > 0 && (
         <div className="space-y-2">
-          {uncompletedMeetings.map((m) => (
-            <div
-              key={m.id}
-              className="flex flex-wrap items-center gap-3 rounded-xl border border-orange-500/25 bg-orange-500/8 px-4 py-3"
-            >
-              <span className="grid size-8 place-items-center rounded-lg bg-orange-500/15 shrink-0">
-                <CalendarCheck className="size-4 text-orange-400" />
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold">{m.title}</p>
-                <p className="text-xs text-muted-foreground">
-                  {(() => {
-                    if (!m?.scheduled_time) return "Scheduled";
-                    const d = new Date(m.scheduled_time);
-                    return isNaN(d.getTime())
-                      ? "Scheduled"
-                      : d.toLocaleString([], {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          hour12: true,
-                        });
-                  })()}
-                </p>
+          {uncompletedMeetings.map((m) => {
+            const cleanTitle = m.title ? m.title.split("|| ZOOM:")[0].trim() : "Scheduled Meeting";
+            return (
+              <div
+                key={m.id}
+                className="flex flex-wrap items-center gap-3 rounded-xl border border-orange-500/25 bg-orange-500/8 px-4 py-3"
+              >
+                <span className="grid size-8 place-items-center rounded-lg bg-orange-500/15 shrink-0">
+                  <CalendarCheck className="size-4 text-orange-400" />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold">{cleanTitle}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {(() => {
+                      if (!m?.scheduled_time) return "Scheduled";
+                      const d = new Date(m.scheduled_time);
+                      return isNaN(d.getTime())
+                        ? "Scheduled"
+                        : d.toLocaleString([], {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: true,
+                          });
+                    })()}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -407,8 +410,9 @@ function DashboardPage() {
 
           // Extract time label from title
           let timeLabel = "";
-          if (m.title && m.title.includes("@ ")) {
-            timeLabel = m.title.split("@ ")[1]?.trim() || "";
+          const cleanTitle = m.title ? m.title.split("|| ZOOM:")[0].trim() : "";
+          if (cleanTitle && cleanTitle.includes("@ ")) {
+            timeLabel = cleanTitle.split("@ ")[1]?.trim() || "";
           }
           if (!timeLabel) {
             timeLabel = mt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
@@ -459,6 +463,11 @@ function DashboardPage() {
                 ? "Prepare your notes — meeting starts in less than 1 hour."
                 : "Meeting scheduled for tomorrow — be prepared.";
 
+              let zoomLink = "https://zoom.us/j/5539578967";
+              if (n.meeting.title && n.meeting.title.includes("|| ZOOM: ")) {
+                zoomLink = n.meeting.title.split("|| ZOOM: ")[1]?.trim() || zoomLink;
+              }
+
               return (
                 <div
                   key={n.id}
@@ -472,7 +481,7 @@ function DashboardPage() {
                     <p className="text-xs text-muted-foreground">{subtitle}</p>
                   </div>
                   <a
-                    href="https://zoom.us/j/5539578967"
+                    href={zoomLink}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors"
