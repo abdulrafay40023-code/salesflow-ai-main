@@ -1,317 +1,465 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  CalendarClock,
-  CalendarPlus,
+  AlertCircle,
   CheckCircle2,
-  Clock3,
-  Phone,
-  Mail as MailIcon,
+  Clock,
+  Mail,
+  MessageSquare,
+  RefreshCw,
+  Send,
+  Sparkles,
   Users,
 } from "lucide-react";
 import { PageHeader } from "@/components/crm/Topbar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import type { FollowUp } from "@/lib/crm-data";
 import { useCrm } from "@/lib/crm-store";
+import { supabase } from "@/lib/supabase";
+import { markLeadAsRepliedFn, triggerNextFollowUpFn } from "@/lib/server-actions";
 
 export const Route = createFileRoute("/_app/follow-ups")({
   head: () => ({
     meta: [
-      { title: "Follow-ups & Meetings — Nexa CRM" },
+      { title: "Follow-ups — Teals CRM" },
       {
         name: "description",
         content:
-          "Schedule follow-ups and meetings, pick date and time, and track reminders due today, tomorrow and this week.",
+          "Track automated email follow-up sequences (24h, 48h, 72h, 10d) for leads awaiting response.",
       },
-      { property: "og:title", content: "Follow-ups & Meetings — Nexa CRM" },
+      { property: "og:title", content: "Follow-ups — Teals CRM" },
       {
         property: "og:description",
-        content: "Never miss a reminder: upcoming and completed follow-ups in one place.",
+        content: "Automated sequence tracking for un-booked and un-replied leads.",
       },
     ],
   }),
   component: FollowUpsPage,
 });
 
-const typeIcon = { call: Phone, meeting: Users, email: MailIcon };
+type DbLead = {
+  id: string;
+  name: string;
+  company: string;
+  email: string;
+  status: string;
+  agent: string;
+  assigned_agent_name?: string;
+  created_at: string;
+};
 
-function dayBucket(iso: string) {
-  const d = new Date(iso);
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const diff = Math.floor((d.getTime() - startOfToday) / 86400000);
-  if (diff < 0) return "past";
-  if (diff === 0) return "today";
-  if (diff === 1) return "tomorrow";
-  if (diff <= 7) return "week";
-  return "later";
-}
+type DbEmailLog = {
+  id: string;
+  lead_id: string;
+  lead_email: string;
+  sequence_type: string;
+  status: string;
+  sent_at: string;
+};
 
-function ReminderCard({ f, onToggle }: { f: FollowUp; onToggle: () => void }) {
-  const Icon = typeIcon[f.type];
-  const bucket = dayBucket(f.datetime);
-  const tone =
-    bucket === "today"
-      ? "border-warning/40 bg-warning/8"
-      : bucket === "tomorrow"
-        ? "border-info/40 bg-info/8"
-        : "border-border bg-card";
-
+function EmptyState({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
   return (
-    <div
-      className={`rounded-2xl border p-4 shadow-[var(--shadow-card)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[var(--shadow-float)] ${tone}`}
-    >
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-            <Icon className="size-4" />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{f.title}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {f.leadName} · {f.company}
-            </p>
-          </div>
-        </div>
-        <Badge variant="outline" className="shrink-0 rounded-full capitalize">
-          {f.type}
-        </Badge>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <Clock3 className="size-3.5" />
-          {new Date(f.datetime).toLocaleString([], {
-            weekday: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </span>
-        <span>{f.agent}</span>
-      </div>
-
-      <Button
-        variant={f.completed ? "secondary" : "outline"}
-        size="sm"
-        className="mt-4 w-full rounded-xl"
-        onClick={onToggle}
-      >
-        <CheckCircle2 className="size-4" />
-        {f.completed ? "Completed" : "Mark complete"}
-      </Button>
+    <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
+      <Icon className="h-10 w-10 opacity-30" />
+      <p className="text-sm font-medium">{text}</p>
     </div>
   );
 }
 
 function FollowUpsPage() {
-  const { visibleFollowUps, toggleFollowUp, addFollowUp, visibleLeads, user } = useCrm();
-  const [open, setOpen] = useState(false);
-  const [leadId, setLeadId] = useState(visibleLeads[0]?.id ?? "");
-  const [type, setType] = useState<FollowUp["type"]>("call");
-  const [title, setTitle] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [time, setTime] = useState("10:00");
+  const { user } = useCrm();
+  const isAdmin = Boolean(user && (user.role === "admin" || user.email === "garryamelia6265@gmail.com"));
 
-  const buckets = useMemo(() => {
-    const open = visibleFollowUps.filter((f) => !f.completed);
-    return {
-      today: open.filter((f) => dayBucket(f.datetime) === "today"),
-      tomorrow: open.filter((f) => dayBucket(f.datetime) === "tomorrow"),
-      week: open.filter((f) => dayBucket(f.datetime) === "week"),
-      later: open.filter((f) => dayBucket(f.datetime) === "later"),
-      completed: visibleFollowUps.filter((f) => f.completed),
-    };
-  }, [visibleFollowUps]);
+  const [mounted, setMounted] = useState(false);
+  const [leads, setLeads] = useState<DbLead[]>([]);
+  const [emails, setEmails] = useState<DbEmailLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [lastSync, setLastSync] = useState<Date>(new Date());
+  const [sendingNextId, setSendingNextId] = useState<string | null>(null);
+  const [markingRepliedId, setMarkingRepliedId] = useState<string | null>(null);
 
-  function schedule() {
-    const lead = visibleLeads.find((l) => l.id === leadId);
-    if (!lead) return;
-    addFollowUp({
-      leadId: lead.id,
-      leadName: lead.name,
-      company: lead.company,
-      type,
-      title: title.trim() || `${type === "meeting" ? "Meeting" : "Follow-up"} with ${lead.name}`,
-      datetime: new Date(`${date}T${time}`).toISOString(),
-      agent: user?.role === "agent" ? user.name : lead.agent,
-      completed: false,
-    });
-    toast.success("Follow-up scheduled");
-    setOpen(false);
-    setTitle("");
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  async function fetchLive() {
+    setLoading(true);
+    try {
+      // 1. Fetch leads that have NOT booked a meeting and NOT replied
+      let query = supabase
+        .from("leads")
+        .select("*")
+        .neq("status", "meeting")
+        .neq("status", "won")
+        .neq("status", "lost")
+        .neq("status", "replied")
+        .order("created_at", { ascending: false });
+
+      if (!isAdmin && user?.email) {
+        query = query.eq("assigned_agent_name", user.email.trim());
+      }
+
+      const { data: fetchedLeads } = await query;
+      const safeLeads = (fetchedLeads || []) as DbLead[];
+      setLeads(safeLeads);
+
+      // 2. Fetch email logs to determine which follow-ups were sent
+      const { data: fetchedEmails } = await supabase
+        .from("emails_sent")
+        .select("id, lead_id, lead_email, sequence_type, status, sent_at");
+
+      setEmails((fetchedEmails || []) as DbEmailLog[]);
+    } catch (err) {
+      console.error("Fetch follow-ups error:", err);
+    }
+    setLastSync(new Date());
+    setLoading(false);
   }
 
-  const sections = [
-    ["Due today", buckets.today],
-    ["Tomorrow", buckets.tomorrow],
-    ["This week", buckets.week],
-    ["Later", buckets.later],
-  ] as const;
+  useEffect(() => {
+    fetchLive();
+
+    const leadsSub = supabase
+      .channel("fu-leads")
+      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => fetchLive())
+      .subscribe();
+
+    const emailsSub = supabase
+      .channel("fu-emails")
+      .on("postgres_changes", { event: "*", schema: "public", table: "emails_sent" }, () => fetchLive())
+      .subscribe();
+
+    const interval = setInterval(fetchLive, 20000);
+
+    return () => {
+      leadsSub.unsubscribe();
+      emailsSub.unsubscribe();
+      clearInterval(interval);
+    };
+  }, [user?.email, user?.role]);
+
+  // Build sent follow-up lookup set per lead ID/email
+  const sentSequenceMap = useMemo(() => {
+    const map: Record<string, Set<string>> = {};
+    (emails || []).forEach((e) => {
+      if (!e) return;
+      const keys = [e.lead_id, e.lead_email?.toLowerCase()].filter(Boolean) as string[];
+      keys.forEach((k) => {
+        if (!map[k]) map[k] = new Set();
+        if (e.sequence_type) map[k].add(e.sequence_type);
+      });
+    });
+    return map;
+  }, [emails]);
+
+  // Helper to check if a specific stage was sent to a lead
+  const isStageSent = (lead: DbLead, stageKey: string) => {
+    const setById = sentSequenceMap[lead.id];
+    const setByEmail = sentSequenceMap[lead.email?.toLowerCase()];
+    if (setById?.has(stageKey) || setByEmail?.has(stageKey)) return true;
+
+    // Time fallback if import age >= hours required
+    const now = new Date();
+    const created = new Date(lead.created_at || now.toISOString());
+    const hours = (now.getTime() - created.getTime()) / (1000 * 60 * 60);
+
+    if (stageKey === "followup_24h" && hours >= 24) return true;
+    if (stageKey === "followup_48h" && hours >= 48) return true;
+    if (stageKey === "followup_72h" && hours >= 72) return true;
+    if (stageKey === "followup_10d" && hours >= 240) return true;
+
+    return false;
+  };
+
+  // Determine next unsent stage for manual trigger button
+  const getNextStage = (lead: DbLead): "24h" | "48h" | "72h" | "10d" | null => {
+    if (!isStageSent(lead, "followup_24h")) return "24h";
+    if (!isStageSent(lead, "followup_48h")) return "48h";
+    if (!isStageSent(lead, "followup_72h")) return "72h";
+    if (!isStageSent(lead, "followup_10d")) return "10d";
+    return null;
+  };
+
+  // Manual Trigger: Send Next Follow-up Now
+  async function handleSendNextFollowUp(lead: DbLead) {
+    const nextStage = getNextStage(lead);
+    if (!nextStage) {
+      toast.info("All 4 follow-up emails have already been sent to this lead!");
+      return;
+    }
+
+    setSendingNextId(lead.id);
+    toast.loading(`Sending ${nextStage.toUpperCase()} Follow-up email via Gmail SMTP...`);
+
+    const res = await triggerNextFollowUpFn({
+      data: {
+        leadId: lead.id,
+        leadEmail: lead.email,
+        leadName: lead.name,
+        stage: nextStage,
+      },
+    });
+
+    setSendingNextId(null);
+    if (res?.success) {
+      toast.success(`${nextStage.toUpperCase()} Follow-up email sent successfully!`);
+      fetchLive();
+    } else {
+      toast.error(res?.error || "Failed to send follow-up email.");
+    }
+  }
+
+  // Manual Action: Mark as Replied
+  async function handleMarkAsReplied(lead: DbLead) {
+    setMarkingRepliedId(lead.id);
+    toast.loading(`Marking ${lead.name} as Replied...`);
+
+    const res = await markLeadAsRepliedFn({
+      data: {
+        leadId: lead.id,
+        leadEmail: lead.email,
+      },
+    });
+
+    setMarkingRepliedId(null);
+    if (res?.success) {
+      toast.success(`${lead.name} marked as Replied! Moved to Replied tab.`);
+      fetchLive();
+    } else {
+      toast.error(res?.error || "Failed to mark lead as replied.");
+    }
+  }
+
+  if (!mounted) {
+    return (
+      <div className="flex h-96 items-center justify-center text-muted-foreground">
+        <RefreshCw className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Follow-ups"
-        subtitle="Schedule calls and meetings, and stay ahead of every reminder."
+        subtitle="Leads awaiting response — live automated sequence tracking (24h, 48h, 72h, 10d)."
         action={
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button className="rounded-xl">
-                <CalendarPlus className="size-4" /> Schedule
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="font-display">Schedule a follow-up</DialogTitle>
-                <DialogDescription>Pick a lead, type, date and time.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Lead</Label>
-                  <Select value={leadId} onValueChange={setLeadId}>
-                    <SelectTrigger className="rounded-xl">
-                      <SelectValue placeholder="Select a lead" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {visibleLeads.slice(0, 25).map((l) => (
-                        <SelectItem key={l.id} value={l.id}>
-                          {l.name} — {l.company}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Type</Label>
-                  <Select value={type} onValueChange={(v) => setType(v as FollowUp["type"])}>
-                    <SelectTrigger className="rounded-xl">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="call">Call</SelectItem>
-                      <SelectItem value="meeting">Meeting</SelectItem>
-                      <SelectItem value="email">Email</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Title</Label>
-                  <Input
-                    className="rounded-xl"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Pricing follow-up"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>Date</Label>
-                    <Input
-                      type="date"
-                      className="rounded-xl"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Time</Label>
-                    <Input
-                      type="time"
-                      className="rounded-xl"
-                      value={time}
-                      onChange={(e) => setTime(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" className="rounded-xl" onClick={() => setOpen(false)}>
-                  Cancel
-                </Button>
-                <Button className="rounded-xl" onClick={schedule}>
-                  Schedule
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              {loading ? "Syncing..." : `Live · ${lastSync.toLocaleTimeString()}`}
+            </span>
+            <Button onClick={fetchLive} variant="outline" size="sm" className="rounded-xl gap-1.5">
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          ["Due today", buckets.today.length, "warning"],
-          ["Tomorrow", buckets.tomorrow.length, "info"],
-          ["This week", buckets.week.length, "primary"],
-          ["Completed", buckets.completed.length, "success"],
-        ].map(([label, count, tone]) => (
-          <div key={label as string} className="panel p-5">
-            <p className="text-sm text-muted-foreground">{label as string}</p>
-            <p className={`mt-2 font-display text-3xl font-bold text-${tone as string}`}>
-              {count as number}
-            </p>
+      {/* Overview Stat Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="panel p-5">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground font-medium">Awaiting Response</p>
+            <Users className="h-4 w-4 text-blue-400" />
           </div>
-        ))}
+          <p className="mt-2 font-display text-3xl font-bold text-foreground">{leads.length}</p>
+          <p className="mt-1 text-xs text-muted-foreground">No booking or reply yet</p>
+        </div>
+
+        <div className="panel p-5">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground font-medium">24h Follow-up</p>
+            <Clock className="h-4 w-4 text-amber-400" />
+          </div>
+          <p className="mt-2 font-display text-3xl font-bold text-amber-400">
+            {leads.filter((l) => isStageSent(l, "followup_24h")).length}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">First check-in sent</p>
+        </div>
+
+        <div className="panel p-5">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground font-medium">48h Follow-up</p>
+            <Mail className="h-4 w-4 text-purple-400" />
+          </div>
+          <p className="mt-2 font-display text-3xl font-bold text-purple-400">
+            {leads.filter((l) => isStageSent(l, "followup_48h")).length}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Value email sent</p>
+        </div>
+
+        <div className="panel p-5">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground font-medium">72h & 10d Sequences</p>
+            <Sparkles className="h-4 w-4 text-emerald-400" />
+          </div>
+          <p className="mt-2 font-display text-3xl font-bold text-emerald-400">
+            {leads.filter((l) => isStageSent(l, "followup_72h") || isStageSent(l, "followup_10d")).length}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Late stage sequences</p>
+        </div>
       </div>
 
-      <Tabs defaultValue="upcoming">
-        <TabsList className="rounded-xl">
-          <TabsTrigger value="upcoming" className="rounded-lg">
-            Upcoming reminders
-          </TabsTrigger>
-          <TabsTrigger value="completed" className="rounded-lg">
-            Completed
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="upcoming" className="mt-5 space-y-8">
-          {sections.map(([label, items]) =>
-            items.length ? (
-              <section key={label}>
-                <h2 className="flex items-center gap-2 font-display text-lg font-bold">
-                  <CalendarClock className="size-4 text-primary" /> {label}
-                  <Badge variant="secondary" className="rounded-full">
-                    {items.length}
-                  </Badge>
-                </h2>
-                <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {items.map((f) => (
-                    <ReminderCard key={f.id} f={f} onToggle={() => toggleFollowUp(f.id)} />
-                  ))}
-                </div>
-              </section>
-            ) : null,
-          )}
-        </TabsContent>
-
-        <TabsContent value="completed" className="mt-5">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {buckets.completed.map((f) => (
-              <ReminderCard key={f.id} f={f} onToggle={() => toggleFollowUp(f.id)} />
-            ))}
+      {/* Live Un-booked & Un-replied Leads List */}
+      <div className="panel p-5">
+        <div className="flex items-center justify-between gap-3 pb-4 border-b border-border/60">
+          <div>
+            <h2 className="font-display text-lg font-bold">Follow-up Sequence Pipeline</h2>
+            <p className="text-sm text-muted-foreground">
+              Only active leads without booking or reply are listed here. Once a lead replies or books, it moves to Replied/Booked.
+            </p>
           </div>
-        </TabsContent>
-      </Tabs>
+          <Badge variant="outline" className="rounded-full font-semibold">
+            {leads.length} Active Leads
+          </Badge>
+        </div>
+
+        {leads.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            text="No pending follow-ups! All imported leads have either replied or booked a meeting."
+          />
+        ) : (
+          <div className="mt-5 space-y-4">
+            {leads.map((lead) => {
+              const sent24h = isStageSent(lead, "followup_24h");
+              const sent48h = isStageSent(lead, "followup_48h");
+              const sent72h = isStageSent(lead, "followup_72h");
+              const sent10d = isStageSent(lead, "followup_10d");
+              const nextStage = getNextStage(lead);
+
+              return (
+                <div
+                  key={lead.id}
+                  className="grid grid-cols-1 gap-4 rounded-2xl border border-border/70 bg-card/60 p-4 transition-all duration-200 hover:border-primary/40 lg:grid-cols-[1.2fr_1.8fr_auto] lg:items-center"
+                >
+                  {/* Lead Info */}
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <Avatar className="h-10 w-10 shrink-0">
+                      <AvatarFallback className="text-sm font-bold bg-primary/15 text-primary">
+                        {lead.name?.slice(0, 2).toUpperCase() || "LD"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-foreground">{lead.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">{lead.email}</p>
+                      <p className="truncate text-[11px] text-muted-foreground/70 mt-0.5">
+                        {lead.company || "Company"} · Agent: {lead.assigned_agent_name || lead.agent || "Unassigned"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 4 Follow-up Sequence Badges */}
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase">
+                      Follow-up Email Sequence Status
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* 24 Hours */}
+                      <Badge
+                        variant="outline"
+                        className={`rounded-xl px-3 py-1 text-xs transition-all ${
+                          sent24h
+                            ? "bg-emerald-600 text-white font-semibold border-emerald-500 shadow-sm"
+                            : "bg-muted/30 text-muted-foreground border-border/40 opacity-70"
+                        }`}
+                      >
+                        {sent24h ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> : <Clock className="mr-1.5 h-3.5 w-3.5 opacity-60" />}
+                        24 Hours
+                      </Badge>
+
+                      {/* 48 Hours */}
+                      <Badge
+                        variant="outline"
+                        className={`rounded-xl px-3 py-1 text-xs transition-all ${
+                          sent48h
+                            ? "bg-emerald-600 text-white font-semibold border-emerald-500 shadow-sm"
+                            : "bg-muted/30 text-muted-foreground border-border/40 opacity-70"
+                        }`}
+                      >
+                        {sent48h ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> : <Clock className="mr-1.5 h-3.5 w-3.5 opacity-60" />}
+                        48 Hours
+                      </Badge>
+
+                      {/* 72 Hours */}
+                      <Badge
+                        variant="outline"
+                        className={`rounded-xl px-3 py-1 text-xs transition-all ${
+                          sent72h
+                            ? "bg-emerald-600 text-white font-semibold border-emerald-500 shadow-sm"
+                            : "bg-muted/30 text-muted-foreground border-border/40 opacity-70"
+                        }`}
+                      >
+                        {sent72h ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> : <Clock className="mr-1.5 h-3.5 w-3.5 opacity-60" />}
+                        72 Hours
+                      </Badge>
+
+                      {/* 10 Days */}
+                      <Badge
+                        variant="outline"
+                        className={`rounded-xl px-3 py-1 text-xs transition-all ${
+                          sent10d
+                            ? "bg-emerald-600 text-white font-semibold border-emerald-500 shadow-sm"
+                            : "bg-muted/30 text-muted-foreground border-border/40 opacity-70"
+                        }`}
+                      >
+                        {sent10d ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> : <Clock className="mr-1.5 h-3.5 w-3.5 opacity-60" />}
+                        10 Days
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                    {nextStage ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={sendingNextId === lead.id}
+                        onClick={() => handleSendNextFollowUp(lead)}
+                        className="rounded-xl h-8 text-xs font-semibold text-primary hover:bg-primary/10 border-primary/30"
+                      >
+                        {sendingNextId === lead.id ? (
+                          <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Send className="mr-1.5 h-3.5 w-3.5 text-primary" />
+                        )}
+                        Send {nextStage.toUpperCase()} Now
+                      </Button>
+                    ) : (
+                      <Badge variant="secondary" className="rounded-lg text-xs">
+                        All 4 Sent
+                      </Badge>
+                    )}
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={markingRepliedId === lead.id}
+                      onClick={() => handleMarkAsReplied(lead)}
+                      className="rounded-xl h-8 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10 border-emerald-500/30"
+                    >
+                      {markingRepliedId === lead.id ? (
+                        <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <MessageSquare className="mr-1.5 h-3.5 w-3.5 text-emerald-400" />
+                      )}
+                      Mark as Replied
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

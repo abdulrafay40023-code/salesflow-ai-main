@@ -270,8 +270,11 @@ function DashboardPage() {
   // Email Status counts
   // Sent = only welcome emails (sequence_type === "welcome")
   const emailSent = safeEmails.filter((e) => e && e.sequence_type === "welcome").length;
-  // Replied = leads whose email has replied status
-  const emailReplied = safeEmails.filter((e) => e && e.status === "replied").length;
+  // Replied = leads/emails with replied status
+  const emailReplied = Math.max(
+    safeEmails.filter((e) => e && e.status === "replied").length,
+    safeLeads.filter((l) => l && l.status === "replied").length
+  );
   // Booked = meetings booked count (from meetings table)
   const emailBooked = safeMeetings.length;
   const emailTotal = Math.max(emailSent + emailReplied + emailBooked, 1);

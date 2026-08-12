@@ -331,3 +331,77 @@ export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
     }
   });
 
+/**
+ * 8. Mark Lead as Replied
+ */
+export const markLeadAsRepliedFn = createServerFn({ method: "POST" })
+  .validator((data: { leadId?: string; leadEmail?: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      if (data.leadId) {
+        await supabase.from("leads").update({ status: "replied" }).eq("id", data.leadId);
+      } else if (data.leadEmail) {
+        await supabase.from("leads").update({ status: "replied" }).ilike("email", data.leadEmail);
+      }
+
+      await supabase.from("emails_sent").insert({
+        lead_id: data.leadId || null,
+        lead_email: data.leadEmail,
+        subject: "Re: Welcome to Teals CRM / Inquiry Reply",
+        sequence_type: "welcome",
+        status: "replied",
+        sent_at: new Date().toISOString(),
+      });
+
+      return { success: true };
+    } catch (err: any) {
+      console.error("Mark replied error:", err);
+      return { success: false, error: err?.message };
+    }
+  });
+
+/**
+ * 9. Trigger Next Follow-up Email Stage
+ */
+export const triggerNextFollowUpFn = createServerFn({ method: "POST" })
+  .validator(
+    (data: {
+      leadId: string;
+      leadEmail: string;
+      leadName?: string;
+      stage: "24h" | "48h" | "72h" | "10d";
+    }) => data
+  )
+  .handler(async ({ data }) => {
+    try {
+      const stageMap = {
+        "24h": { sequence: "followup_24h", subject: "Quick Follow-up: Checking in on your inquiry" },
+        "48h": { sequence: "followup_48h", subject: "Following up on our previous note — Teals CRM" },
+        "72h": { sequence: "followup_72h", subject: "10-minute slot open for a live sales demo" },
+        "10d": { sequence: "followup_10d", subject: "Final Check-in: Should we close your inquiry?" },
+      };
+
+      const info = stageMap[data.stage];
+      if (!info) throw new Error("Invalid stage");
+
+      const reminderNum = data.stage === "24h" ? 1 : data.stage === "48h" ? 2 : data.stage === "72h" ? 3 : 4;
+      await sendReminderEmail({
+        toEmail: data.leadEmail,
+        reminderNumber: reminderNum,
+      });
+
+      await supabase.from("emails_sent").insert({
+        lead_id: data.leadId,
+        lead_email: data.leadEmail,
+        subject: info.subject,
+        sequence_type: info.sequence,
+        status: "sent",
+        sent_at: new Date().toISOString(),
+      });
+
+      return { success: true };
+    } catch (err: any) {
+      console.error("Trigger next follow-up error:", err);
+      return { success: false, error: err?.message };
+    }
+  });

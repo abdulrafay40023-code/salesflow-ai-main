@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  BadgeCheck, Bot, CheckCircle2, Clock,
+  BadgeCheck, Bot, CheckCircle2, Clock, MessageSquare,
   RefreshCw, Send, Sparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -21,6 +21,7 @@ import {
   triggerBookingFormEmailFn,
   triggerReminderEmailFn,
   checkAndSendMeetingRemindersFn,
+  markLeadAsRepliedFn,
 } from "@/lib/server-actions";
 
 export const Route = createFileRoute("/_app/email")({
@@ -367,15 +368,38 @@ function EmailPage() {
                                   })()}
                                 </TableCell>
                                 <TableCell>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 text-xs rounded-lg text-emerald-600 hover:text-emerald-500"
-                                    onClick={() => handleSendBookingLink(e.lead_id, displayEmail)}
-                                    title="Send Booking Form Email"
-                                  >
-                                    <Clock className="h-3.5 w-3.5 mr-1" /> Booking Form
-                                  </Button>
+                                  <div className="flex items-center gap-1.5">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 text-xs rounded-lg text-emerald-600 hover:text-emerald-500"
+                                      onClick={() => handleSendBookingLink(e.lead_id, displayEmail)}
+                                      title="Send Booking Form Email"
+                                    >
+                                      <Clock className="h-3.5 w-3.5 mr-1" /> Booking Form
+                                    </Button>
+                                    {t !== "replied" && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs rounded-lg text-emerald-400 hover:bg-emerald-500/10 border-emerald-500/30"
+                                        onClick={async () => {
+                                          toast.loading(`Marking ${displayName} as Replied...`);
+                                          const res = await markLeadAsRepliedFn({
+                                            data: { leadId: e.lead_id, leadEmail: displayEmail },
+                                          });
+                                          if (res?.success) {
+                                            toast.success("Marked as Replied!");
+                                            fetchData();
+                                          } else {
+                                            toast.error("Failed to mark replied");
+                                          }
+                                        }}
+                                      >
+                                        <MessageSquare className="h-3.5 w-3.5 mr-1" /> Mark Replied
+                                      </Button>
+                                    )}
+                                  </div>
                                 </TableCell>
                               </TableRow>
                             );

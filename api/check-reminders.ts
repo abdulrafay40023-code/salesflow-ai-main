@@ -218,13 +218,14 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // ── AUTOMATIC LEAD FOLLOW-UPS (For leads that have NOT booked a meeting) ──
+    // ── AUTOMATIC LEAD FOLLOW-UPS (For leads that have NOT booked a meeting and NOT replied) ──
     const { data: pendingLeads } = await supabase
       .from("leads")
       .select("id, name, email, status, created_at, assigned_agent_name")
       .neq("status", "meeting")
       .neq("status", "won")
-      .neq("status", "lost");
+      .neq("status", "lost")
+      .neq("status", "replied");
 
     if (pendingLeads && pendingLeads.length > 0) {
       for (const lead of pendingLeads) {
@@ -241,7 +242,7 @@ export default async function handler(req: any, res: any) {
 
         const sentTypes = new Set((sentEmails || []).map((e) => e.sequence_type));
 
-        // Follow-up 1 (24 Hours after import)
+        // Stage 1: Follow-up 1 (24 Hours)
         if (hoursSinceImport >= 24 && !sentTypes.has("followup_24h")) {
           const mailOptions = {
             from: `"Teals CRM" <${GMAIL_USER}>`,
@@ -274,7 +275,7 @@ export default async function handler(req: any, res: any) {
           count++;
           results.push(`24h Lead Follow-up sent to ${lead.email}`);
         }
-        // Follow-up 2 (48 Hours after import)
+        // Stage 2: Follow-up 2 (48 Hours)
         else if (hoursSinceImport >= 48 && !sentTypes.has("followup_48h")) {
           const mailOptions = {
             from: `"Teals CRM" <${GMAIL_USER}>`,
@@ -306,6 +307,73 @@ export default async function handler(req: any, res: any) {
           });
           count++;
           results.push(`48h Lead Follow-up sent to ${lead.email}`);
+        }
+        // Stage 3: Follow-up 3 (72 Hours)
+        else if (hoursSinceImport >= 72 && !sentTypes.has("followup_72h")) {
+          const mailOptions = {
+            from: `"Teals CRM" <${GMAIL_USER}>`,
+            to: lead.email,
+            subject: "10-minute slot open for a live sales demo",
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; background-color: #ffffff;">
+                <div style="padding: 24px; color: #334155; line-height: 1.6;">
+                  <h2 style="color: #1e293b; margin-top: 0;">Live Demo Slot</h2>
+                  <p>Hi ${lead.name || "there"},</p>
+                  <p>We have a 10-minute slot open this week for a live walkthrough of our automated CRM workspace.</p>
+                  <div style="margin: 25px 0; text-align: center;">
+                    <a href="https://salesflow-ai-main.vercel.app/book" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                      Reserve Your 10-Min Demo
+                    </a>
+                  </div>
+                </div>
+              </div>
+            `,
+          };
+          await transporter.sendMail(mailOptions);
+          await supabase.from("emails_sent").insert({
+            lead_id: lead.id,
+            lead_email: lead.email,
+            subject: "10-minute slot open for a live sales demo",
+            sequence_type: "followup_72h",
+            status: "sent",
+            sent_at: now.toISOString(),
+          });
+          count++;
+          results.push(`72h Lead Follow-up sent to ${lead.email}`);
+        }
+        // Stage 4: Follow-up 4 (10 Days / 240 Hours)
+        else if (hoursSinceImport >= 240 && !sentTypes.has("followup_10d")) {
+          const mailOptions = {
+            from: `"Teals CRM" <${GMAIL_USER}>`,
+            to: lead.email,
+            subject: "Final Check-in: Should we close your inquiry?",
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; background-color: #ffffff;">
+                <div style="padding: 24px; color: #334155; line-height: 1.6;">
+                  <h2 style="color: #1e293b; margin-top: 0;">Final Touchpoint</h2>
+                  <p>Hi ${lead.name || "there"},</p>
+                  <p>We haven't heard back from you, so we're assuming this isn't a priority right now and will close your file for now.</p>
+                  <p>If you ever want to connect in the future, you can book a slot below anytime:</p>
+                  <div style="margin: 25px 0; text-align: center;">
+                    <a href="https://salesflow-ai-main.vercel.app/book" style="background-color: #64748b; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                      Book Slot Anytime
+                    </a>
+                  </div>
+                </div>
+              </div>
+            `,
+          };
+          await transporter.sendMail(mailOptions);
+          await supabase.from("emails_sent").insert({
+            lead_id: lead.id,
+            lead_email: lead.email,
+            subject: "Final Check-in: Should we close your inquiry?",
+            sequence_type: "followup_10d",
+            status: "sent",
+            sent_at: now.toISOString(),
+          });
+          count++;
+          results.push(`10d Lead Follow-up sent to ${lead.email}`);
         }
       }
     }
