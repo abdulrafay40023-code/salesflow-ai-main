@@ -204,7 +204,7 @@ export default async function handler(req: any, res: any) {
 
         // Stage 3: Meeting Time Has Arrived (Starting NOW)
         // ONLY trigger when current time `now` reaches or passes meeting time (meetingTime - 60s)
-        if (now.getTime() >= (meetingTime.getTime() - 60 * 1000)) {
+        if (now.getTime() >= meetingTime.getTime()) {
           // Send 1 email to BOTH client & working agent
           await sendEmail(recipients, `🔴 MEETING STARTING NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
 

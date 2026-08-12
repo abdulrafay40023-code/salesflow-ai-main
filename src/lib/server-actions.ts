@@ -213,7 +213,6 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
           agentEmail: realAgentEmail,
           meetingTime: data.time,
         });
-      }
       } else if (diffMs > 0 && diffMs <= 45 * 60 * 1000 && insertedMeeting?.id) {
         // Schedule precise server-side timer to fire at the EXACT minute when meeting time arrives!
         const meetingId = insertedMeeting.id;
