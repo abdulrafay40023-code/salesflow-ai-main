@@ -107,9 +107,23 @@ function FollowUpsPage() {
 
       const { data: fetchedLeads } = await query;
       const safeLeads = (fetchedLeads || []) as DbLead[];
-      setLeads(safeLeads);
 
-      // 2. Fetch email logs to determine which follow-ups were sent
+      // 2. Fetch meetings table to exclude any lead who booked a meeting
+      const { data: fetchedMeetings } = await supabase.from("meetings").select("title");
+      const bookedEmails = new Set<string>();
+      (fetchedMeetings || []).forEach((m) => {
+        if (m.title) {
+          const match = m.title.match(/\(([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\)/);
+          if (match && match[1]) bookedEmails.add(match[1].trim().toLowerCase());
+        }
+      });
+
+      const unbookedLeads = safeLeads.filter(
+        (l) => l.email && !bookedEmails.has(l.email.trim().toLowerCase())
+      );
+      setLeads(unbookedLeads);
+
+      // 3. Fetch email logs to determine which follow-ups were sent
       const { data: fetchedEmails } = await supabase
         .from("emails_sent")
         .select("id, lead_id, lead_email, sequence_type, status, sent_at");

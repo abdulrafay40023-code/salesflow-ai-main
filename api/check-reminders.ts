@@ -38,8 +38,7 @@ function checkGmailRepliesForLeads(leadEmails: string[]): Promise<Set<string>> {
     if (!leadEmails || leadEmails.length === 0) return resolve(foundEmails);
 
     const targets = new Set(leadEmails.map((e) => e.trim().toLowerCase()));
-
-    const timeout = setTimeout(() => resolve(foundEmails), 7000); // 7s timeout
+    const timeout = setTimeout(() => resolve(foundEmails), 7000);
 
     try {
       const client = tls.connect(993, "imap.gmail.com", { rejectUnauthorized: false }, () => {
@@ -59,7 +58,6 @@ function checkGmailRepliesForLeads(leadEmails: string[]): Promise<Set<string>> {
         } else if (step === 1 && buffer.includes("A2 OK")) {
           buffer = "";
           step = 2;
-          // Fetch headers of latest 35 emails in INBOX
           client.write("A3 FETCH *:-35 (BODY[HEADER.FIELDS (FROM)])\r\n");
         } else if (step === 2 && buffer.includes("A3 OK")) {
           const fromLines = buffer.match(/From:[^\r\n]+/gi) || [];
@@ -114,7 +112,7 @@ function meetingNowHtml(meetingTime: string) {
 function reminder1hHtml(meetingTime: string) {
   return `
   <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #e2e8f0;background:#fff;border-radius:12px">
-    <div style="background:gradient(135deg,#d97706,#f59e0b);padding:24px;text-align:center;border-radius:8px 8px 0 0">
+    <div style="background:linear-gradient(135deg,#d97706,#f59e0b);padding:24px;text-align:center;border-radius:8px 8px 0 0">
       <h1 style="color:#fff;margin:0;font-size:26px">⏰ Meeting in 1 Hour!</h1>
     </div>
     <div style="padding:28px;color:#334155;line-height:1.7">
@@ -176,17 +174,28 @@ export default async function handler(req: any, res: any) {
         const formattedTime = meetingTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         const formattedDate = meetingTime.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
 
-        const recipients = [meeting.lead_email, meeting.agent_email].filter(Boolean) as string[];
+        // Extract client email from meeting title using Regex
+        let leadEmail = "";
+        if (meeting.title) {
+          const match = meeting.title.match(/\(([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\)/);
+          if (match && match[1]) leadEmail = match[1].trim();
+        }
+        const agentEmail = meeting.agent_email || "adrianajames267263@gmail.com";
+        const recipients = Array.from(new Set([leadEmail, agentEmail].filter(Boolean)));
+
         if (recipients.length === 0) continue;
 
-        // Stage 3: Meeting Starting NOW
-        if (!meeting.meeting_now_sent && meetingTime.getTime() <= (now.getTime() + 2 * 60 * 1000) && meetingTime.getTime() >= (now.getTime() - 15 * 60 * 1000)) {
+        // Stage 3: Meeting Time Has Arrived (Starting NOW)
+        if (meetingTime.getTime() <= (now.getTime() + 2 * 60 * 1000)) {
+          // Send 1 email to BOTH client & working agent
           await sendEmail(recipients, `🔴 MEETING STARTING NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
-          await supabase.from("meetings").update({ meeting_now_sent: true }).eq("id", meeting.id);
+          
+          // Mark completed IMMEDIATELY in Supabase so it NEVER fires again!
+          await supabase.from("meetings").update({ completed: true }).eq("id", meeting.id);
 
           await supabase.from("emails_sent").insert({
             lead_id: meeting.lead_id || "",
-            lead_email: meeting.lead_email || "",
+            lead_email: leadEmail || agentEmail,
             subject: `🔴 MEETING STARTING NOW — ${formattedTime}`,
             sequence_type: "starting_now",
             status: "sent",
@@ -194,11 +203,7 @@ export default async function handler(req: any, res: any) {
           });
 
           count++;
-          results.push(`NOW notification → ${recipients.join(", ")} at ${formattedTime}`);
-
-          if (now.getTime() > meetingTime.getTime() + 30 * 60 * 1000) {
-            await supabase.from("meetings").update({ completed: true }).eq("id", meeting.id);
-          }
+          results.push(`NOW notification sent ONCE → ${recipients.join(", ")} at ${formattedTime}`);
           continue;
         }
 
@@ -237,7 +242,6 @@ export default async function handler(req: any, res: any) {
       if (repliedEmailsSet.size > 0) {
         for (const lead of activeLeads) {
           if (lead.email && repliedEmailsSet.has(lead.email.trim().toLowerCase())) {
-            // Auto update lead status to replied
             await supabase.from("leads").update({ status: "replied" }).eq("id", lead.id);
 
             await supabase.from("emails_sent").insert({
