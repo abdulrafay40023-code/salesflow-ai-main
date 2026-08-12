@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
 import tls from "tls";
+import { createZoomMeeting } from "../src/lib/zoom-service";
 
 // ── Supabase credentials (same as app) ────────────────────────────────────
 const SUPABASE_URL = "https://nyjhbeqpjfdhhvqvjzyy.supabase.co";
@@ -235,12 +236,20 @@ export default async function handler(req: any, res: any) {
             continue;
           }
 
-          // Send EXACTLY 1 email to client and 1 email to agent
+          // Create live Zoom Meeting link for this session
+          const zoomRes = await createZoomMeeting({
+            topic: `Sales Meeting with ${leadEmail || "Client"}`,
+            startTimeIso: meetingTime.toISOString(),
+            durationMinutes: 30,
+          });
+          const zoomJoinUrl = zoomRes.joinUrl;
+
+          // Send EXACTLY 1 email to client and 1 email to agent with Zoom link!
           if (leadEmail) {
-            await sendEmail([leadEmail], `🔴 MEETING STARTING NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
+            await sendEmail([leadEmail], `🔴 MEETING STARTING NOW — ${formattedTime}`, meetingNowHtml(formattedTime, zoomJoinUrl));
           }
           if (agentEmail && agentEmail.toLowerCase() !== leadEmail.toLowerCase()) {
-            await sendEmail([agentEmail], `🔴 MEETING STARTING NOW — ${formattedTime}`, meetingNowHtml(formattedTime));
+            await sendEmail([agentEmail], `🔴 MEETING STARTING NOW — ${formattedTime}`, meetingNowHtml(formattedTime, zoomJoinUrl));
           }
 
           await supabase.from("emails_sent").insert({

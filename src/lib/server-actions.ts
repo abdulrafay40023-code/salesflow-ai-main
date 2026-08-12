@@ -152,13 +152,12 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
       });
       const zoomJoinUrl = zoomRes.joinUrl;
 
-      // 2. Send immediate Confirmation Email to Lead, Working Agent & Admin with Zoom Join Link
+      // 2. Send immediate Confirmation Email to Lead, Working Agent & Admin
       await sendMeetingConfirmationEmail({
         leadEmail: data.leadEmail,
         agentEmail: realAgentEmail,
         meetingDate: data.date,
         meetingTime: data.time,
-        zoomJoinUrl,
       });
 
       // 3. Update lead status in Supabase to "booked" by leadId or leadEmail

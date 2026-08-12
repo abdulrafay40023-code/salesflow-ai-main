@@ -154,24 +154,13 @@ export async function sendMeetingConfirmationEmail({
   agentEmail,
   meetingDate,
   meetingTime,
-  zoomJoinUrl,
 }: {
   leadEmail: string;
   agentEmail: string;
   meetingDate: string;
   meetingTime: string;
-  zoomJoinUrl?: string;
 }) {
   const recipients = Array.from(new Set([leadEmail, agentEmail].filter(Boolean))).join(", ");
-  const zoomBtn = zoomJoinUrl
-    ? `
-    <div style="margin: 25px 0; text-align: center;">
-      <a href="${zoomJoinUrl}" style="background-color: #2563eb; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(37,99,235,0.2);">
-        📹 Join Zoom Meeting
-      </a>
-      <p style="margin-top: 8px; font-size: 12px; color: #64748b;">Direct Link: <a href="${zoomJoinUrl}" style="color: #2563eb;">${zoomJoinUrl}</a></p>
-    </div>`
-    : "";
 
   const mailOptions = {
     from: `"Teals CRM Meetings" <${GMAIL_USER}>`,
@@ -189,8 +178,7 @@ export async function sendMeetingConfirmationEmail({
             <p style="margin: 4px 0;"><strong>Time:</strong> ${meetingTime}</p>
             <p style="margin: 4px 0;"><strong>Attendees:</strong> ${leadEmail} & Sales Agent (${agentEmail})</p>
           </div>
-          ${zoomBtn}
-          <p>Reminders will be sent 1 day and 1 hour before the scheduled meeting.</p>
+          <p>Reminders will be sent 1 day and 1 hour before the scheduled meeting. Zoom meeting link will be delivered at the exact meeting start time.</p>
         </div>
       </div>
     `,
