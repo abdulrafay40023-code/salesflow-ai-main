@@ -239,6 +239,18 @@ function DashboardPage() {
     setLoading(false);
   }
 
+  async function handleAcceptAssignedLeads() {
+    const myEmail = (user?.email || "").trim().toLowerCase();
+    await supabase
+      .from("emails_sent")
+      .update({ status: "read" })
+      .eq("lead_email", myEmail)
+      .eq("sequence_type", "lead_assignment");
+
+    toast.success("Accepted assigned leads into your workspace!");
+    fetchLive();
+  }
+
   async function handleApproveAgent(p: any) {
     let phone = "";
     if (p.avatar_url) {
@@ -482,6 +494,32 @@ function DashboardPage() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Assigned Leads Notification Banner for Working Agent */}
+      {!isAdmin && dbEmails.some((e) => e.sequence_type === "lead_assignment" && e.status === "unread") && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-violet-500/40 bg-violet-950/30 p-5 shadow-xl backdrop-blur-md animate-fade-in">
+          <div className="flex items-center gap-3">
+            <span className="grid size-10 place-items-center rounded-xl bg-violet-500/20 text-violet-400 border border-violet-500/30">
+              <UserPlus className="size-5" />
+            </span>
+            <div>
+              <p className="text-base font-bold text-violet-200">
+                Admin Garry Amelia assigned new lead(s) to you!
+              </p>
+              <p className="text-xs text-violet-300/80">
+                Click below to accept and import these leads directly into your workspace.
+              </p>
+            </div>
+          </div>
+
+          <Button
+            onClick={handleAcceptAssignedLeads}
+            className="rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold px-4 py-2 shadow-lg gap-2"
+          >
+            <CheckCircle2 className="size-4" /> Accept & Import Leads →
+          </Button>
         </div>
       )}
 

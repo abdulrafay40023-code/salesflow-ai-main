@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpDown, Filter, RefreshCw, Search, SlidersHorizontal, Users } from "lucide-react";
+import { ArrowUpDown, Filter, RefreshCw, Search, SlidersHorizontal, Users, UserCheck } from "lucide-react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/crm/Topbar";
 import { ImportLeadsDialog } from "@/components/crm/ImportLeadsDialog";
 import { LeadDetailSheet } from "@/components/crm/LeadDetailSheet";
@@ -42,6 +43,7 @@ export const Route = createFileRoute("/_app/leads")({
 });
 
 type SortKey = "name" | "company" | "lastContact" | "nextFollowUp" | "value";
+const ADMIN_EMAIL = "garryamelia6265@gmail.com";
 
 type DbLead = {
   id: string;
@@ -67,6 +69,66 @@ function LeadsPage() {
   const [sortKey, setSortKey] = useState<SortKey>("nextFollowUp");
   const [asc, setAsc] = useState(true);
   const [active, setActive] = useState<Lead | null>(null);
+  const [approvedAgents, setApprovedAgents] = useState<{ name: string; email: string }[]>([]);
+
+  const isAdmin = Boolean(user && (user.role === "admin" || user.email === ADMIN_EMAIL));
+
+  useEffect(() => {
+    if (isAdmin) {
+      supabase
+        .from("profiles")
+        .select("*")
+        .neq("email", ADMIN_EMAIL)
+        .then(({ data }) => {
+          if (data) {
+            const approved = data
+              .filter((p: any) => {
+                if (p.avatar_url) {
+                  try {
+                    return JSON.parse(p.avatar_url).approved === true;
+                  } catch {}
+                }
+                return false;
+              })
+              .map((p: any) => ({
+                name: p.full_name || p.email.split("@")[0],
+                email: p.email,
+              }));
+            setApprovedAgents(approved);
+          }
+        });
+    }
+  }, [isAdmin]);
+
+  async function handleReassignLead(leadId: string, leadName: string, newAgentEmail: string) {
+    try {
+      const { error } = await supabase
+        .from("leads")
+        .update({ assigned_agent_name: newAgentEmail })
+        .eq("id", leadId);
+
+      if (error) {
+        toast.error("Failed to reassign lead: " + error.message);
+        return;
+      }
+
+      if (newAgentEmail !== ADMIN_EMAIL) {
+        await supabase.from("emails_sent").insert({
+          lead_email: newAgentEmail,
+          subject: `Admin assigned lead "${leadName}" to you`,
+          status: "unread",
+          sequence_type: "lead_assignment",
+          type: "lead_assignment",
+          sent_at: new Date().toISOString(),
+        });
+      }
+
+      toast.success(`Lead "${leadName}" assigned to ${newAgentEmail}!`);
+      fetchLeads();
+    } catch (err: any) {
+      toast.error("Reassign error: " + err.message);
+    }
+  }
 
   async function fetchLeads() {
     setLoading(true);
@@ -298,7 +360,28 @@ function LeadsPage() {
                       {statusLabels[l.status] || l.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">{l.agent}</TableCell>
+                  <TableCell className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    {isAdmin ? (
+                      <Select
+                        value={l.agent === "Unassigned" ? ADMIN_EMAIL : l.agent}
+                        onValueChange={(v) => handleReassignLead(l.id, l.name, v)}
+                      >
+                        <SelectTrigger className="h-8 text-xs rounded-xl border-dashed bg-surface-2/80">
+                          <SelectValue placeholder="Assign agent..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={ADMIN_EMAIL}>Admin Pool (Garry Amelia)</SelectItem>
+                          {approvedAgents.map((ag) => (
+                            <SelectItem key={ag.email} value={ag.email}>
+                              👤 {ag.name} ({ag.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      l.agent
+                    )}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
                     {new Date(l.lastContact).toLocaleDateString()}
                   </TableCell>

@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { CheckCircle2, FileSpreadsheet, Upload, X, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CheckCircle2, FileSpreadsheet, Upload, X, Loader2, UserCheck } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -27,6 +34,7 @@ import * as XLSX from "xlsx";
 
 // Preview columns — Company removed
 const columns = ["Name", "Email", "Phone"];
+const ADMIN_EMAIL = "garryamelia6265@gmail.com";
 
 export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void } = {}) {
   const { user, addLeads } = useCrm();
@@ -34,7 +42,38 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
   const [fileName, setFileName] = useState<string | null>(null);
   const [rows, setRows] = useState<string[][]>([]);
   const [isParsing, setIsParsing] = useState(false);
+  const [approvedAgents, setApprovedAgents] = useState<{ name: string; email: string }[]>([]);
+  const [selectedAgentEmail, setSelectedAgentEmail] = useState<string>(ADMIN_EMAIL);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const isAdmin = user?.email === ADMIN_EMAIL;
+
+  useEffect(() => {
+    if (open && isAdmin) {
+      supabase
+        .from("profiles")
+        .select("*")
+        .neq("email", ADMIN_EMAIL)
+        .then(({ data }) => {
+          if (data) {
+            const approved = data
+              .filter((p: any) => {
+                if (p.avatar_url) {
+                  try {
+                    return JSON.parse(p.avatar_url).approved === true;
+                  } catch {}
+                }
+                return false;
+              })
+              .map((p: any) => ({
+                name: p.full_name || p.email.split("@")[0],
+                email: p.email,
+              }));
+            setApprovedAgents(approved);
+          }
+        });
+    }
+  }, [open, isAdmin]);
 
   async function parseFile(file: File) {
     setFileName(file.name);
@@ -89,55 +128,50 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
     }
   }
 
-  /** Parse a single sheet row → { name, email, phone } */
+  /** Parse a single sheet row → { name, email, phone, statusCell } */
   function parseRow(r: string[], i: number) {
-    // Email: first cell containing '@'
     const foundEmail = r.find((c) => c.includes("@")) || "";
     const lowerEmail = foundEmail.toLowerCase().trim();
 
     // Phone: first cell matching phone-number pattern
     const foundPhone = r.find((c) => /^\+?[0-9][\d\s\-().]{5,}$/.test(c)) ?? "";
 
-    // Name: first non-email, non-phone cell
-    let foundName = "";
-    for (const cell of r) {
-      if (!cell) continue;
-      if (cell.includes("@")) continue;
-      if (/^\+?[0-9][\d\s\-().]{5,}$/.test(cell)) continue;
-      foundName = cell;
-      break;
-    }
-    if (!foundName) {
-      foundName = lowerEmail ? lowerEmail.split("@")[0]! : `Lead #${i + 1}`;
-    }
+    // Name: first cell that doesn't contain '@' and isn't phone-like
+    const foundName = r.find((c) => c && !c.includes("@") && c !== foundPhone) || "";
 
-    return { name: foundName, email: lowerEmail, phone: foundPhone };
+    // Status: check if any cell matches a valid LeadStatus
+    const statusCell = r.find((c) =>
+      ["new", "contacted", "qualified", "meeting", "won", "lost"].includes(c.toLowerCase())
+    );
+
+    return {
+      name: foundName.trim() || lowerEmail.split("@")[0] || `Lead #${i + 1}`,
+      email: lowerEmail,
+      phone: foundPhone.trim(),
+      statusCell,
+    };
   }
 
-  async function confirmImport() {
-    const currentAgent = user?.email || user?.name || "admin@teals-crm.com";
-    const seenEmails = new Set<string>();
+  async function handleImport() {
+    if (!rows.length) return;
+
+    const targetAgentEmail = isAdmin ? selectedAgentEmail : (user?.email || ADMIN_EMAIL);
     const created: Lead[] = [];
 
     rows.forEach((r, i) => {
-      const { name, email, phone } = parseRow(r, i);
-      if (!email) return; // skip rows with no email
-      if (seenEmails.has(email)) return; // deduplicate
-      seenEmails.add(email);
+      const { name, email, phone, statusCell } = parseRow(r, i);
+      if (!email || !email.includes("@")) return;
 
-      const statusCell = r.find((c) =>
-        ["new", "contacted", "qualified", "meeting", "won", "lost"].includes(c.toLowerCase())
-      );
       const status: LeadStatus = (statusCell?.toLowerCase() as LeadStatus) || "new";
 
       created.push({
         id: `LD-${Date.now()}-${i}`,
         name,
-        company: "",      // no company
+        company: "",
         email,
-        phone,            // empty string "" if no phone found
+        phone,
         status,
-        agent: currentAgent,
+        agent: targetAgentEmail,
         lastContact: new Date().toISOString(),
         nextFollowUp: new Date(Date.now() + 86400000 * 2).toISOString(),
         notes: [`Imported from file: ${fileName || "User Upload"}`],
@@ -157,14 +191,26 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
         name: l.name,
         company: l.company,
         email: l.email,
-        phone: l.phone || null,  // null if empty
+        phone: l.phone || null,
         status: l.status,
-        assigned_agent_name: l.agent,
+        assigned_agent_name: targetAgentEmail,
         value: l.value,
         notes: l.notes,
       }));
       const { data: inserted, error } = await supabase.from("leads").insert(payload).select("id, email");
       if (error) console.log("Supabase lead insertion error:", error.message);
+
+      // If Admin assigned to a Working Agent, create an assignment notification record in emails_sent
+      if (isAdmin && targetAgentEmail !== ADMIN_EMAIL) {
+        await supabase.from("emails_sent").insert({
+          lead_email: targetAgentEmail,
+          subject: `Admin Garry Amelia assigned ${created.length} new lead(s) to you`,
+          status: "unread",
+          sequence_type: "lead_assignment",
+          type: "lead_assignment",
+          sent_at: new Date().toISOString(),
+        });
+      }
 
       // Send Welcome emails
       if (inserted && inserted.length) {
@@ -172,7 +218,7 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
           inserted.forEach((item) => {
             if (item.email && item.email.includes("@")) {
               triggerWelcomeEmailFn({
-                data: { email: item.email, leadId: item.id, agentEmail: currentAgent },
+                data: { email: item.email, leadId: item.id, agentEmail: targetAgentEmail },
               }).catch((err) => console.log("Welcome email send notice:", err));
             }
           });
@@ -182,7 +228,7 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
       console.log("Database sync completed.");
     }
 
-    toast.success(`${created.length} leads imported successfully!`);
+    toast.success(`${created.length} leads imported and assigned successfully!`);
     setOpen(false);
     setRows([]);
     setFileName(null);
@@ -269,7 +315,32 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
               </Button>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-border">
+            {/* Admin Assign To Dropdown */}
+            {isAdmin && (
+              <div className="flex flex-col gap-1.5 rounded-xl border border-primary/20 bg-primary/5 p-3.5">
+                <label className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                  <UserCheck className="size-3.5" /> Assign imported leads to:
+                </label>
+                <Select value={selectedAgentEmail} onValueChange={setSelectedAgentEmail}>
+                  <SelectTrigger className="w-full rounded-lg bg-surface-1 text-xs">
+                    <SelectValue placeholder="Select target agent..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ADMIN_EMAIL}>Admin Pool (Garry Amelia)</SelectItem>
+                    {approvedAgents.map((ag) => (
+                      <SelectItem key={ag.email} value={ag.email}>
+                        👤 {ag.name} ({ag.email})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Leads assigned to a working agent will send an instant Dashboard notification to them.
+                </p>
+              </div>
+            )}
+
+            <div className="overflow-x-auto rounded-xl border border-border max-h-60">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -301,10 +372,11 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
           <Button variant="outline" className="rounded-xl" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button className="rounded-xl" disabled={!rows.length} onClick={confirmImport}>
+          <Button className="rounded-xl" disabled={!rows.length} onClick={handleImport}>
             Import {rows.length ? `${rows.length} leads` : ""}
           </Button>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );

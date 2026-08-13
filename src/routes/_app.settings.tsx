@@ -1,17 +1,28 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Bell, Bot, Mail, Shield, UserRound, Users } from "lucide-react";
+import {
+  Bell,
+  Bot,
+  CheckCircle2,
+  Copy,
+  Globe,
+  Mail,
+  Shield,
+  UserRound,
+  Users,
+} from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/crm/Topbar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
 import { useCrm } from "@/lib/crm-store";
 import { supabase } from "@/lib/supabase";
 
@@ -112,12 +123,14 @@ function SettingsPage() {
             ["profile", "Profile", UserRound],
             ["team", "Team Members", Users],
             ["roles", "Roles & Permissions", Shield],
+            ["meta", "Meta Lead Ads", Globe],
             ["notifications", "Notifications", Bell],
             ["email", "Email Settings", Mail],
             ["ai", "AI Settings", Bot],
           ]
             .filter(([v]) => isAdmin || v === "profile")
             .map(([v, label, Icon]) => {
+
               const I = Icon as typeof Bell;
               return (
                 <TabsTrigger key={v as string} value={v as string} className="rounded-lg">
@@ -389,7 +402,82 @@ function SettingsPage() {
             </Button>
           </div>
         </TabsContent>
+
+        {/* ── META LEAD ADS INTEGRATION ───────────── */}
+        <TabsContent value="meta" className="mt-5">
+          <div className="panel max-w-3xl space-y-6 p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Globe className="size-5 text-blue-400" />
+                  <h3 className="font-display text-lg font-bold">Facebook & Instagram Lead Ads</h3>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Connect Meta Developer Lead Ads webhook to auto-import leads into Admin Dashboard pool.
+                </p>
+              </div>
+              <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40">
+                🟢 Webhook Endpoint Ready
+              </Badge>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">Webhook Callback URL (Vercel Serverless Endpoint)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value="https://salesflow-ai-main.vercel.app/api/meta-webhook"
+                    className="rounded-xl bg-surface-2 font-mono text-xs text-blue-300"
+                  />
+                  <Button
+                    variant="outline"
+                    className="rounded-xl shrink-0 gap-1.5"
+                    onClick={() => {
+                      navigator.clipboard.writeText("https://salesflow-ai-main.vercel.app/api/meta-webhook");
+                      toast.success("Copied Meta Webhook URL to clipboard!");
+                    }}
+                  >
+                    <Copy className="size-3.5" /> Copy
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">Meta Verification Token (`hub.verify_token`)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value="salesflow_meta_secret_token"
+                    className="rounded-xl bg-surface-2 font-mono text-xs text-emerald-300"
+                  />
+                  <Button
+                    variant="outline"
+                    className="rounded-xl shrink-0 gap-1.5"
+                    onClick={() => {
+                      navigator.clipboard.writeText("salesflow_meta_secret_token");
+                      toast.success("Copied verify token!");
+                    }}
+                  >
+                    <Copy className="size-3.5" /> Copy Token
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-blue-500/20 bg-blue-950/20 p-4 space-y-2">
+              <p className="text-xs font-bold text-blue-300">📌 How to connect Meta Lead Ads:</p>
+              <ol className="list-decimal list-inside space-y-1.5 text-xs text-slate-300">
+                <li>Go to <strong>Meta for Developers</strong> → App Dashboard → Add Webhooks product.</li>
+                <li>Select <strong>Page</strong> object → Subscribe to <code>leadgen</code> fields.</li>
+                <li>Paste the <strong>Callback URL</strong> and <strong>Verify Token</strong> provided above.</li>
+                <li>When leads submit your Meta Lead Form, they will instantly land in <strong>Admin Dashboard</strong> as New Leads!</li>
+              </ol>
+            </div>
+          </div>
+        </TabsContent>
       </Tabs>
     </div>
   );
 }
+
