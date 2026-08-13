@@ -100,8 +100,9 @@ function AppLayout() {
 
   // ── APPROVAL GATE FOR WORKING AGENTS ─────────────────────────────────────
   if (!isAdmin && !isApproved) {
-    // Case 1: User hasn't entered Name & Phone yet -> Show Profile Registration Form
-    if (!user.phone) {
+    // Case 1: User hasn't submitted approval request yet -> Show Profile Registration Form
+    if (user.status !== "pending") {
+
       const formValid = name.trim().length > 0 && phone.trim().length >= 7;
 
       return (

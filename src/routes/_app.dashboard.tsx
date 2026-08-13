@@ -225,17 +225,15 @@ function DashboardPage() {
         const pending = allProfiles.filter((p: any) => {
           if (!p || !p.email || p.email === "garryamelia6265@gmail.com") return false;
           if (p.role === "admin") return false;
-          let isApproved = false;
           if (p.avatar_url) {
             try {
               const parsed = JSON.parse(p.avatar_url);
-              if (typeof parsed.approved === "boolean") {
-                isApproved = parsed.approved;
-              }
+              return parsed.status === "pending" && parsed.approved !== true;
             } catch {}
           }
-          return !isApproved;
+          return false;
         });
+
 
 
         setPendingProfiles(pending);

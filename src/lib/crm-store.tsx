@@ -285,8 +285,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             email,
             role,
             approved: isMainAdmin ? true : false,
-            status: isMainAdmin ? "approved" : "pending",
+            status: isMainAdmin ? "approved" : "unsubmitted",
           };
+
           setUser(googleUser);
           try {
             window.localStorage.setItem(STORAGE_KEY, JSON.stringify(googleUser));
@@ -319,8 +320,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       email,
       role: userRole,
       approved: isMainAdmin ? true : false,
-      status: isMainAdmin ? "approved" : "pending",
+      status: isMainAdmin ? "approved" : "unsubmitted",
     };
+
     setUser(next);
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
