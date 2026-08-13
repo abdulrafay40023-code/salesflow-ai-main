@@ -68,20 +68,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const syncProfileToSupabase = useCallback(async (u: SessionUser) => {
     if (!u.email) return;
     try {
-      const role = u.email === "garryamelia6265@gmail.com" ? "admin" : "agent";
-      const name = u.name || u.email.split("@")[0];
       const isMainAdmin = u.email === "garryamelia6265@gmail.com";
+      const role = isMainAdmin ? "admin" : "agent";
+      const name = u.name || u.email.split("@")[0];
 
-      // If profile exists, read phone/approved metadata from avatar_url
+      // Read existing profile safely using maybeSingle
       const { data: existingProf } = await supabase
         .from("profiles")
         .select("id, full_name, avatar_url, role")
         .eq("email", u.email)
-        .single();
+        .maybeSingle();
 
       let phone = u.phone || "";
-      let approved = isMainAdmin ? true : u.approved ?? false;
-      let status: "pending" | "approved" | "rejected" = isMainAdmin ? "approved" : u.status ?? "pending";
+      let approved = isMainAdmin ? true : false;
+      let status: "pending" | "approved" | "rejected" = isMainAdmin ? "approved" : "pending";
 
       if (existingProf?.avatar_url) {
         try {
@@ -94,31 +94,25 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
       const meta = JSON.stringify({ phone, approved, status });
 
-      let userId: string | null = existingProf?.id ?? null;
-      if (!userId) {
-        const { data: authData } = await supabase.auth.getUser();
-        if (authData?.user?.email === u.email) {
-          userId = authData.user.id;
-        } else {
-          const { data: signUpData } = await supabase.auth.signUp({
-            email: u.email,
-            password: "TealsAgentPassword123!",
-          });
-          userId = signUpData?.user?.id ?? null;
-        }
-      }
-
-      if (userId) {
-        await supabase.from("profiles").upsert(
-          {
-            id: userId,
-            email: u.email,
+      if (existingProf) {
+        await supabase
+          .from("profiles")
+          .update({
             full_name: name,
             avatar_url: meta,
             role: isMainAdmin ? "admin" : "agent",
-          },
-          { onConflict: "email" }
-        );
+          })
+          .eq("email", u.email);
+      } else {
+        const { data: authData } = await supabase.auth.getUser();
+        const userId = authData?.user?.id || "usr-" + Date.now();
+        await supabase.from("profiles").insert({
+          id: userId,
+          email: u.email,
+          full_name: name,
+          avatar_url: meta,
+          role: isMainAdmin ? "admin" : "agent",
+        });
       }
 
       // Update user state with freshly synced phone and approved status
@@ -137,6 +131,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+
   const submitApprovalRequest = useCallback(
     async ({ name, email, phone }: { name: string; email: string; phone: string }) => {
       const meta = JSON.stringify({ phone, approved: false, status: "pending" });
@@ -144,7 +139,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         .from("profiles")
         .select("id")
         .eq("email", email)
-        .single();
+        .maybeSingle();
+
       let userId = existing?.id;
       if (!userId) {
         const { data: authData } = await supabase.auth.getUser();
@@ -200,7 +196,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         .from("profiles")
         .select("id, email, full_name, avatar_url, role")
         .eq("email", email)
-        .single();
+        .maybeSingle();
+
       if (!prof) {
         // Deleted by admin
         setUser((prev) => {
