@@ -166,10 +166,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             role: "agent",
           });
         }
+
+        // Send notification email log into DB for instant Admin alert
+        await supabase.from("emails_sent").insert({
+          lead_email: "garryamelia6265@gmail.com",
+          subject: `New agent approval request: ${name} (${email})`,
+          status: "unread",
+          sequence_type: "agent_approval_request",
+          sent_at: new Date().toISOString(),
+        });
       } catch (err) {
         console.log("Approval submission notice:", err);
       }
-
 
       const updatedUser: SessionUser = {
         name,
@@ -181,11 +189,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       };
       setUser(updatedUser);
       try {
+        window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
       } catch {}
     },
     []
   );
+
 
 
   const checkUserApprovalStatus = useCallback(async (email: string) => {
@@ -243,7 +253,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     document.documentElement.classList.add("dark");
 
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const sessionRaw = window.sessionStorage.getItem(STORAGE_KEY);
+      const localRaw = window.localStorage.getItem(STORAGE_KEY);
+      const raw = sessionRaw || localRaw;
       if (raw) {
         const parsed = JSON.parse(raw) as SessionUser;
         setUser(parsed);
