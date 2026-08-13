@@ -224,20 +224,19 @@ function AdminPage() {
     );
   }
 
-  // Filter pending agent approval requests
+  // Filter pending agent approval requests (only show users who actually submitted registration form)
   const pendingProfiles = profiles.filter((p) => {
     if (p.email === ADMIN_EMAIL) return false;
-    let isApproved = false;
-    if ((p as any).avatar_url) {
-      try {
-        const parsed = JSON.parse((p as any).avatar_url);
-        if (typeof parsed.approved === "boolean") {
-          isApproved = parsed.approved;
-        }
-      } catch {}
+    if (!(p as any).avatar_url) return false;
+    try {
+      const parsed = JSON.parse((p as any).avatar_url);
+      if (typeof parsed.status === "undefined") return false;
+      return parsed.approved !== true;
+    } catch {
+      return false;
     }
-    return !isApproved;
   });
+
 
   // Filter out internal system logs from customer email logs
   const customerEmailLogs = emailLogs.filter(
