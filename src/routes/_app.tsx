@@ -102,6 +102,8 @@ function AppLayout() {
   if (!isAdmin && !isApproved) {
     // Case 1: User hasn't entered Name & Phone yet -> Show Profile Registration Form
     if (!user.phone) {
+      const formValid = name.trim().length > 0 && phone.trim().length >= 7;
+
       return (
         <div className="flex min-h-screen items-center justify-center bg-[#080b11] px-4 py-12">
           <div className="w-full max-w-md animate-fade-in space-y-6">
@@ -122,7 +124,9 @@ function AppLayout() {
 
               <form onSubmit={handleSubmitForm} className="space-y-4">
                 <div className="space-y-2 text-left">
-                  <Label className="text-xs font-semibold text-slate-300">Full Name</Label>
+                  <Label className="text-xs font-semibold text-slate-300">
+                    Full Name <span className="text-red-400">*</span>
+                  </Label>
                   <Input
                     required
                     value={name}
@@ -142,7 +146,9 @@ function AppLayout() {
                 </div>
 
                 <div className="space-y-2 text-left">
-                  <Label className="text-xs font-semibold text-slate-300">Phone Number</Label>
+                  <Label className="text-xs font-semibold text-slate-300">
+                    Phone Number <span className="text-red-400">*</span>
+                  </Label>
                   <Input
                     required
                     type="tel"
@@ -151,15 +157,24 @@ function AppLayout() {
                     placeholder="+1 (555) 019-2834"
                     className="rounded-xl border-slate-700 bg-slate-900/80 text-white placeholder:text-slate-500"
                   />
+                  {phone.trim().length > 0 && phone.trim().length < 7 && (
+                    <p className="text-[11px] text-red-400 mt-1">Please enter a valid phone number.</p>
+                  )}
                 </div>
 
                 <Button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="w-full rounded-xl bg-primary py-6 text-sm font-semibold hover:bg-primary/90 transition-all shadow-lg"
+                  disabled={isSubmitting || !formValid}
+                  className="w-full rounded-xl bg-primary py-6 text-sm font-semibold hover:bg-primary/90 transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? "Submitting..." : "Submit for Admin Approval"}
+                  {isSubmitting ? "Submitting..." : "Submit for Admin Approval →"}
                 </Button>
+
+                {!formValid && (
+                  <p className="text-center text-[11px] text-slate-500">
+                    Fill in your full name and phone number to continue.
+                  </p>
+                )}
               </form>
 
               <div className="pt-2 text-center">
