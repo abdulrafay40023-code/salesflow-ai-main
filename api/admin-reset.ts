@@ -3,31 +3,32 @@ import { createClient } from "@supabase/supabase-js";
 const ADMIN_EMAIL = "garryamelia6265@gmail.com";
 const SECRET = "salesflow-reset-2026";
 
+// Hardcoded credentials for admin-only reset operation
+const SUPABASE_URL = "https://wvlgkalpqfkifexrzdmi.supabase.co";
+const SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2bGdrYWxwcWZraWZleHJ6ZG1pIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTgzNTI3MywiZXhwIjoyMDY1NDExMjczfQ.2_GmHDrBsB4QAklnOzLPaE_MODlKv-oRkmv2oAtT6YE";
+
 export default async function handler(req: any, res: any) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const body = req.body as { secret?: string };
+  let body: any = {};
+  try { body = typeof req.body === "string" ? JSON.parse(req.body) : req.body; } catch {}
   if (body?.secret !== SECRET) return res.status(403).json({ error: "Forbidden" });
 
-  const supabase = createClient(
-    process.env["VITE_SUPABASE_URL"]!,
-    process.env["SUPABASE_SERVICE_ROLE_KEY"]!
-  );
-
+  const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
   const results: string[] = [];
 
   try {
-    const { error: profErr } = await supabase.from("profiles").delete().neq("email", ADMIN_EMAIL);
-    results.push(profErr ? `profiles error: ${profErr.message}` : "profiles: cleared");
+    const { error } = await supabase.from("profiles").delete().neq("email", ADMIN_EMAIL);
+    results.push(error ? `profiles error: ${error.message}` : "profiles: cleared");
   } catch (e: any) { results.push(`profiles catch: ${e.message}`); }
 
   try {
-    await supabase.from("leads").delete().gte("id", "00000000-0000-0000-0000-000000000000");
+    await supabase.from("leads").delete().not("id", "is", null);
     results.push("leads: cleared");
   } catch (e: any) { results.push(`leads catch: ${e.message}`); }
 
   try {
-    await supabase.from("emails_sent").delete().gte("id", "00000000-0000-0000-0000-000000000000");
+    await supabase.from("emails_sent").delete().not("id", "is", null);
     results.push("emails_sent: cleared");
   } catch (e: any) { results.push(`emails_sent catch: ${e.message}`); }
 
