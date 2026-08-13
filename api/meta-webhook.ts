@@ -60,27 +60,30 @@ export default async function handler(req: any, res: any) {
             const email = value.email || value.lead_email || `meta_lead_${leadgenId || Date.now()}@meta.lead`;
             const phone = value.phone_number || value.phone || "+1 (555) 019-meta";
 
-            const newLead = {
-              name,
-              email: email.toLowerCase().trim(),
-              phone,
-              company: "Meta Lead Ads",
-              status: "new",
-              assigned_agent_name: ADMIN_EMAIL,
-              notes: [
-                `Source: Meta Lead Ads`,
-                `Form ID: ${formId || "N/A"}`,
-                `Page ID: ${pageId || "N/A"}`,
-                `Leadgen ID: ${leadgenId || "N/A"}`,
-              ],
-              created_at: new Date().toISOString(),
-            };
+            const cleanEmail = email.toLowerCase().trim();
 
-            const { data, error } = await supabase.from("leads").insert(newLead).select();
-            if (error) {
-              console.error("Error inserting Meta lead to Supabase:", error.message);
-            } else if (data) {
-              insertedLeads.push(data[0]);
+            // Duplicate Prevention: Check if lead exists by email or phone
+            const { data: existing } = await supabase
+              .from("leads")
+              .select("id, notes")
+              .or(`email.eq.${cleanEmail},phone.eq.${phone}`)
+              .maybeSingle();
+
+            if (existing) {
+              // Existing lead found -> Update record & skip duplicate creation
+              const updatedNotes = Array.from(new Set([...(existing.notes || []), ...newLead.notes]));
+              await supabase
+                .from("leads")
+                .update({ notes: updatedNotes, name, company: "Meta Lead Ads" })
+                .eq("id", existing.id);
+              insertedLeads.push(existing);
+            } else {
+              const { data, error } = await supabase.from("leads").insert(newLead).select();
+              if (error) {
+                console.error("Error inserting Meta lead to Supabase:", error.message);
+              } else if (data) {
+                insertedLeads.push(data[0]);
+              }
             }
           }
         }
@@ -88,21 +91,35 @@ export default async function handler(req: any, res: any) {
 
       // Fallback: If POST payload is direct JSON lead object (e.g. Zapier / Make / Meta Graph Test Tool)
       if (insertedLeads.length === 0 && (body.email || body.name)) {
-        const directLead = {
-          name: body.name || "Meta Test Lead",
-          email: (body.email || `meta_lead_${Date.now()}@meta.lead`).toLowerCase().trim(),
-          phone: body.phone || body.phone_number || "+1 (555) 019-meta",
-          company: body.company || "Meta Lead Ads",
-          status: "new",
-          assigned_agent_name: ADMIN_EMAIL,
-          notes: ["Source: Meta Lead Ads Direct Webhook"],
-          created_at: new Date().toISOString(),
-        };
-        const { data, error } = await supabase.from("leads").insert(directLead).select();
-        if (!error && data) {
-          insertedLeads.push(data[0]);
+        const cleanDirectEmail = (body.email || `meta_lead_${Date.now()}@meta.lead`).toLowerCase().trim();
+        const directPhone = body.phone || body.phone_number || "+1 (555) 019-meta";
+
+        const { data: existingDirect } = await supabase
+          .from("leads")
+          .select("id, notes")
+          .or(`email.eq.${cleanDirectEmail},phone.eq.${directPhone}`)
+          .maybeSingle();
+
+        if (existingDirect) {
+          insertedLeads.push(existingDirect);
+        } else {
+          const directLead = {
+            name: body.name || "Meta Test Lead",
+            email: cleanDirectEmail,
+            phone: directPhone,
+            company: body.company || "Meta Lead Ads",
+            status: "new",
+            assigned_agent_name: ADMIN_EMAIL,
+            notes: ["Source: Meta Lead Ads Direct Webhook"],
+            created_at: new Date().toISOString(),
+          };
+          const { data, error } = await supabase.from("leads").insert(directLead).select();
+          if (!error && data) {
+            insertedLeads.push(data[0]);
+          }
         }
       }
+
 
       return res.status(200).json({
         status: "success",

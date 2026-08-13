@@ -1,0 +1,57 @@
+{
+  "timestamp": "2026-08-13T19:04:06.304Z",
+  "supabase_url": "https://nyjhbeqpjfdhhvqvjzyy.supabase.co",
+  "leads": [],
+  "emails_sent": [],
+  "meetings": [],
+  "profiles": [
+    {
+      "id": "4c3bdaf8-3158-4580-b2eb-ac1ed9d5b40d",
+      "email": "garryamelia6265@gmail.com",
+      "full_name": "Garry Amelia",
+      "avatar_url": "{\"phone\":\"\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "admin",
+      "created_at": "2026-08-13T18:33:19.66937+00:00"
+    },
+    {
+      "id": "87bf5135-a80c-4fa5-8b63-0bbf8115fe94",
+      "email": "bollygarden222@gmail.com",
+      "full_name": "Bolly Garden",
+      "avatar_url": "{\"phone\":\"0300044666012\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-13T19:01:34.246498+00:00"
+    },
+    {
+      "id": "12f275ec-ffa6-422d-8f51-70e3590d6f5c",
+      "email": "digitalsphere346@gmail.com",
+      "full_name": "Digital Sphere",
+      "avatar_url": "{\"phone\":\"03301035196\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-13T18:52:16.319418+00:00"
+    },
+    {
+      "id": "0cb2c769-b138-47c8-ab59-79572c326ec0",
+      "email": "leadzmaker@gmail.com",
+      "full_name": "Leadz Maker",
+      "avatar_url": "{\"phone\":\"034514557768\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-13T18:59:59.251878+00:00"
+    },
+    {
+      "id": "c1a7282b-c14b-4bc6-a959-831973d2e609",
+      "email": "adrianajames267263@gmail.com",
+      "full_name": "Adriana James",
+      "avatar_url": "{\"phone\":\"034224557765\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-13T18:51:25.202946+00:00"
+    },
+    {
+      "id": "677bc67e-42cb-44cb-bf10-16df69cc23e8",
+      "email": "ellathomas81631@gmail.com",
+      "full_name": "Ella Thomas",
+      "avatar_url": "{\"phone\":\"03002824012\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-13T18:52:56.493577+00:00"
+    }
+  ]
+}

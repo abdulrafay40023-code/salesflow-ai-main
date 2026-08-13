@@ -197,15 +197,57 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
       const payload = created.map((l) => ({
         name: l.name,
         company: l.company,
-        email: l.email,
+        email: (l.email || "").trim().toLowerCase(),
         phone: l.phone || null,
         status: l.status,
         assigned_agent_name: l.agent,
         value: l.value,
         notes: l.notes,
       }));
-      const { data: inserted, error } = await supabase.from("leads").insert(payload).select("id, email");
-      if (error) console.log("Supabase lead insertion error:", error.message);
+
+      // Duplicate Prevention: Check existing database leads by email & phone
+      const { data: existingDbLeads } = await supabase
+        .from("leads")
+        .select("id, email, phone, notes");
+
+      const existingMap = new Map<string, any>();
+      (existingDbLeads || []).forEach((el) => {
+        if (el.email) existingMap.set(el.email.trim().toLowerCase(), el);
+        if (el.phone) existingMap.set(el.phone.trim(), el);
+      });
+
+      const newLeadsToInsert: typeof payload = [];
+
+      for (const item of payload) {
+        const emailKey = item.email ? item.email.trim().toLowerCase() : "";
+        const phoneKey = item.phone ? item.phone.trim() : "";
+        const match = (emailKey && existingMap.get(emailKey)) || (phoneKey && existingMap.get(phoneKey));
+
+        if (match) {
+          // Matching lead exists: SKIP duplicate row creation & update existing lead
+          const mergedNotes = Array.from(new Set([...(match.notes || []), ...(item.notes || [])]));
+          await supabase
+            .from("leads")
+            .update({
+              name: item.name,
+              company: item.company,
+              phone: item.phone || undefined,
+              assigned_agent_name: item.assigned_agent_name,
+              notes: mergedNotes,
+            })
+            .eq("id", match.id);
+        } else {
+          newLeadsToInsert.push(item);
+        }
+      }
+
+      let inserted: { id: string; email: string }[] | null = null;
+      if (newLeadsToInsert.length > 0) {
+        const { data, error } = await supabase.from("leads").insert(newLeadsToInsert).select("id, email");
+        if (error) console.log("Supabase lead insertion notice:", error.message);
+        inserted = data;
+      }
+
 
       // Create notification records for each agent who received leads
       if (isAdmin) {
