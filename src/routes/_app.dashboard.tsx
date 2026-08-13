@@ -223,21 +223,21 @@ function DashboardPage() {
       if (isAdmin && profilesRes.status === "fulfilled" && Array.isArray((profilesRes.value as any)?.data)) {
         const allProfiles = (profilesRes.value as any).data;
         const pending = allProfiles.filter((p: any) => {
-          if (p.email === "garryamelia6265@gmail.com") return false;
-          // Only show profiles that have actually registered (have avatar_url with phone/status data)
-          if (!p.avatar_url) return false;
-          try {
-            const parsed = JSON.parse(p.avatar_url);
-            // Must have submitted registration with a status field
-            if (typeof parsed.status === "undefined") return false;
-            // Show only pending (not yet approved)
-            return parsed.approved !== true;
-          } catch {
-            return false;
+          if (!p || p.email === "garryamelia6265@gmail.com") return false;
+          if (p.role === "admin") return false;
+          if (p.avatar_url) {
+            try {
+              const parsed = JSON.parse(p.avatar_url);
+              if (typeof parsed.approved === "boolean") {
+                return !parsed.approved;
+              }
+            } catch {}
           }
+          return true;
         });
         setPendingProfiles(pending);
       }
+
     } catch (e) {
       console.error("Dashboard fetch error", e);
     }
