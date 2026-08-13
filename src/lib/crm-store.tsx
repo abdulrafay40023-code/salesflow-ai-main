@@ -20,13 +20,18 @@ import { supabase } from "./supabase";
 export type SessionUser = {
   name: string;
   email: string;
+  phone?: string;
   role: "admin" | "agent";
+  approved?: boolean;
+  status?: "pending" | "approved" | "rejected";
 };
 
 type CrmContextValue = {
   user: SessionUser | null;
   signIn: (email: string, role: "admin" | "agent") => void;
   signOut: () => void;
+  submitApprovalRequest: (info: { name: string; email: string; phone: string }) => Promise<void>;
+  checkUserApprovalStatus: (email: string) => Promise<boolean>;
   leads: Lead[];
   visibleLeads: Lead[];
   addLeads: (leads: Lead[]) => void;
@@ -48,11 +53,14 @@ const defaultAdminUser: SessionUser = {
   name: "Garry Amelia",
   email: "garryamelia6265@gmail.com",
   role: "admin",
+  approved: true,
+  status: "approved",
+  phone: "+1 (555) 019-2834",
 };
 
 export function CrmProvider({ children }: { children: ReactNode }) {
   // Start with defaultAdminUser - localStorage is loaded in useEffect (client-only)
-  const [user, setUser] = useState<SessionUser>(defaultAdminUser);
+  const [user, setUser] = useState<SessionUser | null>(defaultAdminUser);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [theme] = useState<"dark">("dark");
@@ -62,18 +70,42 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     try {
       const role = u.email === "garryamelia6265@gmail.com" ? "admin" : "agent";
       const name = u.name || u.email.split("@")[0];
+      const isMainAdmin = u.email === "garryamelia6265@gmail.com";
 
-      // Attempt to register/update in profiles table if auth user exists
-      let userId: string | null = null;
-      const { data: authData } = await supabase.auth.getUser();
-      if (authData?.user?.email === u.email) {
-        userId = authData.user.id;
-      } else {
-        const { data: signUpData } = await supabase.auth.signUp({
-          email: u.email,
-          password: "TealsAgentPassword123!",
-        });
-        userId = signUpData?.user?.id ?? null;
+      // If profile exists, read phone/approved metadata from avatar_url
+      const { data: existingProf } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url, role")
+        .eq("email", u.email)
+        .single();
+
+      let phone = u.phone || "";
+      let approved = isMainAdmin ? true : u.approved ?? false;
+      let status: "pending" | "approved" | "rejected" = isMainAdmin ? "approved" : u.status ?? "pending";
+
+      if (existingProf?.avatar_url) {
+        try {
+          const parsed = JSON.parse(existingProf.avatar_url);
+          if (parsed.phone) phone = parsed.phone;
+          if (typeof parsed.approved === "boolean" && !isMainAdmin) approved = parsed.approved;
+          if (parsed.status && !isMainAdmin) status = parsed.status;
+        } catch {}
+      }
+
+      const meta = JSON.stringify({ phone, approved, status });
+
+      let userId: string | null = existingProf?.id ?? null;
+      if (!userId) {
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user?.email === u.email) {
+          userId = authData.user.id;
+        } else {
+          const { data: signUpData } = await supabase.auth.signUp({
+            email: u.email,
+            password: "TealsAgentPassword123!",
+          });
+          userId = signUpData?.user?.id ?? null;
+        }
       }
 
       if (userId) {
@@ -82,13 +114,117 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             id: userId,
             email: u.email,
             full_name: name,
-            role,
+            avatar_url: meta,
+            role: isMainAdmin ? "admin" : "agent",
           },
           { onConflict: "email" }
         );
       }
+
+      // Update user state with freshly synced phone and approved status
+      setUser((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          name: existingProf?.full_name || prev.name,
+          phone,
+          approved,
+          status,
+        };
+      });
     } catch (err) {
       console.log("Profile sync notice:", err);
+    }
+  }, []);
+
+  const submitApprovalRequest = useCallback(
+    async ({ name, email, phone }: { name: string; email: string; phone: string }) => {
+      const meta = JSON.stringify({ phone, approved: false, status: "pending" });
+      const { data: existing } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", email)
+        .single();
+      let userId = existing?.id;
+      if (!userId) {
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user?.email === email) {
+          userId = authData.user.id;
+        }
+      }
+      if (!userId) {
+        userId = "usr-" + Date.now();
+      }
+      await supabase.from("profiles").upsert(
+        {
+          id: userId,
+          email,
+          full_name: name,
+          avatar_url: meta,
+          role: "agent",
+        },
+        { onConflict: "email" }
+      );
+      const updatedUser: SessionUser = {
+        name,
+        email,
+        phone,
+        role: "agent",
+        approved: false,
+        status: "pending",
+      };
+      setUser(updatedUser);
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
+      } catch {}
+    },
+    []
+  );
+
+  const checkUserApprovalStatus = useCallback(async (email: string) => {
+    if (email === "garryamelia6265@gmail.com") return true;
+    try {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("id, email, full_name, avatar_url, role")
+        .eq("email", email)
+        .single();
+      if (!prof) {
+        // Deleted by admin
+        setUser((prev) => {
+          if (!prev) return null;
+          return { ...prev, approved: false, status: "pending", phone: undefined };
+        });
+        return false;
+      }
+      let phone = "";
+      let approved = false;
+      let status: "pending" | "approved" | "rejected" = "pending";
+      if (prof.avatar_url) {
+        try {
+          const parsed = JSON.parse(prof.avatar_url);
+          phone = parsed.phone || "";
+          approved = Boolean(parsed.approved);
+          status = parsed.status || (approved ? "approved" : "pending");
+        } catch {}
+      }
+      setUser((prev) => {
+        if (!prev) return null;
+        const next: SessionUser = {
+          ...prev,
+          name: prof.full_name || prev.name,
+          phone: phone || prev.phone,
+          approved,
+          status,
+        };
+        try {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      return approved;
+    } catch {
+      return false;
     }
   }, []);
 
@@ -123,10 +259,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             email.split("@")[0] ||
             "Working Agent";
           const role: "admin" | "agent" = email === "garryamelia6265@gmail.com" ? "admin" : "agent";
+          const isMainAdmin = email === "garryamelia6265@gmail.com";
           const googleUser: SessionUser = {
             name,
             email,
             role,
+            approved: isMainAdmin ? true : false,
+            status: isMainAdmin ? "approved" : "pending",
           };
           setUser(googleUser);
           try {
@@ -154,7 +293,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback((email: string, role: "admin" | "agent") => {
     const defaultName = role === "admin" ? "Garry Amelia" : email.split("@")[0] || "Sales Agent";
     const userRole = email === "garryamelia6265@gmail.com" ? "admin" : role;
-    const next: SessionUser = { name: defaultName, email, role: userRole };
+    const isMainAdmin = email === "garryamelia6265@gmail.com";
+    const next: SessionUser = {
+      name: defaultName,
+      email,
+      role: userRole,
+      approved: isMainAdmin ? true : false,
+      status: isMainAdmin ? "approved" : "pending",
+    };
     setUser(next);
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
@@ -181,6 +327,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       user,
       signIn,
       signOut,
+      submitApprovalRequest,
+      checkUserApprovalStatus,
       leads,
       visibleLeads: scoped(leads),
       addLeads: (incoming) => setLeads((prev) => [...incoming, ...prev]),
@@ -201,7 +349,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       theme,
       toggleTheme: () => {},
     };
-  }, [user, leads, followUps, theme, signIn, signOut]);
+  }, [user, leads, followUps, theme, signIn, signOut, submitApprovalRequest, checkUserApprovalStatus]);
 
   return <CrmContext.Provider value={value}>{children}</CrmContext.Provider>;
 }

@@ -46,13 +46,49 @@ function SettingsPage() {
     try {
       const { data } = await supabase
         .from("profiles")
-        .select("id,email,full_name,role,created_at")
+        .select("id,email,full_name,avatar_url,role,created_at")
         .order("created_at", { ascending: true });
       if (data) setTeamMembers(data as DbProfile[]);
     } catch (e) {
       console.error("Team fetch error", e);
     }
     setLoadingTeam(false);
+  }
+
+  async function handleApproveMember(m: DbProfile) {
+    let phone = "";
+    if ((m as any).avatar_url) {
+      try {
+        const parsed = JSON.parse((m as any).avatar_url);
+        phone = parsed.phone || "";
+      } catch {}
+    }
+    const meta = JSON.stringify({ phone, approved: true, status: "approved" });
+    const { error } = await supabase
+      .from("profiles")
+      .update({ avatar_url: meta, role: "agent" })
+      .eq("id", m.id);
+
+    if (error) {
+      toast.error("Failed to approve agent: " + error.message);
+    } else {
+      toast.success(`Approved ${m.full_name || m.email}! Access granted.`);
+      fetchTeam();
+    }
+  }
+
+  async function handleRemoveMember(m: DbProfile) {
+    if (m.email === "garryamelia6265@gmail.com") {
+      toast.error("Main Admin cannot be removed.");
+      return;
+    }
+    const { error } = await supabase.from("profiles").delete().eq("id", m.id);
+    if (error) {
+      toast.error("Failed to remove member: " + error.message);
+    } else {
+      toast.success(`Removed ${m.full_name || m.email} from CRM.`);
+      fetchTeam();
+    }
   }
 
   useEffect(() => {
@@ -133,21 +169,16 @@ function SettingsPage() {
           </div>
         </TabsContent>
 
-        {/* ── TEAM MEMBERS (live from Supabase profiles) ── */}
+        {/* ── TEAM MEMBERS (live from Supabase profiles with Approval & Removal) ── */}
         <TabsContent value="team" className="mt-5">
           <div className="panel divide-y divide-border">
             <div className="flex flex-wrap items-center justify-between gap-3 p-5">
               <div>
-                <h2 className="font-display text-lg font-bold">Team Members</h2>
+                <h2 className="font-display text-lg font-bold">Team Members & Approvals</h2>
                 <p className="text-sm text-muted-foreground">
-                  {loadingTeam ? "Loading..." : `${teamMembers.length} member${teamMembers.length !== 1 ? "s" : ""} in your workspace`}
+                  {loadingTeam ? "Loading..." : `${teamMembers.length} member${teamMembers.length !== 1 ? "s" : ""} registered`}
                 </p>
               </div>
-              {isAdmin && (
-                <Button className="rounded-xl" onClick={() => toast.info("Invite feature coming soon")}>
-                  Invite member
-                </Button>
-              )}
             </div>
 
             {loadingTeam ? (
@@ -167,26 +198,70 @@ function SettingsPage() {
                   .slice(0, 2)
                   .toUpperCase();
                 const memberIsAdmin = m.email === "garryamelia6265@gmail.com";
+
+                let phone = "";
+                let isApproved = memberIsAdmin;
+                if ((m as any).avatar_url) {
+                  try {
+                    const parsed = JSON.parse((m as any).avatar_url);
+                    phone = parsed.phone || "";
+                    if (typeof parsed.approved === "boolean" && !memberIsAdmin) {
+                      isApproved = parsed.approved;
+                    }
+                  } catch {}
+                }
+
                 return (
-                  <div key={m.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-5">
+                  <div key={m.id} className="flex flex-wrap items-center justify-between gap-4 p-5">
                     <div className="flex min-w-0 items-center gap-3">
-                      <Avatar className="size-9 shrink-0">
-                        <AvatarFallback className="bg-muted text-xs">
+                      <Avatar className="size-10 shrink-0">
+                        <AvatarFallback className="bg-muted text-xs font-bold">
                           {memberInitials}
                         </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{m.full_name || m.email}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-semibold">{m.full_name || m.email}</p>
+                          {memberIsAdmin ? (
+                            <span className="rounded-full border border-violet-400/30 bg-violet-500/10 px-2.5 py-0.5 text-[10px] font-bold text-violet-400">
+                              Admin
+                            </span>
+                          ) : isApproved ? (
+                            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold text-emerald-400">
+                              Approved
+                            </span>
+                          ) : (
+                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-bold text-amber-400">
+                              Pending Approval
+                            </span>
+                          )}
+                        </div>
                         <p className="truncate text-xs text-muted-foreground">{m.email}</p>
+                        {phone && <p className="text-[11px] text-muted-foreground/80 mt-0.5">📞 {phone}</p>}
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {memberIsAdmin && (
-                        <span className="rounded-full border border-violet-400/30 bg-violet-500/10 px-2.5 py-0.5 text-xs font-semibold text-violet-500">
-                          Admin
-                        </span>
-                      )}
-                    </div>
+
+                    {isAdmin && !memberIsAdmin && (
+                      <div className="flex shrink-0 items-center gap-2">
+                        {!isApproved && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleApproveMember(m)}
+                            className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 shadow-sm"
+                          >
+                            ✅ Approve Access
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleRemoveMember(m)}
+                          className="rounded-xl text-xs font-semibold px-3 py-1.5"
+                        >
+                          🗑️ Remove
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 );
               })
