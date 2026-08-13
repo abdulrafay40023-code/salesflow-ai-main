@@ -4,8 +4,9 @@ const ADMIN_EMAIL = "garryamelia6265@gmail.com";
 const SECRET = "salesflow-reset-2026";
 
 // Hardcoded credentials for admin-only reset operation
-const SUPABASE_URL = "https://wvlgkalpqfkifexrzdmi.supabase.co";
-const SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2bGdrYWxwcWZraWZleHJ6ZG1pIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTgzNTI3MywiZXhwIjoyMDY1NDExMjczfQ.2_GmHDrBsB4QAklnOzLPaE_MODlKv-oRkmv2oAtT6YE";
+const SUPABASE_URL = "https://nyjhbeqpjfdhhvqvjzyy.supabase.co";
+const SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im55amhiZXFwamZkaGh2cXZqenl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwMTAyMTgsImV4cCI6MjEwMTU4NjIxOH0.dng1sTshSzApFQia9YPkGsaBiiwWSJYduX_bAl5asPM";
+
 
 export default async function handler(req: any, res: any) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
