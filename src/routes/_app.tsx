@@ -22,8 +22,8 @@ function AppLayout() {
   const isApproved = isAdmin || Boolean(user?.approved);
 
   // Form states for first-time registration submission
-  const [name, setName] = useState(user?.name ?? "");
-  const [phone, setPhone] = useState(user?.phone ?? "");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
 
