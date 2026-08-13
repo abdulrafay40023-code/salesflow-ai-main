@@ -187,13 +187,21 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
       // 5. Calculate exact scheduled ISO timestamp & short-notice flags
       const now = new Date();
       const rawTime = data.rawTime || "10:00";
-      const isoStr = data.scheduledIso || `${data.date}T${rawTime}:00+05:00`;
-      const meetingDateTime = new Date(isoStr);
+      // Calculate scheduled ISO timestamp strictly from date & time
+      let scheduledIso = data.scheduledIso;
+      if (!scheduledIso || isNaN(new Date(scheduledIso).getTime())) {
+        const [y, m, d] = (data.date || "").split("-").map(Number);
+        const [h, min] = (data.rawTime || data.time || "10:00").split(":").map(Number);
+        if (y && m && d) {
+          const dt = new Date(y, m - 1, d, h || 10, min || 0, 0);
+          scheduledIso = dt.toISOString();
+        } else {
+          // If no date provided, default to 24h in future, NEVER 'now'
+          scheduledIso = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        }
+      }
 
-      const scheduledIso = isNaN(meetingDateTime.getTime())
-        ? now.toISOString()
-        : meetingDateTime.toISOString();
-
+      const meetingDateTime = new Date(scheduledIso);
       const diffMs = meetingDateTime.getTime() - now.getTime();
       const isWithin24h = diffMs <= 24 * 60 * 60 * 1000;
       const isWithin1h = diffMs <= 60 * 60 * 1000;

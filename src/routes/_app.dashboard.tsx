@@ -14,7 +14,7 @@ import {
   Clock,
   AlertCircle,
 } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { StatCard } from "@/components/crm/StatCard";
 import { PageHeader } from "@/components/crm/Topbar";
@@ -80,6 +80,230 @@ function EmptyState({ icon: Icon, text }: { icon: React.ElementType; text: strin
     <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
       <Icon className="h-8 w-8 opacity-30" />
       <p className="text-sm">{text}</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// MeetingNotifications — isolated notification component
+// Handles Zoom vs non-Zoom meetings with different visibility logic
+// ─────────────────────────────────────────────
+function MeetingNotifications({
+  meetings,
+  dismissedNotifs,
+  dismissNotif,
+}: {
+  meetings: DbMeeting[];
+  dismissedNotifs: Set<string>;
+  dismissNotif: (id: string) => void;
+}) {
+  // Live ticker updates every 2 seconds so start-time state transitions happen cleanly & live
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 2000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Separate Zoom meetings from non-Zoom meetings
+  const zoomMeetings = meetings.filter((m) => m.title && m.title.includes("|| ZOOM:"));
+  const nonZoomMeetings = meetings.filter((m) => !m.title || !m.title.includes("|| ZOOM:"));
+
+  // ── Zoom Meeting Cards ──
+  // Per-meeting independent evaluation:
+  // 1. Appears when booked in normal/default color (orange/blue).
+  // 2. Turns RED at THAT SPECIFIC meeting's own scheduled start time (nowMs >= meetingStartMs).
+  // 3. Stays RED for exactly 10 minutes after scheduled start time.
+  // 4. Auto-disappears 10 minutes after scheduled start time (nowMs - meetingStartMs > 10 * 60 * 1000).
+  // 5. Always has a manual "X" dismiss button at any stage.
+  const zoomCards: Array<{
+    id: string;
+    isRed: boolean;
+    meeting: DbMeeting;
+    label: string;
+    formattedTime: string;
+  }> = [];
+
+  for (const m of zoomMeetings) {
+    if (!m.scheduled_time) continue;
+    const meetingStartMs = new Date(m.scheduled_time).getTime();
+    if (isNaN(meetingStartMs)) continue;
+
+    // Elapsed time since meeting start time (ms)
+    const elapsedPostStart = nowMs - meetingStartMs;
+
+    // Requirement: Auto-disappear 10 minutes after start time
+    if (elapsedPostStart > 10 * 60 * 1000) continue;
+
+    const id = `zoom-${m.id}`;
+    if (dismissedNotifs.has(id)) continue;
+
+    // Requirement: Turn RED at THAT meeting's start time
+    const isRed = nowMs >= meetingStartMs;
+
+    let timeLabel = "";
+    const cleanTitle = m.title ? (m.title.split("|| ZOOM:")[0] || "").trim() : "";
+    if (cleanTitle.includes("@ ")) {
+      timeLabel = cleanTitle.split("@ ")[1]?.trim() || "";
+    }
+    if (!timeLabel) {
+      timeLabel = new Date(m.scheduled_time).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+    }
+
+    const formattedTime = new Date(m.scheduled_time).toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    zoomCards.push({ id, isRed, meeting: m, label: timeLabel, formattedTime });
+  }
+
+  // ── Non-Zoom Meeting Cards ──
+  const nonZoomCards: Array<{
+    id: string;
+    type: "now" | "1h" | "24h";
+    meeting: DbMeeting;
+    label: string;
+  }> = [];
+
+  for (const m of nonZoomMeetings) {
+    if (!m.scheduled_time) continue;
+    const mt = new Date(m.scheduled_time);
+    if (isNaN(mt.getTime())) continue;
+    const diffMs = mt.getTime() - nowMs;
+
+    let timeLabel = mt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    const titlePart = m.title ? m.title.trim() : "";
+    if (titlePart.includes("@ ")) {
+      timeLabel = titlePart.split("@ ")[1]?.trim() || timeLabel;
+    }
+
+    if (diffMs <= 0 && diffMs >= -10 * 60 * 1000) {
+      const id = `now-${m.id}`;
+      if (!dismissedNotifs.has(id)) nonZoomCards.push({ id, type: "now", meeting: m, label: timeLabel });
+    } else if (diffMs > 0 && diffMs <= 65 * 60 * 1000) {
+      const id = `1h-${m.id}`;
+      if (!dismissedNotifs.has(id)) nonZoomCards.push({ id, type: "1h", meeting: m, label: timeLabel });
+    } else if (diffMs > 65 * 60 * 1000 && diffMs <= 25 * 60 * 60 * 1000) {
+      const id = `24h-${m.id}`;
+      if (!dismissedNotifs.has(id)) nonZoomCards.push({ id, type: "24h", meeting: m, label: timeLabel });
+    }
+  }
+
+  if (zoomCards.length === 0 && nonZoomCards.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {/* Zoom Meeting Notifications */}
+      {zoomCards.map((n) => {
+        const isRed = n.isRed;
+        const borderColor = isRed
+          ? "border-red-500/50 bg-red-950/40 text-red-100"
+          : "border-orange-500/30 bg-orange-500/10 text-foreground";
+        const iconBg = isRed ? "bg-red-500/20 text-red-400" : "bg-orange-500/20 text-orange-400";
+        const Icon = isRed ? AlertCircle : CalendarCheck;
+
+        const title = isRed
+          ? `🔴 Zoom Meeting Started — ${n.label}`
+          : `📹 Zoom Meeting Scheduled — ${n.label}`;
+        const subtitle = isRed
+          ? "Meeting in progress! Join Zoom now to connect."
+          : `Scheduled for ${n.formattedTime}`;
+
+        let zoomLink = "https://zoom.us/j/5539578967";
+        if (n.meeting.title && n.meeting.title.includes("|| ZOOM: ")) {
+          zoomLink = n.meeting.title.split("|| ZOOM: ")[1]?.trim() || zoomLink;
+        }
+
+        return (
+          <div
+            key={n.id}
+            className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 ${borderColor} transition-all duration-500 shadow-md`}
+          >
+            <span className={`grid size-8 place-items-center rounded-lg shrink-0 ${iconBg}`}>
+              <Icon className={`size-4 ${isRed ? "animate-pulse" : ""}`} />
+            </span>
+
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold">{title}</p>
+              <p className="text-xs text-muted-foreground">{subtitle}</p>
+            </div>
+
+            <a
+              href={zoomLink}
+              target="_blank"
+              rel="noreferrer"
+              className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors text-white ${
+                isRed ? "bg-red-600 hover:bg-red-500 animate-pulse" : "bg-blue-600 hover:bg-blue-500"
+              }`}
+            >
+              📹 Join Zoom
+            </a>
+
+            {/* Manual X dismiss button — available at all times */}
+            <button
+              onClick={() => dismissNotif(n.id)}
+              className="ml-auto shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+              title="Dismiss notification"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        );
+      })}
+
+      {/* Non-Zoom Meeting Notifications */}
+      {nonZoomCards.map((n) => {
+        const isNow = n.type === "now";
+        const is1h = n.type === "1h";
+        const borderColor = isNow
+          ? "border-red-500/30 bg-red-500/8"
+          : is1h
+          ? "border-yellow-500/30 bg-yellow-500/8"
+          : "border-blue-500/30 bg-blue-500/8";
+        const iconColor = isNow ? "text-red-400" : is1h ? "text-yellow-400" : "text-blue-400";
+        const iconBg = isNow ? "bg-red-500/15" : is1h ? "bg-yellow-500/15" : "bg-blue-500/15";
+        const Icon = isNow ? AlertCircle : is1h ? Clock : Bell;
+        const title = isNow
+          ? `🔴 Meeting Starting NOW — ${n.label}`
+          : is1h
+          ? `⏰ Meeting in 1 Hour — ${n.label}`
+          : `📅 Meeting Tomorrow — ${n.label}`;
+        const subtitle = isNow
+          ? "Your meeting is happening right now!"
+          : is1h
+          ? "Prepare your notes — meeting starts in less than 1 hour."
+          : "Meeting scheduled for tomorrow — be prepared.";
+
+        return (
+          <div
+            key={n.id}
+            className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 ${borderColor} transition-all duration-300`}
+          >
+            <span className={`grid size-8 place-items-center rounded-lg shrink-0 ${iconBg}`}>
+              <Icon className={`size-4 ${iconColor}`} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold">{title}</p>
+              <p className="text-xs text-muted-foreground">{subtitle}</p>
+            </div>
+            <button
+              onClick={() => dismissNotif(n.id)}
+              className="ml-auto shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+              title="Dismiss"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -151,9 +375,8 @@ function DashboardPage() {
         supabase
           .from("meetings")
           .select("id,title,scheduled_time,completed,lead_id,agent_email")
-          .eq("completed", false)
           .order("scheduled_time", { ascending: true })
-          .limit(20),
+          .limit(50),
         isAdmin
           ? supabase.from("profiles").select("*").order("created_at", { ascending: true })
           : Promise.resolve({ data: [] }),
@@ -565,148 +788,8 @@ function DashboardPage() {
       })()}
 
 
-      {/* ── Booking Notification Banner (NO mark done button, NO cross) ── */}
-      {!isAdmin && uncompletedMeetings.length > 0 && (
-        <div className="space-y-2">
-          {uncompletedMeetings.map((m) => {
-            const cleanTitle = m.title ? m.title.split("|| ZOOM:")[0].trim() : "Scheduled Meeting";
-            return (
-              <div
-                key={m.id}
-                className="flex flex-wrap items-center gap-3 rounded-xl border border-orange-500/25 bg-orange-500/8 px-4 py-3"
-              >
-                <span className="grid size-8 place-items-center rounded-lg bg-orange-500/15 shrink-0">
-                  <CalendarCheck className="size-4 text-orange-400" />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold">{cleanTitle}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {(() => {
-                      if (!m?.scheduled_time) return "Scheduled";
-                      const d = new Date(m.scheduled_time);
-                      return isNaN(d.getTime())
-                        ? "Scheduled"
-                        : d.toLocaleString([], {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: true,
-                          });
-                    })()}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ── Smart CRM Notifications (24h, 1h, NOW) with X dismiss (ONLY for working agents, NOT admin) ── */}
-      {!isAdmin && (() => {
-        const now = new Date();
-        const notifs: Array<{id: string; type: "now"|"1h"|"24h"; meeting: DbMeeting; label: string}> = [];
-
-        for (const m of safeMeetings) {
-          if (!m.scheduled_time) continue;
-          const mt = new Date(m.scheduled_time);
-          if (isNaN(mt.getTime())) continue;
-          const diffMs = mt.getTime() - now.getTime();
-
-          // Extract time label from title
-          let timeLabel = "";
-          const cleanTitle = m.title ? m.title.split("|| ZOOM:")[0].trim() : "";
-          if (cleanTitle && cleanTitle.includes("@ ")) {
-            timeLabel = cleanTitle.split("@ ")[1]?.trim() || "";
-          }
-          if (!timeLabel) {
-            timeLabel = mt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-          }
-
-          // NOW: meeting time arrived (within last 5 min)
-          if (diffMs <= 0 && diffMs >= -5 * 60 * 1000) {
-            const id = `now-${m.id}`;
-            if (!dismissedNotifs.has(id)) {
-              notifs.push({ id, type: "now", meeting: m, label: timeLabel });
-            }
-          }
-          // 1H: within next 0–65 minutes
-          else if (diffMs > 0 && diffMs <= 65 * 60 * 1000) {
-            const id = `1h-${m.id}`;
-            if (!dismissedNotifs.has(id)) {
-              notifs.push({ id, type: "1h", meeting: m, label: timeLabel });
-            }
-          }
-          // 24H: within next 1h–25h
-          else if (diffMs > 65 * 60 * 1000 && diffMs <= 25 * 60 * 60 * 1000) {
-            const id = `24h-${m.id}`;
-            if (!dismissedNotifs.has(id)) {
-              notifs.push({ id, type: "24h", meeting: m, label: timeLabel });
-            }
-          }
-        }
-
-        if (notifs.length === 0) return null;
-
-        return (
-          <div className="space-y-2">
-            {notifs.map((n) => {
-              const isNow = n.type === "now";
-              const is1h = n.type === "1h";
-              const borderColor = isNow ? "border-red-500/30 bg-red-500/8" : is1h ? "border-yellow-500/30 bg-yellow-500/8" : "border-blue-500/30 bg-blue-500/8";
-              const iconColor = isNow ? "text-red-400" : is1h ? "text-yellow-400" : "text-blue-400";
-              const iconBg = isNow ? "bg-red-500/15" : is1h ? "bg-yellow-500/15" : "bg-blue-500/15";
-              const Icon = isNow ? AlertCircle : is1h ? Clock : Bell;
-              const title = isNow
-                ? `🔴 Meeting Starting NOW — ${n.label}`
-                : is1h
-                ? `⏰ Meeting in 1 Hour — ${n.label}`
-                : `📅 Meeting Tomorrow — ${n.label}`;
-              const subtitle = isNow
-                ? "Your meeting is happening right now!"
-                : is1h
-                ? "Prepare your notes — meeting starts in less than 1 hour."
-                : "Meeting scheduled for tomorrow — be prepared.";
-
-              let zoomLink = "https://zoom.us/j/5539578967";
-              if (n.meeting.title && n.meeting.title.includes("|| ZOOM: ")) {
-                zoomLink = n.meeting.title.split("|| ZOOM: ")[1]?.trim() || zoomLink;
-              }
-
-              return (
-                <div
-                  key={n.id}
-                  className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 ${borderColor} transition-all duration-300`}
-                >
-                  <span className={`grid size-8 place-items-center rounded-lg shrink-0 ${iconBg}`}>
-                    <Icon className={`size-4 ${iconColor}`} />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold">{title}</p>
-                    <p className="text-xs text-muted-foreground">{subtitle}</p>
-                  </div>
-                  <a
-                    href={zoomLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors"
-                  >
-                    📹 Join Zoom
-                  </a>
-                  <button
-                    onClick={() => dismissNotif(n.id)}
-                    className="ml-auto shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
-                    title="Dismiss"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })()}
+      {/* ── Notification Sections (agents only, not admin) ── */}
+      {!isAdmin && <MeetingNotifications meetings={safeMeetings} dismissedNotifs={dismissedNotifs} dismissNotif={dismissNotif} />}
 
       {/* Charts Row */}
       <div className="grid gap-4 lg:grid-cols-3">

@@ -46,11 +46,16 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
   const [selectedAgentEmail, setSelectedAgentEmail] = useState<string>(ADMIN_EMAIL);
   const [rowAgents, setRowAgents] = useState<Record<number, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
+  // Agent's own phone (fetched from profiles) — used for self-import check
+  const [agentPhone, setAgentPhone] = useState<string>("");
 
   const isAdmin = user?.email === ADMIN_EMAIL;
 
   useEffect(() => {
-    if (open && isAdmin) {
+    if (!open) return;
+
+    if (isAdmin) {
+      // Admin: fetch approved agent list for assignment dropdown
       supabase
         .from("profiles")
         .select("*")
@@ -73,8 +78,27 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
             setApprovedAgents(approved);
           }
         });
+    } else {
+      // Working agent: fetch their own phone number for self-import check
+      if (user?.email) {
+        supabase
+          .from("profiles")
+          .select("avatar_url")
+          .eq("email", user.email)
+          .single()
+          .then(({ data }) => {
+            if (data?.avatar_url) {
+              try {
+                const parsed = JSON.parse(data.avatar_url);
+                setAgentPhone((parsed.phone || "").trim());
+              } catch {
+                setAgentPhone("");
+              }
+            }
+          });
+      }
     }
-  }, [open, isAdmin]);
+  }, [open, isAdmin, user?.email]);
 
   const getRowAgent = (i: number) => rowAgents[i] || selectedAgentEmail;
 
@@ -91,6 +115,11 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
         return;
       }
       const worksheet = workbook.Sheets[firstSheetName];
+      if (!worksheet) {
+        toast.error("Worksheet is invalid or empty");
+        setIsParsing(false);
+        return;
+      }
       const rawData = XLSX.utils.sheet_to_json<(string | number)[]>(worksheet, {
         header: 1,
         defval: "",
@@ -161,10 +190,28 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
 
     const created: Lead[] = [];
     const agentCounts: Record<string, number> = {};
+    let selfSkippedCount = 0;
+
+    // Self-import check values (only for non-admin agents)
+    const myEmail = !isAdmin ? (user?.email || "").trim().toLowerCase() : "";
+    const myPhone = !isAdmin ? agentPhone.trim() : "";
 
     rows.forEach((r, i) => {
       const { name, email, phone, statusCell } = parseRow(r, i);
       if (!email || !email.includes("@")) return;
+
+      // ── SELF-IMPORT PREVENTION (agents only, not admin) ──────────────
+      if (!isAdmin && myEmail) {
+        const leadEmail = email.trim().toLowerCase();
+        const leadPhone = phone.trim();
+        const emailMatch = leadEmail === myEmail;
+        const phoneMatch = myPhone && leadPhone && leadPhone === myPhone;
+        if (emailMatch || phoneMatch) {
+          selfSkippedCount++;
+          return; // skip this row entirely
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────
 
       const rowTargetAgent = isAdmin ? getRowAgent(i) : (user?.email || ADMIN_EMAIL);
       const status: LeadStatus = (statusCell?.toLowerCase() as LeadStatus) || "new";
@@ -186,8 +233,24 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
       });
     });
 
+    // Notify agent if any rows were self-skipped
+    if (selfSkippedCount > 0) {
+      toast.warning(
+        `${selfSkippedCount} entr${selfSkippedCount === 1 ? "y was" : "ies were"} skipped — ` +
+        `your own account details (email/phone) cannot be imported as a lead.`,
+        { duration: 8000 }
+      );
+    }
+
     if (!created.length) {
-      toast.error("No valid leads could be created. Make sure your file has email addresses.");
+      if (selfSkippedCount === 0) {
+        toast.error("No valid leads could be created. Make sure your file has email addresses.");
+      }
+      // If every row was self-skipped, close dialog and stop — the warning toast already fired above
+      setOpen(false);
+      setRows([]);
+      setRowAgents({});
+      setFileName(null);
       return;
     }
 
@@ -415,13 +478,36 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
                 <TableBody>
                   {rows.map((r, i) => {
                     const cells = getPreviewCells(r, i);
+
+                    // Flag self-matching rows in the preview (agents only)
+                    const isSelfRow = (() => {
+                      if (isAdmin) return false;
+                      const myEm = (user?.email || "").trim().toLowerCase();
+                      const myPh = agentPhone.trim();
+                      const { email: rowEmail, phone: rowPhone } = parseRow(r, i);
+                      const emailMatch = myEm && rowEmail.trim().toLowerCase() === myEm;
+                      const phoneMatch = myPh && rowPhone.trim() && rowPhone.trim() === myPh;
+                      return emailMatch || phoneMatch;
+                    })();
+
                     return (
-                      <TableRow key={i}>
+                      <TableRow
+                        key={i}
+                        className={isSelfRow ? "bg-amber-500/10 border-amber-500/30" : ""}
+                      >
                         {cells.map((val, ci) => (
                           <TableCell key={ci} className="whitespace-nowrap text-sm">
                             {val || <span className="text-muted-foreground italic">—</span>}
                           </TableCell>
                         ))}
+                        {/* Self-match warning badge */}
+                        {isSelfRow && (
+                          <TableCell className="whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold text-amber-400 border border-amber-500/30">
+                              ⚠ Your account — will be skipped
+                            </span>
+                          </TableCell>
+                        )}
                         {isAdmin && (
                           <TableCell className="w-60 whitespace-nowrap">
                             <Select
