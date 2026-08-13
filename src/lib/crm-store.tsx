@@ -135,42 +135,39 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const submitApprovalRequest = useCallback(
     async ({ name, email, phone }: { name: string; email: string; phone: string }) => {
       const meta = JSON.stringify({ phone, approved: false, status: "pending" });
-      const { data: existing } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("email", email)
-        .maybeSingle();
 
-      let userId = existing?.id;
-      if (!userId) {
+      try {
         const { data: authData } = await supabase.auth.getUser();
-        if (authData?.user?.email === email) {
-          userId = authData.user.id;
-        }
-      }
-      if (!userId) {
-        userId = "usr-" + Date.now();
-      }
-      // Try update first
-      const { data: updateRes, error: updateErr } = await supabase
-        .from("profiles")
-        .update({
-          full_name: name,
-          avatar_url: meta,
-          role: "agent",
-        })
-        .eq("email", email)
-        .select();
+        const authUserId = authData?.user?.id;
 
-      if (updateErr || !updateRes || updateRes.length === 0) {
-        // Fallback to insert if profile row does not exist yet
-        await supabase.from("profiles").insert({
-          id: userId,
-          email,
-          full_name: name,
-          avatar_url: meta,
-          role: "agent",
-        });
+        const { data: existing } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("email", email)
+          .maybeSingle();
+
+        const profileId = existing?.id || authUserId;
+
+        if (existing) {
+          await supabase
+            .from("profiles")
+            .update({
+              full_name: name,
+              avatar_url: meta,
+              role: "agent",
+            })
+            .eq("email", email);
+        } else if (profileId) {
+          await supabase.from("profiles").insert({
+            id: profileId,
+            email,
+            full_name: name,
+            avatar_url: meta,
+            role: "agent",
+          });
+        }
+      } catch (err) {
+        console.log("Approval submission notice:", err);
       }
 
       const updatedUser: SessionUser = {
@@ -188,6 +185,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     },
     []
   );
+
 
   const checkUserApprovalStatus = useCallback(async (email: string) => {
     if (email === "garryamelia6265@gmail.com") return true;
