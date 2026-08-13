@@ -62,6 +62,22 @@ export default async function handler(req: any, res: any) {
 
             const cleanEmail = email.toLowerCase().trim();
 
+            const newLead = {
+              name,
+              email: cleanEmail,
+              phone,
+              company: "Meta Lead Ads",
+              status: "new",
+              assigned_agent_name: ADMIN_EMAIL,
+              notes: [
+                `Source: Meta Lead Ads`,
+                `Form ID: ${formId || "N/A"}`,
+                `Page ID: ${pageId || "N/A"}`,
+                `Leadgen ID: ${leadgenId || "N/A"}`,
+              ],
+              created_at: new Date().toISOString(),
+            };
+
             // Duplicate Prevention: Check if lead exists by email or phone
             const { data: existing } = await supabase
               .from("leads")
@@ -85,6 +101,7 @@ export default async function handler(req: any, res: any) {
                 insertedLeads.push(data[0]);
               }
             }
+
           }
         }
       }
