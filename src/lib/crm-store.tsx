@@ -23,7 +23,7 @@ export type SessionUser = {
   phone?: string;
   role: "admin" | "agent";
   approved?: boolean;
-  status?: "pending" | "approved" | "rejected";
+  status?: "unsubmitted" | "pending" | "approved" | "rejected";
 };
 
 type CrmContextValue = {
@@ -48,47 +48,69 @@ type CrmContextValue = {
 const CrmContext = createContext<CrmContextValue | null>(null);
 
 const STORAGE_KEY = "teals-crm-session";
+const ADMIN_EMAIL = "garryamelia6265@gmail.com";
 
-const defaultAdminUser: SessionUser = {
-  name: "Garry Amelia",
-  email: "garryamelia6265@gmail.com",
-  role: "admin",
-  approved: true,
-  status: "approved",
-  phone: "+1 (555) 019-2834",
-};
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function saveSession(u: SessionUser) {
+  try { window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(u)); } catch {}
+  try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(u)); } catch {}
+}
+
+function loadSession(): SessionUser | null {
+  try {
+    const raw = window.sessionStorage.getItem(STORAGE_KEY) || window.localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as SessionUser;
+  } catch {}
+  return null;
+}
+
+function clearSession() {
+  try { window.sessionStorage.removeItem(STORAGE_KEY); } catch {}
+  try { window.localStorage.removeItem(STORAGE_KEY); } catch {}
+}
+
+// ── Provider ─────────────────────────────────────────────────────────────────
 
 export function CrmProvider({ children }: { children: ReactNode }) {
-  // Start with defaultAdminUser - localStorage is loaded in useEffect (client-only)
-  const [user, setUser] = useState<SessionUser | null>(defaultAdminUser);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [theme] = useState<"dark">("dark");
 
+  // ── Sync user profile to Supabase DB ───────────────────────────────────────
+  // Only syncs DB; does NOT downgrade status (e.g. won't reset "pending" → "unsubmitted")
   const syncProfileToSupabase = useCallback(async (u: SessionUser) => {
     if (!u.email) return;
     try {
-      const isMainAdmin = u.email === "garryamelia6265@gmail.com";
-      const role = isMainAdmin ? "admin" : "agent";
+      const isMainAdmin = u.email === ADMIN_EMAIL;
       const name = u.name || u.email.split("@")[0];
 
-      // Read existing profile safely using maybeSingle
       const { data: existingProf } = await supabase
         .from("profiles")
         .select("id, full_name, avatar_url, role")
         .eq("email", u.email)
         .maybeSingle();
 
+      // Read values from DB; don't downgrade status if current session has higher state
       let phone = u.phone || "";
-      let approved = isMainAdmin ? true : false;
-      let status: "pending" | "approved" | "rejected" = isMainAdmin ? "approved" : "pending";
+      let approved = isMainAdmin ? true : (u.approved ?? false);
+      let status: SessionUser["status"] = isMainAdmin ? "approved" : (u.status ?? "unsubmitted");
 
       if (existingProf?.avatar_url) {
         try {
           const parsed = JSON.parse(existingProf.avatar_url);
           if (parsed.phone) phone = parsed.phone;
           if (typeof parsed.approved === "boolean" && !isMainAdmin) approved = parsed.approved;
-          if (parsed.status && !isMainAdmin) status = parsed.status;
+          // Only update status from DB; never downgrade "pending" to "unsubmitted"
+          if (parsed.status && !isMainAdmin) {
+            if (parsed.status === "approved" || parsed.status === "rejected") {
+              status = parsed.status;
+            } else if (parsed.status === "pending" && status !== "approved") {
+              status = "pending";
+            }
+            // if DB says "unsubmitted" but session says "pending", keep "pending"
+          }
         } catch {}
       }
 
@@ -97,11 +119,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (existingProf) {
         await supabase
           .from("profiles")
-          .update({
-            full_name: name,
-            avatar_url: meta,
-            role: isMainAdmin ? "admin" : "agent",
-          })
+          .update({ full_name: name, avatar_url: meta, role: isMainAdmin ? "admin" : "agent" })
           .eq("email", u.email);
       } else {
         const { data: authData } = await supabase.auth.getUser();
@@ -115,27 +133,41 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         });
       }
 
-      // Update user state with freshly synced phone and approved status
+      // Update user state — preserve session-level status if it's "pending" and DB isn't "approved"
       setUser((prev) => {
-        if (!prev) return null;
-        return {
+        if (!prev || prev.email !== u.email) return prev;
+        const merged: SessionUser = {
           ...prev,
           name: existingProf?.full_name || prev.name,
-          phone,
+          phone: phone || prev.phone,
           approved,
           status,
         };
+        saveSession(merged);
+        return merged;
       });
     } catch (err) {
       console.log("Profile sync notice:", err);
     }
   }, []);
 
-
+  // ── Submit approval request (agent form) ───────────────────────────────────
   const submitApprovalRequest = useCallback(
     async ({ name, email, phone }: { name: string; email: string; phone: string }) => {
-      const meta = JSON.stringify({ phone, approved: false, status: "pending" });
+      // First update UI immediately so agent sees the lock screen right away
+      const pendingUser: SessionUser = {
+        name,
+        email,
+        phone,
+        role: "agent",
+        approved: false,
+        status: "pending",
+      };
+      setUser(pendingUser);
+      saveSession(pendingUser);
 
+      // Then persist to DB
+      const meta = JSON.stringify({ phone, approved: false, status: "pending" });
       try {
         const { data: authData } = await supabase.auth.getUser();
         const authUserId = authData?.user?.id;
@@ -151,11 +183,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         if (existing) {
           await supabase
             .from("profiles")
-            .update({
-              full_name: name,
-              avatar_url: meta,
-              role: "agent",
-            })
+            .update({ full_name: name, avatar_url: meta, role: "agent" })
             .eq("email", email);
         } else {
           await supabase.from("profiles").insert({
@@ -166,40 +194,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             role: "agent",
           });
         }
-
-        // Send notification email log into DB for instant Admin alert
-        await supabase.from("emails_sent").insert({
-          lead_email: "garryamelia6265@gmail.com",
-          subject: `New agent approval request: ${name} (${email})`,
-          status: "unread",
-          sequence_type: "agent_approval_request",
-          sent_at: new Date().toISOString(),
-        });
       } catch (err) {
         console.log("Approval submission notice:", err);
       }
-
-      const updatedUser: SessionUser = {
-        name,
-        email,
-        phone,
-        role: "agent",
-        approved: false,
-        status: "pending",
-      };
-      setUser(updatedUser);
-      try {
-        window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
-      } catch {}
     },
     []
   );
 
-
-
-  const checkUserApprovalStatus = useCallback(async (email: string) => {
-    if (email === "garryamelia6265@gmail.com") return true;
+  // ── Poll for admin approval ─────────────────────────────────────────────────
+  const checkUserApprovalStatus = useCallback(async (email: string): Promise<boolean> => {
+    if (email === ADMIN_EMAIL) return true;
     try {
       const { data: prof } = await supabase
         .from("profiles")
@@ -207,17 +211,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         .eq("email", email)
         .maybeSingle();
 
-      if (!prof) {
-        // No profile or deleted by admin
-        setUser((prev) => {
-          if (!prev) return null;
-          return { ...prev, approved: false, status: "unsubmitted", phone: undefined };
-        });
-        return false;
-      }
+      if (!prof) return false;
+
       let phone = "";
       let approved = false;
-      let status: "unsubmitted" | "pending" | "approved" | "rejected" = "unsubmitted";
+      let status: SessionUser["status"] = "unsubmitted";
+
       if (prof.avatar_url) {
         try {
           const parsed = JSON.parse(prof.avatar_url);
@@ -228,7 +227,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
 
       setUser((prev) => {
-        if (!prev) return null;
+        if (!prev || prev.email !== email) return prev;
         const next: SessionUser = {
           ...prev,
           name: prof.full_name || prev.name,
@@ -236,9 +235,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           approved,
           status,
         };
-        try {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-        } catch {}
+        saveSession(next);
         return next;
       });
       return approved;
@@ -247,101 +244,87 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // ── Bootstrap on mount ─────────────────────────────────────────────────────
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    // Enforce dark mode permanently
     document.documentElement.classList.add("dark");
 
-    try {
-      const sessionRaw = window.sessionStorage.getItem(STORAGE_KEY);
-      const localRaw = window.localStorage.getItem(STORAGE_KEY);
-      const raw = sessionRaw || localRaw;
-      if (raw) {
-        const parsed = JSON.parse(raw) as SessionUser;
-        setUser(parsed);
-        syncProfileToSupabase(parsed);
-      } else {
-        syncProfileToSupabase(defaultAdminUser);
-      }
-    } catch {
-      /* ignore */
+    // Step 1: Restore from session/localStorage immediately (fast render)
+    const stored = loadSession();
+    if (stored) {
+      setUser(stored);
     }
 
-    // Listen for Real Google Auth Callback via Supabase
+    // Step 2: Listen to Supabase auth state changes (Google OAuth callback etc.)
     let subscription: { unsubscribe: () => void } | null = null;
     try {
       const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session?.user) {
           const email = session.user.email ?? "";
+          const isMainAdmin = email === ADMIN_EMAIL;
           const name =
             session.user.user_metadata?.full_name ||
             session.user.user_metadata?.name ||
             email.split("@")[0] ||
             "Working Agent";
-          const role: "admin" | "agent" = email === "garryamelia6265@gmail.com" ? "admin" : "agent";
-          const isMainAdmin = email === "garryamelia6265@gmail.com";
+
+          // Preserve existing session status — don't reset "pending" to "unsubmitted" on refresh
+          const existing = loadSession();
+          let preservedStatus: SessionUser["status"] = "unsubmitted";
+          let preservedPhone: string | undefined = undefined;
+
+          if (existing && existing.email === email) {
+            preservedStatus = existing.status ?? "unsubmitted";
+            preservedPhone = existing.phone;
+          }
+
           const googleUser: SessionUser = {
             name,
             email,
-            role,
+            role: isMainAdmin ? "admin" : "agent",
             approved: isMainAdmin ? true : false,
-            status: isMainAdmin ? "approved" : "unsubmitted",
+            status: isMainAdmin ? "approved" : preservedStatus,
+            phone: preservedPhone,
           };
 
           setUser(googleUser);
-          try {
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(googleUser));
-          } catch {
-            /* ignore */
-          }
+          saveSession(googleUser);
+
+          // Sync to DB — will further update status from DB if needed
           syncProfileToSupabase(googleUser);
         }
       });
       subscription = authListener.subscription;
-    } catch (e) {
+    } catch {
       console.log("Auth listener initialized safely");
     }
 
-    return () => {
-      subscription?.unsubscribe();
-    };
+    return () => { subscription?.unsubscribe(); };
   }, [syncProfileToSupabase]);
 
-  useEffect(() => {
-    document.documentElement.classList.add("dark");
-  }, []);
-
+  // ── signIn (kept for fallback, not exposed on login page anymore) ──────────
   const signIn = useCallback((email: string, role: "admin" | "agent") => {
-    const defaultName = role === "admin" ? "Garry Amelia" : email.split("@")[0] || "Sales Agent";
-    const userRole = email === "garryamelia6265@gmail.com" ? "admin" : role;
-    const isMainAdmin = email === "garryamelia6265@gmail.com";
+    const isMainAdmin = email === ADMIN_EMAIL;
     const next: SessionUser = {
-      name: defaultName,
+      name: isMainAdmin ? "Garry Amelia" : email.split("@")[0] || "Sales Agent",
       email,
-      role: userRole,
+      role: isMainAdmin ? "admin" : role,
       approved: isMainAdmin ? true : false,
       status: isMainAdmin ? "approved" : "unsubmitted",
     };
-
     setUser(next);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
+    saveSession(next);
     syncProfileToSupabase(next);
   }, [syncProfileToSupabase]);
 
+  // ── signOut ────────────────────────────────────────────────────────────────
   const signOut = useCallback(() => {
     setUser(null);
-    try {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* ignore */
-    }
+    clearSession();
+    supabase.auth.signOut().catch(() => {});
   }, []);
 
+  // ── Context value ──────────────────────────────────────────────────────────
   const value = useMemo<CrmContextValue>(() => {
     const scoped = <T extends { agent: string }>(items: T[]) =>
       user?.role === "agent" ? items.filter((i) => i.agent === user.name) : items;
