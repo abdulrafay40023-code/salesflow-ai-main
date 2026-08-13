@@ -197,7 +197,8 @@ function DashboardPage() {
           });
         }
 
-        setDbEmails(emails as DbEmailLog[]);
+        setDbEmails(emails as any);
+
       }
 
       if (meetingsRes.status === "fulfilled" && Array.isArray(meetingsRes.value.data)) {

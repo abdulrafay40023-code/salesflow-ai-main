@@ -7,7 +7,8 @@ import { useCrm } from "@/lib/crm-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ShieldAlert, Clock, RefreshCw, LogOut, Sparkles, CheckCircle2 } from "lucide-react";
+import { ShieldAlert, Clock, RefreshCw, LogOut, Sparkles, CheckCircle2, Loader2 } from "lucide-react";
+
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app")({
