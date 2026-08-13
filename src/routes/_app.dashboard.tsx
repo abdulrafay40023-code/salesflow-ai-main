@@ -182,14 +182,19 @@ function DashboardPage() {
           (e: any) => e && e.sequence_type !== "agent_presence" && e.sequence_type !== "agent_login",
         );
 
-        if (!isAdmin && fetchedLeads.length > 0) {
+        if (!isAdmin) {
+          const myEmail = (user?.email || "").trim().toLowerCase();
           const leadIds = new Set(fetchedLeads.map((l) => l?.id).filter(Boolean));
           const leadEmails = new Set(fetchedLeads.map((l) => (l?.email || "").toLowerCase()).filter(Boolean));
-          emails = emails.filter(
-            (e: any) => e && ((e.lead_id && leadIds.has(e.lead_id)) || (e.lead_email && leadEmails.has(e.lead_email.toLowerCase())))
-          );
-        } else if (!isAdmin) {
-          emails = [];
+          emails = emails.filter((e: any) => {
+            if (!e) return false;
+            // Always show lead_assignment notifications addressed to this agent
+            if (e.sequence_type === "lead_assignment" && (e.lead_email || "").toLowerCase() === myEmail) return true;
+            // Show emails matching this agent's leads
+            if (e.lead_id && leadIds.has(e.lead_id)) return true;
+            if (e.lead_email && leadEmails.has(e.lead_email.toLowerCase())) return true;
+            return false;
+          });
         }
 
         setDbEmails(emails as DbEmailLog[]);
@@ -219,16 +224,17 @@ function DashboardPage() {
         const allProfiles = (profilesRes.value as any).data;
         const pending = allProfiles.filter((p: any) => {
           if (p.email === "garryamelia6265@gmail.com") return false;
-          let isApproved = false;
-          if (p.avatar_url) {
-            try {
-              const parsed = JSON.parse(p.avatar_url);
-              if (typeof parsed.approved === "boolean") {
-                isApproved = parsed.approved;
-              }
-            } catch {}
+          // Only show profiles that have actually registered (have avatar_url with phone/status data)
+          if (!p.avatar_url) return false;
+          try {
+            const parsed = JSON.parse(p.avatar_url);
+            // Must have submitted registration with a status field
+            if (typeof parsed.status === "undefined") return false;
+            // Show only pending (not yet approved)
+            return parsed.approved !== true;
+          } catch {
+            return false;
           }
-          return !isApproved;
         });
         setPendingProfiles(pending);
       }
