@@ -43,7 +43,9 @@ type CrmContextValue = {
   toggleFollowUp: (id: string) => void;
   theme: "light" | "dark";
   toggleTheme: () => void;
+  isAuthLoading: boolean;
 };
+
 
 const CrmContext = createContext<CrmContextValue | null>(null);
 
@@ -74,9 +76,11 @@ function clearSession() {
 
 export function CrmProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [theme] = useState<"dark">("dark");
+
 
   // ── Sync user profile to Supabase DB ───────────────────────────────────────
   // Only syncs DB; does NOT downgrade status (e.g. won't reset "pending" → "unsubmitted")
@@ -253,9 +257,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     const stored = loadSession();
     if (stored) {
       setUser(stored);
+      setIsAuthLoading(false);
     }
 
-    // Step 2: Listen to Supabase auth state changes (Google OAuth callback etc.)
+    // Step 2: Check Supabase session to complete OAuth callback processing
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session && !stored) {
+        setIsAuthLoading(false);
+      }
+    }).catch(() => {
+      setIsAuthLoading(false);
+    });
+
+    // Step 3: Listen to Supabase auth state changes (Google OAuth callback etc.)
     let subscription: { unsubscribe: () => void } | null = null;
     try {
       const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -293,11 +307,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           // Sync to DB — will further update status from DB if needed
           syncProfileToSupabase(googleUser);
         }
+        setIsAuthLoading(false);
       });
       subscription = authListener.subscription;
     } catch {
       console.log("Auth listener initialized safely");
+      setIsAuthLoading(false);
     }
+
 
     return () => { subscription?.unsubscribe(); };
   }, [syncProfileToSupabase]);
@@ -354,8 +371,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ),
       theme,
       toggleTheme: () => {},
+      isAuthLoading,
     };
-  }, [user, leads, followUps, theme, signIn, signOut, submitApprovalRequest, checkUserApprovalStatus]);
+  }, [user, isAuthLoading, leads, followUps, theme, signIn, signOut, submitApprovalRequest, checkUserApprovalStatus]);
+
 
   return <CrmContext.Provider value={value}>{children}</CrmContext.Provider>;
 }

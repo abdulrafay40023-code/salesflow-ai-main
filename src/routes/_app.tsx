@@ -15,8 +15,9 @@ export const Route = createFileRoute("/_app")({
 });
 
 function AppLayout() {
-  const { user, signOut, submitApprovalRequest, checkUserApprovalStatus } = useCrm();
+  const { user, signOut, submitApprovalRequest, checkUserApprovalStatus, isAuthLoading } = useCrm();
   const navigate = useNavigate();
+
 
   const isAdmin = Boolean(user && user.email === "garryamelia6265@gmail.com");
   const isApproved = isAdmin || Boolean(user?.approved);
@@ -90,13 +91,26 @@ function AppLayout() {
     navigate({ to: "/" });
   };
 
-  // If user is not logged in, redirect to login page
+  // If auth is still resolving OAuth callback or session, show loading spinner
+  if (isAuthLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#080b11]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="size-8 animate-spin text-primary" />
+          <p className="text-xs text-slate-400">Authenticating with Google...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If user is not logged in after auth resolves, redirect to login page
   if (!user) {
     if (typeof window !== "undefined") {
       navigate({ to: "/" });
     }
     return null;
   }
+
 
   // ── APPROVAL GATE FOR WORKING AGENTS ─────────────────────────────────────
   if (!isAdmin && !isApproved) {
