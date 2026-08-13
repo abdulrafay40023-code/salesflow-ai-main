@@ -228,14 +228,18 @@ function AdminPage() {
   const pendingProfiles = profiles.filter((p) => {
     if (!p || !p.email || p.email === ADMIN_EMAIL) return false;
     if (p.role === "admin") return false;
+    let isApproved = false;
     if ((p as any).avatar_url) {
       try {
         const parsed = JSON.parse((p as any).avatar_url);
-        return parsed.approved === false || parsed.status === "pending";
+        if (typeof parsed.approved === "boolean") {
+          isApproved = parsed.approved;
+        }
       } catch {}
     }
-    return false;
+    return !isApproved;
   });
+
 
 
 

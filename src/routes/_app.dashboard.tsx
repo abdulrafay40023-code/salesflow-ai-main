@@ -223,16 +223,20 @@ function DashboardPage() {
       if (isAdmin && profilesRes.status === "fulfilled" && Array.isArray((profilesRes.value as any)?.data)) {
         const allProfiles = (profilesRes.value as any).data;
         const pending = allProfiles.filter((p: any) => {
-          if (!p || p.email === "garryamelia6265@gmail.com") return false;
+          if (!p || !p.email || p.email === "garryamelia6265@gmail.com") return false;
           if (p.role === "admin") return false;
+          let isApproved = false;
           if (p.avatar_url) {
             try {
               const parsed = JSON.parse(p.avatar_url);
-              return parsed.approved === false || parsed.status === "pending";
+              if (typeof parsed.approved === "boolean") {
+                isApproved = parsed.approved;
+              }
             } catch {}
           }
-          return false;
+          return !isApproved;
         });
+
 
         setPendingProfiles(pending);
       }
