@@ -1,10 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Sparkles, ShieldCheck, Loader2 } from "lucide-react";
-import { useCrm } from "@/lib/crm-store";
 import { signInWithGoogle } from "@/lib/supabase";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/")(({
   head: () => ({
     meta: [
       { title: "Sign in — Teals CRM | AI Sales Workspace" },
@@ -21,46 +20,28 @@ export const Route = createFileRoute("/")({
     ],
   }),
   component: LoginPage,
-});
+}));
 
 function LoginPage() {
-  const { signIn } = useCrm();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
-  const [agentEmailInput, setAgentEmailInput] = useState("");
+  const [error, setError] = useState("");
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
+    setError("");
     try {
       const { error } = await signInWithGoogle();
       if (error) {
-        // Fallback for testing: prompt for agent email or default to agent
-        const email = prompt("Enter your agent email to log in:", "agent@teals.ai");
-        if (email) {
-          signIn(email.trim(), email.trim() === "garryamelia6265@gmail.com" ? "admin" : "agent");
-          navigate({ to: "/dashboard" });
-        }
+        setError("Google sign-in failed. Please try again.");
       }
+      // On success Supabase redirects back via OAuth — no manual navigate needed
     } catch {
-      const email = prompt("Enter your agent email to log in:", "agent@teals.ai");
-      if (email) {
-        signIn(email.trim(), email.trim() === "garryamelia6265@gmail.com" ? "admin" : "agent");
-        navigate({ to: "/dashboard" });
-      }
+      setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
-
-  const handleDirectAgentLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const email = agentEmailInput.trim();
-    if (!email) return;
-    const isMainAdmin = email.toLowerCase() === "garryamelia6265@gmail.com";
-    signIn(email, isMainAdmin ? "admin" : "agent");
-    navigate({ to: "/dashboard" });
-  };
-
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr] bg-[#080b11]">
@@ -115,14 +96,14 @@ function LoginPage() {
               Welcome back
             </h2>
             <p className="mt-2 text-sm text-slate-400">
-              Sign in with your Google OAuth account to access your CRM.
+              Sign in with your Google account to access your CRM.
             </p>
           </div>
 
           <div className="rounded-2xl bg-[#0f141c]/90 border border-slate-800/80 p-8 shadow-2xl space-y-6">
             <div className="space-y-1">
               <h3 className="text-lg font-semibold text-white">Sign In</h3>
-              <p className="text-xs text-slate-400">Continue with Google account</p>
+              <p className="text-xs text-slate-400">Continue with your Google account</p>
             </div>
 
             <button
@@ -156,37 +137,15 @@ function LoginPage() {
               <span>Sign in with Google</span>
             </button>
 
-            <div className="relative my-4 flex items-center justify-center">
-
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800" /></div>
-              <span className="relative bg-[#0f141c] px-3 text-[11px] font-medium text-slate-500 uppercase tracking-wider">
-                Or Sign In With Email
-              </span>
-            </div>
-
-            <form onSubmit={handleDirectAgentLogin} className="space-y-3">
-              <input
-                type="email"
-                required
-                value={agentEmailInput}
-                onChange={(e) => setAgentEmailInput(e.target.value)}
-                placeholder="Enter email (e.g. adriana@gmail.com)"
-                className="w-full h-11 rounded-xl border border-slate-700 bg-slate-900/90 px-4 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
-              <button
-                type="submit"
-                className="w-full h-11 rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold text-xs transition-all shadow-md cursor-pointer"
-              >
-                Continue as Working Agent / Admin →
-              </button>
-            </form>
+            {error && (
+              <p className="text-xs text-red-400 text-center">{error}</p>
+            )}
 
             <div className="flex items-center justify-center gap-2 rounded-xl bg-slate-900/60 p-3 text-xs text-slate-400 border border-slate-800/50">
               <ShieldCheck className="size-4 text-emerald-500 shrink-0" />
-              <span>Multi-Agent Sync & Live Database Active</span>
+              <span>Multi-Agent Sync &amp; Live Database Active</span>
             </div>
           </div>
-
 
           <p className="text-xs text-slate-500 text-center font-normal">
             By signing in, you agree to our terms and privacy policy.
@@ -196,5 +155,3 @@ function LoginPage() {
     </div>
   );
 }
-
-
