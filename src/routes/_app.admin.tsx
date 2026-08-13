@@ -282,11 +282,24 @@ function AdminPage() {
     { name: string; email: string; role: string; totalLeads: number; newLeads: number; contacted: number; won: number; emailsSent: number; replies: number }
   > = {};
 
-  // 1. Populate registered profiles from Supabase profiles table
+  // 1. Populate registered profiles from Supabase profiles table (ONLY APPROVED AGENTS AND ADMIN)
   profiles.forEach((p) => {
     if (!p.email) return;
+    const isMainAdmin = p.email.toLowerCase() === ADMIN_EMAIL;
+    let isApproved = isMainAdmin;
+    if ((p as any).avatar_url) {
+      try {
+        const parsed = JSON.parse((p as any).avatar_url);
+        if (typeof parsed.approved === "boolean" && !isMainAdmin) {
+          isApproved = parsed.approved;
+        }
+      } catch {}
+    }
+    // Hide pending agents from team cards until admin approves them!
+    if (!isApproved) return;
+
     const key = p.email.toLowerCase();
-    const role = p.email.toLowerCase() === ADMIN_EMAIL ? "admin" : "agent";
+    const role = isMainAdmin ? "admin" : "agent";
     agentStatsMap[key] = {
       name: p.full_name || p.email.split("@")[0] || "Working Agent",
       email: p.email,
@@ -304,12 +317,16 @@ function AdminPage() {
   emailLogs.forEach((e: any) => {
     if (e.sequence_type === "agent_presence" && e.lead_email) {
       const email = e.lead_email.toLowerCase();
+      // Do not add pending agents to agent stats cards
+      const isPending = pendingProfiles.some((p) => p.email.toLowerCase() === email);
+      if (isPending) return;
+
       if (!agentStatsMap[email]) {
         const name = e.subject || email.split("@")[0];
         agentStatsMap[email] = {
           name: name,
           email: e.lead_email,
-          role: e.lead_email === "garryamelia6265@gmail.com" ? "admin" : "agent",
+          role: e.lead_email === ADMIN_EMAIL ? "admin" : "agent",
           totalLeads: 0,
           newLeads: 0,
           contacted: 0,
