@@ -498,30 +498,63 @@ function DashboardPage() {
       )}
 
       {/* Assigned Leads Notification Banner for Working Agent */}
-      {!isAdmin && dbEmails.some((e) => e.sequence_type === "lead_assignment" && e.status === "unread") && (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-violet-500/40 bg-violet-950/30 p-5 shadow-xl backdrop-blur-md animate-fade-in">
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-violet-500/20 text-violet-400 border border-violet-500/30">
-              <UserPlus className="size-5" />
-            </span>
-            <div>
-              <p className="text-base font-bold text-violet-200">
-                Admin Garry Amelia assigned new lead(s) to you!
-              </p>
-              <p className="text-xs text-violet-300/80">
-                Click below to accept and import these leads directly into your workspace.
-              </p>
+      {(() => {
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000; // 24 hours ago
+        const pendingAssignments = dbEmails.filter(
+          (e) =>
+            e.sequence_type === "lead_assignment" &&
+            e.status === "unread" &&
+            new Date(e.sent_at).getTime() > cutoff
+        );
+        if (isAdmin || pendingAssignments.length === 0) return null;
+
+        const leadCount = pendingAssignments.reduce((sum, e) => {
+          const match = (e.subject || "").match(/(\d+) new lead/);
+          return sum + (match ? parseInt(match[1]) : 1);
+        }, 0);
+
+        return (
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-violet-500/40 bg-violet-950/30 p-5 shadow-xl backdrop-blur-md animate-fade-in">
+            <div className="flex items-center gap-3">
+              <span className="grid size-10 place-items-center rounded-xl bg-violet-500/20 text-violet-400 border border-violet-500/30 shrink-0">
+                <UserPlus className="size-5" />
+              </span>
+              <div>
+                <p className="text-base font-bold text-violet-200">
+                  📥 Admin assigned <span className="text-violet-300">{leadCount} new lead{leadCount !== 1 ? "s" : ""}</span> to you!
+                </p>
+                <p className="text-xs text-violet-300/70 mt-0.5">
+                  Go to your Leads page to see them, or click Accept below to confirm receipt.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleAcceptAssignedLeads}
+                className="rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold px-4 py-2 shadow-lg gap-2"
+              >
+                <CheckCircle2 className="size-4" /> Accept Leads →
+              </Button>
+              <button
+                onClick={async () => {
+                  const myEmail = (user?.email || "").trim().toLowerCase();
+                  await supabase
+                    .from("emails_sent")
+                    .update({ status: "read" })
+                    .eq("lead_email", myEmail)
+                    .eq("sequence_type", "lead_assignment");
+                  fetchLive();
+                }}
+                title="Dismiss notification"
+                className="flex items-center justify-center size-8 rounded-lg bg-violet-500/20 hover:bg-violet-500/40 text-violet-300 hover:text-white transition-all shrink-0"
+              >
+                <X className="size-4" />
+              </button>
             </div>
           </div>
-
-          <Button
-            onClick={handleAcceptAssignedLeads}
-            className="rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold px-4 py-2 shadow-lg gap-2"
-          >
-            <CheckCircle2 className="size-4" /> Accept & Import Leads →
-          </Button>
-        </div>
-      )}
+        );
+      })()}
 
 
       {/* ── Booking Notification Banner (NO mark done button, NO cross) ── */}
