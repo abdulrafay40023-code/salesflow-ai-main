@@ -146,7 +146,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           .eq("email", email)
           .maybeSingle();
 
-        const profileId = existing?.id || authUserId;
+        const profileId = existing?.id || authUserId || "usr-" + Date.now();
 
         if (existing) {
           await supabase
@@ -157,7 +157,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               role: "agent",
             })
             .eq("email", email);
-        } else if (profileId) {
+        } else {
           await supabase.from("profiles").insert({
             id: profileId,
             email,
@@ -169,6 +169,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.log("Approval submission notice:", err);
       }
+
 
       const updatedUser: SessionUser = {
         name,
