@@ -1,16 +1,15 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "https://nyjhbeqpjfdhhvqvjzyy.supabase.co";
+const SUPABASE_URL = process.env["VITE_SUPABASE_URL"] || "https://nyjhbeqpjfdhhvqvjzyy.supabase.co";
 const SUPABASE_SERVICE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.VITE_SUPABASE_ANON_KEY ||
+  process.env["SUPABASE_SERVICE_ROLE_KEY"] ||
+  process.env["VITE_SUPABASE_ANON_KEY"] ||
   "";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 const ADMIN_EMAIL = "garryamelia6265@gmail.com";
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   // CORS & Security headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -26,7 +25,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
 
-    const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || "salesflow_meta_secret_token";
+    const VERIFY_TOKEN = process.env["META_VERIFY_TOKEN"] || "salesflow_meta_secret_token";
+
 
     if (mode === "subscribe" && token === VERIFY_TOKEN) {
       console.log("META WEBHOOK VERIFIED SUCCESSFULLY!");
