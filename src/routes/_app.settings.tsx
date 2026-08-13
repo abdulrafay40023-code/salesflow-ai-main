@@ -36,7 +36,7 @@ type DbProfile = {
 
 function SettingsPage() {
   const { user } = useCrm();
-  const isAdmin = user?.email === "garryamelia6265@gmail.com";
+  const isAdmin = Boolean(user && (user.role === "admin" || user.email === "garryamelia6265@gmail.com"));
 
   const [teamMembers, setTeamMembers] = useState<DbProfile[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(true);
@@ -79,14 +79,16 @@ function SettingsPage() {
             ["notifications", "Notifications", Bell],
             ["email", "Email Settings", Mail],
             ["ai", "AI Settings", Bot],
-          ].map(([v, label, Icon]) => {
-            const I = Icon as typeof Bell;
-            return (
-              <TabsTrigger key={v as string} value={v as string} className="rounded-lg">
-                <I className="size-4" /> {label as string}
-              </TabsTrigger>
-            );
-          })}
+          ]
+            .filter(([v]) => isAdmin || v === "profile")
+            .map(([v, label, Icon]) => {
+              const I = Icon as typeof Bell;
+              return (
+                <TabsTrigger key={v as string} value={v as string} className="rounded-lg">
+                  <I className="size-4" /> {label as string}
+                </TabsTrigger>
+              );
+            })}
         </TabsList>
 
         {/* ── PROFILE ──────────────────────────────── */}
