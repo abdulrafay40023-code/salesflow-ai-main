@@ -44,6 +44,7 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
   const [isParsing, setIsParsing] = useState(false);
   const [approvedAgents, setApprovedAgents] = useState<{ name: string; email: string }[]>([]);
   const [selectedAgentEmail, setSelectedAgentEmail] = useState<string>(ADMIN_EMAIL);
+  const [rowAgents, setRowAgents] = useState<Record<number, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
@@ -74,6 +75,8 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
         });
     }
   }, [open, isAdmin]);
+
+  const getRowAgent = (i: number) => rowAgents[i] || selectedAgentEmail;
 
   async function parseFile(file: File) {
     setFileName(file.name);
@@ -118,6 +121,7 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
         return;
       }
       setRows(validRows);
+      setRowAgents({});
       toast.success(`Loaded ${validRows.length} rows from ${file.name}`);
     } catch (err) {
       console.error("Error reading file:", err);
@@ -155,14 +159,17 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
   async function handleImport() {
     if (!rows.length) return;
 
-    const targetAgentEmail = isAdmin ? selectedAgentEmail : (user?.email || ADMIN_EMAIL);
     const created: Lead[] = [];
+    const agentCounts: Record<string, number> = {};
 
     rows.forEach((r, i) => {
       const { name, email, phone, statusCell } = parseRow(r, i);
       if (!email || !email.includes("@")) return;
 
+      const rowTargetAgent = isAdmin ? getRowAgent(i) : (user?.email || ADMIN_EMAIL);
       const status: LeadStatus = (statusCell?.toLowerCase() as LeadStatus) || "new";
+
+      agentCounts[rowTargetAgent] = (agentCounts[rowTargetAgent] || 0) + 1;
 
       created.push({
         id: `LD-${Date.now()}-${i}`,
@@ -171,7 +178,7 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
         email,
         phone,
         status,
-        agent: targetAgentEmail,
+        agent: rowTargetAgent,
         lastContact: new Date().toISOString(),
         nextFollowUp: new Date(Date.now() + 86400000 * 2).toISOString(),
         notes: [`Imported from file: ${fileName || "User Upload"}`],
@@ -193,32 +200,37 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
         email: l.email,
         phone: l.phone || null,
         status: l.status,
-        assigned_agent_name: targetAgentEmail,
+        assigned_agent_name: l.agent,
         value: l.value,
         notes: l.notes,
       }));
       const { data: inserted, error } = await supabase.from("leads").insert(payload).select("id, email");
       if (error) console.log("Supabase lead insertion error:", error.message);
 
-      // If Admin assigned to a Working Agent, create an assignment notification record in emails_sent
-      if (isAdmin && targetAgentEmail !== ADMIN_EMAIL) {
-        await supabase.from("emails_sent").insert({
-          lead_email: targetAgentEmail,
-          subject: `Admin Garry Amelia assigned ${created.length} new lead(s) to you`,
-          status: "unread",
-          sequence_type: "lead_assignment",
-          type: "lead_assignment",
-          sent_at: new Date().toISOString(),
-        });
+      // Create notification records for each agent who received leads
+      if (isAdmin) {
+        for (const [agentEmail, count] of Object.entries(agentCounts)) {
+          if (agentEmail !== ADMIN_EMAIL) {
+            await supabase.from("emails_sent").insert({
+              lead_email: agentEmail,
+              subject: `Admin Garry Amelia assigned ${count} new lead(s) to you`,
+              status: "unread",
+              sequence_type: "lead_assignment",
+              type: "lead_assignment",
+              sent_at: new Date().toISOString(),
+            });
+          }
+        }
       }
 
       // Send Welcome emails
       if (inserted && inserted.length) {
         import("@/lib/server-actions").then(({ triggerWelcomeEmailFn }) => {
-          inserted.forEach((item) => {
+          inserted.forEach((item, i) => {
+            const leadAgent = created[i]?.agent || ADMIN_EMAIL;
             if (item.email && item.email.includes("@")) {
               triggerWelcomeEmailFn({
-                data: { email: item.email, leadId: item.id, agentEmail: targetAgentEmail },
+                data: { email: item.email, leadId: item.id, agentEmail: leadAgent },
               }).catch((err) => console.log("Welcome email send notice:", err));
             }
           });
@@ -228,12 +240,14 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
       console.log("Database sync completed.");
     }
 
-    toast.success(`${created.length} leads imported and assigned successfully!`);
+    toast.success(`${created.length} leads imported and assigned!`);
     setOpen(false);
     setRows([]);
+    setRowAgents({});
     setFileName(null);
     if (typeof onImportDone === "function") onImportDone();
   }
+
 
   /** Preview cells for a row: [name, email, phone] */
   function getPreviewCells(r: string[], i: number): string[] {
@@ -315,13 +329,19 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
               </Button>
             </div>
 
-            {/* Admin Assign To Dropdown */}
+            {/* Admin Default Assign Dropdown */}
             {isAdmin && (
               <div className="flex flex-col gap-1.5 rounded-xl border border-primary/20 bg-primary/5 p-3.5">
                 <label className="flex items-center gap-1.5 text-xs font-bold text-primary">
-                  <UserCheck className="size-3.5" /> Assign imported leads to:
+                  <UserCheck className="size-3.5" /> Set default agent for all rows (or customize each row below):
                 </label>
-                <Select value={selectedAgentEmail} onValueChange={setSelectedAgentEmail}>
+                <Select
+                  value={selectedAgentEmail}
+                  onValueChange={(val) => {
+                    setSelectedAgentEmail(val);
+                    setRowAgents({});
+                  }}
+                >
                   <SelectTrigger className="w-full rounded-lg bg-surface-1 text-xs">
                     <SelectValue placeholder="Select target agent..." />
                   </SelectTrigger>
@@ -335,18 +355,19 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] text-muted-foreground">
-                  Leads assigned to a working agent will send an instant Dashboard notification to them.
+                  You can change the assigned agent for any specific lead directly in the table below before importing.
                 </p>
               </div>
             )}
 
-            <div className="overflow-x-auto rounded-xl border border-border max-h-60">
+            <div className="overflow-x-auto rounded-xl border border-border max-h-72">
               <Table>
                 <TableHeader>
                   <TableRow>
                     {columns.map((c) => (
                       <TableHead key={c} className="whitespace-nowrap">{c}</TableHead>
                     ))}
+                    {isAdmin && <TableHead className="whitespace-nowrap font-bold text-primary">Assign To Agent</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -359,12 +380,33 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
                             {val || <span className="text-muted-foreground italic">—</span>}
                           </TableCell>
                         ))}
+                        {isAdmin && (
+                          <TableCell className="w-60 whitespace-nowrap">
+                            <Select
+                              value={getRowAgent(i)}
+                              onValueChange={(val) => setRowAgents((prev) => ({ ...prev, [i]: val }))}
+                            >
+                              <SelectTrigger className="h-8 text-xs rounded-lg border-primary/30 bg-surface-1 font-medium">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={ADMIN_EMAIL}>Admin Pool (Garry Amelia)</SelectItem>
+                                {approvedAgents.map((ag) => (
+                                  <SelectItem key={ag.email} value={ag.email}>
+                                    👤 {ag.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })}
                 </TableBody>
               </Table>
             </div>
+
           </div>
         )}
 
