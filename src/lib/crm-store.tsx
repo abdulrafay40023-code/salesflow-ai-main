@@ -208,24 +208,25 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (!prof) {
-        // Deleted by admin
+        // No profile or deleted by admin
         setUser((prev) => {
           if (!prev) return null;
-          return { ...prev, approved: false, status: "pending", phone: undefined };
+          return { ...prev, approved: false, status: "unsubmitted", phone: undefined };
         });
         return false;
       }
       let phone = "";
       let approved = false;
-      let status: "pending" | "approved" | "rejected" = "pending";
+      let status: "unsubmitted" | "pending" | "approved" | "rejected" = "unsubmitted";
       if (prof.avatar_url) {
         try {
           const parsed = JSON.parse(prof.avatar_url);
           phone = parsed.phone || "";
           approved = Boolean(parsed.approved);
-          status = parsed.status || (approved ? "approved" : "pending");
+          status = parsed.status || (approved ? "approved" : "unsubmitted");
         } catch {}
       }
+
       setUser((prev) => {
         if (!prev) return null;
         const next: SessionUser = {
