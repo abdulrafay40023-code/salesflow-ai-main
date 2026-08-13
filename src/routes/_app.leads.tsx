@@ -70,6 +70,9 @@ function LeadsPage() {
   const [asc, setAsc] = useState(true);
   const [active, setActive] = useState<Lead | null>(null);
   const [approvedAgents, setApprovedAgents] = useState<{ name: string; email: string }[]>([]);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+  const [bulkTargetAgent, setBulkTargetAgent] = useState<string>(ADMIN_EMAIL);
+  const [isBatchAssigning, setIsBatchAssigning] = useState(false);
 
   const isAdmin = Boolean(user && (user.role === "admin" || user.email === ADMIN_EMAIL));
 
@@ -129,6 +132,42 @@ function LeadsPage() {
       toast.error("Reassign error: " + err.message);
     }
   }
+
+  async function handleBulkAssignLeads() {
+    if (!selectedLeadIds.length) return;
+    setIsBatchAssigning(true);
+    try {
+      const { error } = await supabase
+        .from("leads")
+        .update({ assigned_agent_name: bulkTargetAgent })
+        .in("id", selectedLeadIds);
+
+      if (error) {
+        toast.error("Failed bulk assign: " + error.message);
+        setIsBatchAssigning(false);
+        return;
+      }
+
+      if (bulkTargetAgent !== ADMIN_EMAIL) {
+        await supabase.from("emails_sent").insert({
+          lead_email: bulkTargetAgent,
+          subject: `Admin Garry Amelia assigned ${selectedLeadIds.length} new leads to you`,
+          status: "unread",
+          sequence_type: "lead_assignment",
+          type: "lead_assignment",
+          sent_at: new Date().toISOString(),
+        });
+      }
+
+      toast.success(`Assigned ${selectedLeadIds.length} leads to ${bulkTargetAgent}!`);
+      setSelectedLeadIds([]);
+      fetchLeads();
+    } catch (e: any) {
+      toast.error("Bulk assign error: " + e.message);
+    }
+    setIsBatchAssigning(false);
+  }
+
 
   async function fetchLeads() {
     setLoading(true);
@@ -316,11 +355,73 @@ function LeadsPage() {
         </div>
       </div>
 
+      {/* Bulk Assignment Bar for Admin */}
+      {isAdmin && selectedLeadIds.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-500/40 bg-violet-950/40 p-4 shadow-xl backdrop-blur animate-fade-in">
+          <div className="flex items-center gap-3">
+            <Badge className="bg-violet-500/20 text-violet-300 border-violet-500/40 text-xs px-3 py-1 font-bold rounded-full">
+              {selectedLeadIds.length} leads selected
+            </Badge>
+            <span className="text-xs text-slate-300 font-medium">Assign selected leads to agent:</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Select value={bulkTargetAgent} onValueChange={setBulkTargetAgent}>
+              <SelectTrigger className="w-56 rounded-xl bg-slate-900 text-xs font-semibold border-slate-700">
+                <SelectValue placeholder="Choose target agent..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ADMIN_EMAIL}>Admin Pool (Garry Amelia)</SelectItem>
+                {approvedAgents.map((ag) => (
+                  <SelectItem key={ag.email} value={ag.email}>
+                    👤 {ag.name} ({ag.email})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button
+              onClick={handleBulkAssignLeads}
+              disabled={isBatchAssigning}
+              className="rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold gap-1.5 px-4 shadow-md"
+            >
+              <UserCheck className="size-4" />
+              {isBatchAssigning ? "Assigning..." : `Assign ${selectedLeadIds.length} Leads →`}
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="rounded-xl text-xs text-slate-400 hover:text-white"
+              onClick={() => setSelectedLeadIds([])}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="panel overflow-hidden">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-surface-2/60">
+                {isAdmin && (
+                  <TableHead className="w-10 px-3">
+                    <input
+                      type="checkbox"
+                      className="rounded accent-violet-600 size-4 cursor-pointer"
+                      checked={rows.length > 0 && selectedLeadIds.length === rows.length}
+                      onChange={() => {
+                        if (selectedLeadIds.length === rows.length) {
+                          setSelectedLeadIds([]);
+                        } else {
+                          setSelectedLeadIds(rows.map((r) => r.id));
+                        }
+                      }}
+                    />
+                  </TableHead>
+                )}
                 {headers.map((h) => (
                   <TableHead
                     key={h.label}
@@ -340,7 +441,7 @@ function LeadsPage() {
             <TableBody>
               {loading && !dbLeads.length ? (
                 <TableRow>
-                  <TableCell colSpan={headers.length} className="py-16 text-center text-muted-foreground">
+                  <TableCell colSpan={headers.length + (isAdmin ? 1 : 0)} className="py-16 text-center text-muted-foreground">
                     <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 opacity-40" />
                     Loading live leads from Supabase database...
                   </TableCell>
@@ -348,10 +449,25 @@ function LeadsPage() {
               ) : rows.map((l) => (
                 <TableRow
                   key={l.id}
-                  className="cursor-pointer"
+                  className={`cursor-pointer ${selectedLeadIds.includes(l.id) ? "bg-violet-500/10" : ""}`}
                   onClick={() => setActive(l)}
                 >
+                  {isAdmin && (
+                    <TableCell className="w-10 px-3" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className="rounded accent-violet-600 size-4 cursor-pointer"
+                        checked={selectedLeadIds.includes(l.id)}
+                        onChange={() => {
+                          setSelectedLeadIds((prev) =>
+                            prev.includes(l.id) ? prev.filter((id) => id !== l.id) : [...prev, l.id]
+                          );
+                        }}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell className="whitespace-nowrap font-medium">{l.name}</TableCell>
+
                   <TableCell className="whitespace-nowrap">{l.company}</TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">{l.email}</TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">{l.phone}</TableCell>
@@ -395,12 +511,13 @@ function LeadsPage() {
               ))}
               {!loading && !rows.length ? (
                 <TableRow>
-                  <TableCell colSpan={headers.length} className="py-16 text-center text-muted-foreground">
+                  <TableCell colSpan={headers.length + (isAdmin ? 1 : 0)} className="py-16 text-center text-muted-foreground">
                     <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
                     No leads in database yet. Click "Import Leads" to add leads.
                   </TableCell>
                 </TableRow>
               ) : null}
+
             </TableBody>
           </Table>
         </div>
