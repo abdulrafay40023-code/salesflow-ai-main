@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
   Users,
   Mail,
@@ -17,6 +18,8 @@ import {
   Zap,
   UserCheck2,
   CalendarCheck,
+  Check,
+  X,
 } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
 import { supabase } from "@/lib/supabase";
@@ -145,6 +148,39 @@ function AdminPage() {
     setLoading(false);
   }
 
+  async function handleApproveAgent(p: SupabaseProfile) {
+    let phone = "";
+    if ((p as any).avatar_url) {
+      try {
+        const parsed = JSON.parse((p as any).avatar_url);
+        phone = parsed.phone || "";
+      } catch {}
+    }
+    const meta = JSON.stringify({ phone, approved: true, status: "approved" });
+    const { error } = await supabase
+      .from("profiles")
+      .update({ avatar_url: meta, role: "agent" })
+      .eq("id", p.id);
+
+    if (error) {
+      toast.error("Failed to approve agent: " + error.message);
+    } else {
+      toast.success(`Approved ${p.full_name || p.email}! Access granted.`);
+      fetchData();
+    }
+  }
+
+  async function handleRejectAgent(p: SupabaseProfile) {
+    if (p.email === ADMIN_EMAIL) return;
+    const { error } = await supabase.from("profiles").delete().eq("id", p.id);
+    if (error) {
+      toast.error("Failed to decline request: " + error.message);
+    } else {
+      toast.success(`Declined access request for ${p.full_name || p.email}.`);
+      fetchData();
+    }
+  }
+
   useEffect(() => {
     if (!isAdmin) {
       navigate({ to: "/dashboard" });
@@ -187,6 +223,21 @@ function AdminPage() {
       </div>
     );
   }
+
+  // Filter pending agent approval requests
+  const pendingProfiles = profiles.filter((p) => {
+    if (p.email === ADMIN_EMAIL) return false;
+    let isApproved = false;
+    if ((p as any).avatar_url) {
+      try {
+        const parsed = JSON.parse((p as any).avatar_url);
+        if (typeof parsed.approved === "boolean") {
+          isApproved = parsed.approved;
+        }
+      } catch {}
+    }
+    return !isApproved;
+  });
 
   // Filter out internal system logs from customer email logs
   const customerEmailLogs = emailLogs.filter(
@@ -328,6 +379,68 @@ function AdminPage() {
           {loading ? "Refreshing..." : "Refresh Live Data"}
         </Button>
       </div>
+
+      {/* Pending Agent Approval Notifications Banner */}
+      {pendingProfiles.length > 0 && (
+        <div className="rounded-2xl border border-amber-500/40 bg-amber-950/30 p-5 shadow-xl backdrop-blur-md animate-fade-in space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex size-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex size-3 rounded-full bg-amber-500"></span>
+              </span>
+              <h2 className="text-base font-bold text-amber-200">
+                Pending Approval Requests ({pendingProfiles.length})
+              </h2>
+            </div>
+            <span className="text-xs font-semibold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/30">
+              New Agent Waiting
+            </span>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {pendingProfiles.map((p) => {
+              let phone = "";
+              if ((p as any).avatar_url) {
+                try {
+                  phone = JSON.parse((p as any).avatar_url).phone || "";
+                } catch {}
+              }
+              return (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-slate-900/90 p-3.5 shadow-md"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-white">
+                      {p.full_name || p.email.split("@")[0]}
+                    </p>
+                    <p className="truncate text-xs text-slate-400">{p.email}</p>
+                    {phone && <p className="text-[11px] text-amber-300/90 mt-0.5 font-medium">📞 {phone}</p>}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => handleApproveAgent(p)}
+                      title="Approve Access"
+                      className="flex items-center justify-center size-8 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-md active:scale-95"
+                    >
+                      <Check className="size-4" />
+                    </button>
+                    <button
+                      onClick={() => handleRejectAgent(p)}
+                      title="Decline / Reject Request"
+                      className="flex items-center justify-center size-8 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white transition-all shadow-md active:scale-95"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
