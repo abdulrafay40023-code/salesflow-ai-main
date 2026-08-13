@@ -226,18 +226,17 @@ function AdminPage() {
 
   // Filter pending agent approval requests
   const pendingProfiles = profiles.filter((p) => {
-    if (!p || p.email === ADMIN_EMAIL) return false;
+    if (!p || !p.email || p.email === ADMIN_EMAIL) return false;
     if (p.role === "admin") return false;
     if ((p as any).avatar_url) {
       try {
         const parsed = JSON.parse((p as any).avatar_url);
-        if (typeof parsed.approved === "boolean") {
-          return !parsed.approved;
-        }
+        return parsed.approved === false || parsed.status === "pending";
       } catch {}
     }
-    return true;
+    return false;
   });
+
 
 
 

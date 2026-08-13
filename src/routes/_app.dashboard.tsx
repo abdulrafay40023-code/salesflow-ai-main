@@ -228,13 +228,12 @@ function DashboardPage() {
           if (p.avatar_url) {
             try {
               const parsed = JSON.parse(p.avatar_url);
-              if (typeof parsed.approved === "boolean") {
-                return !parsed.approved;
-              }
+              return parsed.approved === false || parsed.status === "pending";
             } catch {}
           }
-          return true;
+          return false;
         });
+
         setPendingProfiles(pending);
       }
 

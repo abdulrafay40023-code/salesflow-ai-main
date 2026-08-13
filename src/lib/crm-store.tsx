@@ -155,16 +155,28 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (!userId) {
         userId = "usr-" + Date.now();
       }
-      await supabase.from("profiles").upsert(
-        {
+      // Try update first
+      const { data: updateRes, error: updateErr } = await supabase
+        .from("profiles")
+        .update({
+          full_name: name,
+          avatar_url: meta,
+          role: "agent",
+        })
+        .eq("email", email)
+        .select();
+
+      if (updateErr || !updateRes || updateRes.length === 0) {
+        // Fallback to insert if profile row does not exist yet
+        await supabase.from("profiles").insert({
           id: userId,
           email,
           full_name: name,
           avatar_url: meta,
           role: "agent",
-        },
-        { onConflict: "email" }
-      );
+        });
+      }
+
       const updatedUser: SessionUser = {
         name,
         email,
