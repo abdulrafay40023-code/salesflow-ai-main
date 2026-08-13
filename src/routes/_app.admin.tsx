@@ -397,6 +397,45 @@ function AdminPage() {
         </Button>
       </div>
 
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <StatCard
+          icon={<Users className="h-6 w-6" />}
+          label="Total Leads"
+          value={totalLeads}
+          sub="Across all agents"
+          color="from-violet-900 via-violet-800 to-violet-700"
+        />
+        <StatCard
+          icon={<Mail className="h-6 w-6" />}
+          label="Outreach Sent"
+          value={emailSent}
+          sub="Leads contacted"
+          color="from-fuchsia-900 via-fuchsia-800 to-fuchsia-700"
+        />
+        <StatCard
+          icon={<CheckCircle2 className="h-6 w-6" />}
+          label="Replies & Booked"
+          value={emailReplied}
+          sub="Meeting responses"
+          color="from-emerald-900 via-emerald-800 to-emerald-700"
+        />
+        <StatCard
+          icon={<UserCheck className="h-6 w-6" />}
+          label="Won Deals"
+          value={wonLeads}
+          sub={`${conversionRate}% conversion`}
+          color="from-blue-900 via-blue-800 to-blue-700"
+        />
+        <StatCard
+          icon={<Zap className="h-6 w-6" />}
+          label="New Leads"
+          value={newLeads}
+          sub="Pending outreach"
+          color="from-slate-900 via-slate-800 to-slate-700"
+        />
+      </div>
+
       {/* Pending Agent Approval Notifications Banner */}
       {pendingProfiles.length > 0 && (
         <div className="rounded-2xl border border-amber-500/40 bg-amber-950/30 p-5 shadow-xl backdrop-blur-md animate-fade-in space-y-3">
@@ -459,44 +498,6 @@ function AdminPage() {
         </div>
       )}
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <StatCard
-          icon={<Users className="h-6 w-6" />}
-          label="Total Leads"
-          value={totalLeads}
-          sub="Across all agents"
-          color="from-violet-900 via-violet-800 to-violet-700"
-        />
-        <StatCard
-          icon={<Mail className="h-6 w-6" />}
-          label="Outreach Sent"
-          value={emailSent}
-          sub="Leads contacted"
-          color="from-fuchsia-900 via-fuchsia-800 to-fuchsia-700"
-        />
-        <StatCard
-          icon={<CheckCircle2 className="h-6 w-6" />}
-          label="Replies & Booked"
-          value={emailReplied}
-          sub="Meeting responses"
-          color="from-emerald-900 via-emerald-800 to-emerald-700"
-        />
-        <StatCard
-          icon={<UserCheck className="h-6 w-6" />}
-          label="Won Deals"
-          value={wonLeads}
-          sub={`${conversionRate}% conversion`}
-          color="from-blue-900 via-blue-800 to-blue-700"
-        />
-        <StatCard
-          icon={<Zap className="h-6 w-6" />}
-          label="New Leads"
-          value={newLeads}
-          sub="Pending outreach"
-          color="from-slate-900 via-slate-800 to-slate-700"
-        />
-      </div>
 
       {/* Pipeline Bar */}
       <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-lg backdrop-blur">

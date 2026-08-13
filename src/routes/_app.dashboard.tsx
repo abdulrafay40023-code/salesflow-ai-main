@@ -414,6 +414,15 @@ function DashboardPage() {
         }
       />
 
+      {/* Primary Metrics Grid (5 Clean Cards) */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <StatCard label="Total Leads" value={total} icon={Users} hint="in workspace" />
+        <StatCard label="Contacted" value={contacted} icon={Mail} tone="info" hint="calls & outreach" />
+        <StatCard label="Meetings Booked" value={meetingsBooked} icon={CalendarCheck} tone="warning" hint="total booked" />
+        <StatCard label="Meetings Today" value={meetingsToday} icon={CalendarCheck} tone="primary" hint="scheduled today" />
+        <StatCard label="Won Deals" value={wonLeads} icon={CheckCircle2} tone="success" hint="closed won" />
+      </div>
+
       {/* Pending Agent Approval Notifications Banner (Admin Only) */}
       {isAdmin && pendingProfiles.length > 0 && (
         <div className="rounded-2xl border border-amber-500/40 bg-amber-950/30 p-5 shadow-xl backdrop-blur-md animate-fade-in space-y-3">
@@ -476,14 +485,6 @@ function DashboardPage() {
         </div>
       )}
 
-      {/* Primary Metrics Grid (5 Clean Cards) */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard label="Total Leads" value={total} icon={Users} hint="in workspace" />
-        <StatCard label="Contacted" value={contacted} icon={Mail} tone="info" hint="calls & outreach" />
-        <StatCard label="Meetings Booked" value={meetingsBooked} icon={CalendarCheck} tone="warning" hint="total booked" />
-        <StatCard label="Meetings Today" value={meetingsToday} icon={CalendarCheck} tone="primary" hint="scheduled today" />
-        <StatCard label="Won Deals" value={wonLeads} icon={CheckCircle2} tone="success" hint="closed won" />
-      </div>
 
       {/* ── Booking Notification Banner (NO mark done button, NO cross) ── */}
       {!isAdmin && uncompletedMeetings.length > 0 && (
