@@ -1,0 +1,433 @@
+{
+  "profiles": [
+    {
+      "id": "677bc67e-42cb-44cb-bf10-16df69cc23e8",
+      "email": "ellathomas81631@gmail.com",
+      "full_name": "Ella Thomas",
+      "avatar_url": "{\"phone\":\"03002824012\",\"approved\":false,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-13T19:10:39.768389+00:00"
+    },
+    {
+      "id": "87bf5135-a80c-4fa5-8b63-0bbf8115fe94",
+      "email": "bollygarden222@gmail.com",
+      "full_name": "Bolly Garden",
+      "avatar_url": "{\"phone\":\"0300044666012\",\"approved\":false,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-13T19:10:39.490686+00:00"
+    },
+    {
+      "id": "c1a7282b-c14b-4bc6-a959-831973d2e609",
+      "email": "adrianajames267263@gmail.com",
+      "full_name": "Adriana James",
+      "avatar_url": "{\"phone\":\"03422457765\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-13T19:10:39.501256+00:00"
+    },
+    {
+      "id": "4c3bdaf8-3158-4580-b2eb-ac1ed9d5b40d",
+      "email": "garryamelia6265@gmail.com",
+      "full_name": "Garry Amelia",
+      "avatar_url": "{\"phone\":\"\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "admin",
+      "created_at": "2026-08-13T18:33:19.66937+00:00"
+    },
+    {
+      "id": "12f275ec-ffa6-422d-8f51-70e3590d6f5c",
+      "email": "digitalsphere346@gmail.com",
+      "full_name": "Digital Sphere",
+      "avatar_url": "{\"phone\":\"03002824012\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-13T19:10:39.502523+00:00"
+    },
+    {
+      "id": "0cb2c769-b138-47c8-ab59-79572c326ec0",
+      "email": "leadzmaker@gmail.com",
+      "full_name": "Leadz Maker",
+      "avatar_url": "{\"phone\":\"034514557768\",\"approved\":false,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-13T19:10:39.530281+00:00"
+    },
+    {
+      "id": "143b58ac-1fba-4625-b10e-1efb0d8f8dd4",
+      "email": "johnwick9272782@gmail.com",
+      "full_name": "John Wick",
+      "avatar_url": "{\"phone\":\"033001035196\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-13T19:13:14.187597+00:00"
+    }
+  ],
+  "leads": [
+    {
+      "id": "171539bf-6fc5-433b-aa30-5b028a0314f2",
+      "name": "Amelia Hart",
+      "company": "",
+      "email": "ameliahart0334@gmail.com",
+      "phone": null,
+      "status": "new",
+      "assigned_agent_id": null,
+      "assigned_agent_name": "adrianajames267263@gmail.com",
+      "last_contact": null,
+      "next_follow_up": null,
+      "notes": [
+        "Imported from file: Untitled spreadsheet - Sheet1 (3).csv"
+      ],
+      "value": 5000,
+      "created_at": "2026-08-13T19:15:41.728319+00:00"
+    },
+    {
+      "id": "8979dc1c-7413-4b3d-9cb1-f629bc08a4ba",
+      "name": "Clara Bennet",
+      "company": "",
+      "email": "clarabennet92761@gmail.com",
+      "phone": null,
+      "status": "new",
+      "assigned_agent_id": null,
+      "assigned_agent_name": "digitalsphere346@gmail.com",
+      "last_contact": null,
+      "next_follow_up": null,
+      "notes": [
+        "Imported from file: Untitled spreadsheet - Sheet1 (3).csv"
+      ],
+      "value": 6000,
+      "created_at": "2026-08-13T19:15:41.728319+00:00"
+    },
+    {
+      "id": "582bfcdd-0eb9-4c48-8cd0-088f59e7b5dd",
+      "name": "Ava Reed",
+      "company": "",
+      "email": "avareed826@gmail.com",
+      "phone": null,
+      "status": "new",
+      "assigned_agent_id": null,
+      "assigned_agent_name": "johnwick9272782@gmail.com",
+      "last_contact": null,
+      "next_follow_up": null,
+      "notes": [
+        "Imported from file: Untitled spreadsheet - Sheet1 (3).csv"
+      ],
+      "value": 7000,
+      "created_at": "2026-08-13T19:15:41.728319+00:00"
+    }
+  ],
+  "emails_sent": [
+    {
+      "id": "74ccced4-b8fd-4fd5-b3d3-c0f4b7187990",
+      "lead_id": "8979dc1c-7413-4b3d-9cb1-f629bc08a4ba",
+      "lead_email": "clarabennet92761@gmail.com",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Teals CRM",
+      "status": "sent",
+      "sent_at": "2026-08-13T19:15:44.357+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "9c57ab31-a34e-48e1-ae78-28209061bfbb",
+      "lead_id": "171539bf-6fc5-433b-aa30-5b028a0314f2",
+      "lead_email": "ameliahart0334@gmail.com",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Teals CRM",
+      "status": "sent",
+      "sent_at": "2026-08-13T19:15:44.761+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "5bfd8d03-f35b-4f4d-b2a4-25a66a894360",
+      "lead_id": "582bfcdd-0eb9-4c48-8cd0-088f59e7b5dd",
+      "lead_email": "avareed826@gmail.com",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Teals CRM",
+      "status": "sent",
+      "sent_at": "2026-08-13T19:15:44.963+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "5b0fbc08-bf1a-4999-bbbc-2306caf7e148",
+      "lead_id": null,
+      "lead_email": "ameliahart0334@gmail.com",
+      "sequence_type": "meeting_confirmed",
+      "subject": "Meeting Confirmed: 2026-08-14 at 12:20 AM",
+      "status": "sent",
+      "sent_at": "2026-08-13T19:17:21.568+00:00",
+      "replied_at": null
+    }
+  ],
+  "meetings": [
+    {
+      "id": "9071a1d1-f708-424f-b0c7-2d679be6dc6a",
+      "lead_id": null,
+      "agent_id": null,
+      "title": "Sales Meeting with Amelia Hart (ameliahart0334@gmail.com) @ 12:20 AM || ZOOM: https://us05web.zoom.us/j/82095899291?pwd=wCscK4wNtUULV4h3S8H3fwjWdJPg2W.1",
+      "scheduled_time": "2026-08-13T19:20:00+00:00",
+      "reminder_24h_sent": true,
+      "reminder_1h_sent": true,
+      "completed": true,
+      "created_at": "2026-08-13T19:17:21.869023+00:00",
+      "agent_email": "adrianajames267263@gmail.com"
+    }
+  ],
+  "email_sequences": [
+    {
+      "id": "a455c732-de04-48aa-aa76-2dcc5d355a86",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Nexa — Quick question regarding {{company}}",
+      "body_template": "Hi {{first_name}},\\n\\nThanks for your interest! I noticed you are leading outreach at {{company}}. I would love to show you how our automated sales workspace can help you double response rates.\\n\\nAre you open for a quick 10-min chat this week?\\n\\nBest,\\nSales Team",
+      "delay_hours": 0,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "8d906e4d-f8c1-4ff6-8570-8a3270b95b67",
+      "sequence_type": "reminder_1",
+      "subject": "Re: Quick question regarding {{company}}",
+      "body_template": "Hi {{first_name}},\\n\\nFollowing up on my previous note. Did you get a chance to check my email?\\n\\nLet me know if tomorrow works for a quick call.\\n\\nBest,\\nSales Team",
+      "delay_hours": 48,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "d9d214ba-0ee0-43c3-9030-9dd5d744710e",
+      "sequence_type": "reminder_2",
+      "subject": "How teams like {{company}} scale lead response by 3x",
+      "body_template": "Hi {{first_name}},\\n\\nJust wanted to share how similar teams automated their lead follow-ups and saw a 3.1x increase in booked meetings.\\n\\nWould you be interested in a 5-minute video demo?\\n\\nBest,\\nSales Team",
+      "delay_hours": 120,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "2d241888-3b99-440d-b02a-e3cd48ad8028",
+      "sequence_type": "reminder_3",
+      "subject": "Final follow-up — should I close your file?",
+      "body_template": "Hi {{first_name}},\\n\\nI haven't heard back so I assume now might not be the best time. I will close your file for now, but feel free to reply whenever you're ready!\\n\\nBest,\\nSales Team",
+      "delay_hours": 192,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    }
+  ],
+  "auth_users": [
+    {
+      "id": "143b58ac-1fba-4625-b10e-1efb0d8f8dd4",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "johnwick9272782@gmail.com",
+      "email_confirmed_at": "2026-08-13T19:13:11.843995Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T19:13:11.843995Z",
+      "last_sign_in_at": "2026-08-13T19:13:11.852265Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocJViez_uXIqUP-Vocl8pl8C4rlnmkqhbenFXuFxI7cHXuN7wA=s96-c",
+        "email": "johnwick9272782@gmail.com",
+        "email_verified": true,
+        "full_name": "John Wick",
+        "iss": "https://accounts.google.com",
+        "name": "John Wick",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocJViez_uXIqUP-Vocl8pl8C4rlnmkqhbenFXuFxI7cHXuN7wA=s96-c",
+        "provider_id": "109128945664811142323",
+        "sub": "109128945664811142323"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T19:13:11.813236Z",
+      "updated_at": "2026-08-13T19:13:11.88296Z",
+      "is_anonymous": false
+    },
+    {
+      "id": "87bf5135-a80c-4fa5-8b63-0bbf8115fe94",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "bollygarden222@gmail.com",
+      "email_confirmed_at": "2026-08-13T19:01:32.351271Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T19:01:32.351271Z",
+      "last_sign_in_at": "2026-08-13T19:01:32.355701Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocL9U_-WYmqVnTGxYAiu_Xis9gQ3HJcJ3uhuOwHt6-ikDjJcDg=s96-c",
+        "email": "bollygarden222@gmail.com",
+        "email_verified": true,
+        "full_name": "Bolly Garden",
+        "iss": "https://accounts.google.com",
+        "name": "Bolly Garden",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocL9U_-WYmqVnTGxYAiu_Xis9gQ3HJcJ3uhuOwHt6-ikDjJcDg=s96-c",
+        "provider_id": "103405624198038714438",
+        "sub": "103405624198038714438"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T19:01:32.334309Z",
+      "updated_at": "2026-08-13T19:01:32.360897Z",
+      "is_anonymous": false
+    },
+    {
+      "id": "0cb2c769-b138-47c8-ab59-79572c326ec0",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "leadzmaker@gmail.com",
+      "email_confirmed_at": "2026-08-13T18:53:40.836152Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T18:53:40.836152Z",
+      "last_sign_in_at": "2026-08-13T18:53:40.83754Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocKdptkK-hlFrSu7ss2-eS2Aasmr9RlSpqfSc8PJ7qzPnjxWhe0=s96-c",
+        "email": "leadzmaker@gmail.com",
+        "email_verified": true,
+        "full_name": "Leadz Maker",
+        "iss": "https://accounts.google.com",
+        "name": "Leadz Maker",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocKdptkK-hlFrSu7ss2-eS2Aasmr9RlSpqfSc8PJ7qzPnjxWhe0=s96-c",
+        "provider_id": "114553729086575467635",
+        "sub": "114553729086575467635"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T18:53:40.82902Z",
+      "updated_at": "2026-08-13T18:53:40.840523Z",
+      "is_anonymous": false
+    },
+    {
+      "id": "677bc67e-42cb-44cb-bf10-16df69cc23e8",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "ellathomas81631@gmail.com",
+      "email_confirmed_at": "2026-08-13T18:52:55.02838Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T18:52:55.02838Z",
+      "last_sign_in_at": "2026-08-13T18:52:55.030078Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocIkWm6VfBYvEhDfkIu6VAvoDeNTllVF-al4JhLIraZXBSHBpQ=s96-c",
+        "email": "ellathomas81631@gmail.com",
+        "email_verified": true,
+        "full_name": "Ella Thomas",
+        "iss": "https://accounts.google.com",
+        "name": "Ella Thomas",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocIkWm6VfBYvEhDfkIu6VAvoDeNTllVF-al4JhLIraZXBSHBpQ=s96-c",
+        "provider_id": "107247106908666777073",
+        "sub": "107247106908666777073"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T18:52:55.021102Z",
+      "updated_at": "2026-08-13T18:52:55.036642Z",
+      "is_anonymous": false
+    },
+    {
+      "id": "12f275ec-ffa6-422d-8f51-70e3590d6f5c",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "digitalsphere346@gmail.com",
+      "email_confirmed_at": "2026-08-13T18:52:14.81946Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T18:52:14.81946Z",
+      "last_sign_in_at": "2026-08-13T18:52:14.820706Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocKaWf_G1ctRtAgQXPJRld09U7viOK-tYdVswkkeJ60yaqZJWQ=s96-c",
+        "email": "digitalsphere346@gmail.com",
+        "email_verified": true,
+        "full_name": "Digital Sphere",
+        "iss": "https://accounts.google.com",
+        "name": "Digital Sphere",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocKaWf_G1ctRtAgQXPJRld09U7viOK-tYdVswkkeJ60yaqZJWQ=s96-c",
+        "provider_id": "108211997413956645248",
+        "sub": "108211997413956645248"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T18:52:14.81299Z",
+      "updated_at": "2026-08-13T18:52:14.822591Z",
+      "is_anonymous": false
+    },
+    {
+      "id": "c1a7282b-c14b-4bc6-a959-831973d2e609",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "adrianajames267263@gmail.com",
+      "email_confirmed_at": "2026-08-13T18:51:23.526646Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T18:51:23.526646Z",
+      "last_sign_in_at": "2026-08-13T18:51:23.544154Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocJhwZmdGrqQNHW78IDPN0OOe_z0SKMxTwds6Qb4WA9uRd9FKA=s96-c",
+        "email": "adrianajames267263@gmail.com",
+        "email_verified": true,
+        "full_name": "Adriana James",
+        "iss": "https://accounts.google.com",
+        "name": "Adriana James",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocJhwZmdGrqQNHW78IDPN0OOe_z0SKMxTwds6Qb4WA9uRd9FKA=s96-c",
+        "provider_id": "108114158782820755885",
+        "sub": "108114158782820755885"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T18:51:23.517758Z",
+      "updated_at": "2026-08-13T18:51:23.559245Z",
+      "is_anonymous": false
+    },
+    {
+      "id": "4c3bdaf8-3158-4580-b2eb-ac1ed9d5b40d",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "garryamelia6265@gmail.com",
+      "email_confirmed_at": "2026-08-13T18:33:17.418008Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T18:33:17.418008Z",
+      "last_sign_in_at": "2026-08-13T18:51:09.022027Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocJO-TBZQyhYO8gpGx5TW6U_1bJmOVTiI5WmnAD58ocTn0iSxA=s96-c",
+        "email": "garryamelia6265@gmail.com",
+        "email_verified": true,
+        "full_name": "Garry Amelia",
+        "iss": "https://accounts.google.com",
+        "name": "Garry Amelia",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocJO-TBZQyhYO8gpGx5TW6U_1bJmOVTiI5WmnAD58ocTn0iSxA=s96-c",
+        "provider_id": "118032325080064739968",
+        "sub": "118032325080064739968"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T18:33:17.39384Z",
+      "updated_at": "2026-08-13T18:51:09.032743Z",
+      "is_anonymous": false
+    }
+  ]
+}

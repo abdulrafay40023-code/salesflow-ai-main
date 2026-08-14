@@ -1,0 +1,331 @@
+{
+  "profiles": [
+    {
+      "id": "142f0278-452b-4055-b830-377a03030e88",
+      "email": "tzafar04@gmail.com",
+      "full_name": "Talha Zafar",
+      "avatar_url": "{\"phone\":\"+923363869414\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-13T20:18:31.089389+00:00"
+    },
+    {
+      "id": "4c3bdaf8-3158-4580-b2eb-ac1ed9d5b40d",
+      "email": "garryamelia6265@gmail.com",
+      "full_name": "Garry Amelia",
+      "avatar_url": "{\"phone\":\"\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "admin",
+      "created_at": "2026-08-13T18:33:19.66937+00:00"
+    }
+  ],
+  "leads": [
+    {
+      "id": "d41cfc2f-1c85-4f4e-88eb-b8ae5254f575",
+      "name": "Amelia Hart",
+      "company": "",
+      "email": "ameliahart0334@gmail.com",
+      "phone": null,
+      "status": "new",
+      "assigned_agent_id": null,
+      "assigned_agent_name": "tzafar04@gmail.com",
+      "last_contact": null,
+      "next_follow_up": null,
+      "notes": [
+        "Imported from file: Untitled spreadsheet - Sheet1 (3).csv"
+      ],
+      "value": 5000,
+      "created_at": "2026-08-13T20:20:06.392764+00:00"
+    },
+    {
+      "id": "2bcacc07-3755-4e4d-8c77-3dc05d8952d4",
+      "name": "Clara Bennet",
+      "company": "",
+      "email": "clarabennet92761@gmail.com",
+      "phone": null,
+      "status": "new",
+      "assigned_agent_id": null,
+      "assigned_agent_name": "tzafar04@gmail.com",
+      "last_contact": null,
+      "next_follow_up": null,
+      "notes": [
+        "Imported from file: Untitled spreadsheet - Sheet1 (3).csv"
+      ],
+      "value": 6000,
+      "created_at": "2026-08-13T20:20:06.392764+00:00"
+    },
+    {
+      "id": "5a2b8e25-fe21-4412-a3ce-c78b4c522953",
+      "name": "Ava Reed",
+      "company": "",
+      "email": "avareed826@gmail.com",
+      "phone": null,
+      "status": "new",
+      "assigned_agent_id": null,
+      "assigned_agent_name": "garryamelia6265@gmail.com",
+      "last_contact": null,
+      "next_follow_up": null,
+      "notes": [
+        "Imported from file: Untitled spreadsheet - Sheet1 (3).csv"
+      ],
+      "value": 7000,
+      "created_at": "2026-08-13T20:20:06.392764+00:00"
+    },
+    {
+      "id": "75b50f29-60c3-45e6-b38a-8d16066288e4",
+      "name": "Annus Raees",
+      "company": "",
+      "email": "annusraees@gmail.com",
+      "phone": "3363864985",
+      "status": "new",
+      "assigned_agent_id": null,
+      "assigned_agent_name": "tzafar04@gmail.com",
+      "last_contact": null,
+      "next_follow_up": null,
+      "notes": [
+        "Imported from file: Book1.xlsx"
+      ],
+      "value": 5000,
+      "created_at": "2026-08-13T20:20:34.857844+00:00"
+    },
+    {
+      "id": "f6d08f19-79b7-4061-8d53-4d8cd18e538c",
+      "name": "Abdul Rafay",
+      "company": "",
+      "email": "abdulrafay40023@gmail.com",
+      "phone": "3349214994",
+      "status": "new",
+      "assigned_agent_id": null,
+      "assigned_agent_name": "tzafar04@gmail.com",
+      "last_contact": null,
+      "next_follow_up": null,
+      "notes": [
+        "Imported from file: Book1.xlsx"
+      ],
+      "value": 6000,
+      "created_at": "2026-08-13T20:20:34.857844+00:00"
+    }
+  ],
+  "emails_sent": [
+    {
+      "id": "362b56cc-2014-46ed-bb60-314de1e41a49",
+      "lead_id": "d41cfc2f-1c85-4f4e-88eb-b8ae5254f575",
+      "lead_email": "ameliahart0334@gmail.com",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Teals CRM",
+      "status": "sent",
+      "sent_at": "2026-08-13T20:20:07.814+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "6a43fcbb-23b0-498f-8f71-00eb424a0f98",
+      "lead_id": "2bcacc07-3755-4e4d-8c77-3dc05d8952d4",
+      "lead_email": "clarabennet92761@gmail.com",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Teals CRM",
+      "status": "sent",
+      "sent_at": "2026-08-13T20:20:08.557+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "70d017f7-ff7c-453e-996d-df32e17c1b2a",
+      "lead_id": "5a2b8e25-fe21-4412-a3ce-c78b4c522953",
+      "lead_email": "avareed826@gmail.com",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Teals CRM",
+      "status": "sent",
+      "sent_at": "2026-08-13T20:20:08.296+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "cddd0ca5-fffb-4eca-95dd-c71db21b1786",
+      "lead_id": "75b50f29-60c3-45e6-b38a-8d16066288e4",
+      "lead_email": "annusraees@gmail.com",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Teals CRM",
+      "status": "sent",
+      "sent_at": "2026-08-13T20:20:36.235+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "ac763434-e85e-4524-89c5-260cffd8c904",
+      "lead_id": "f6d08f19-79b7-4061-8d53-4d8cd18e538c",
+      "lead_email": "abdulrafay40023@gmail.com",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Teals CRM",
+      "status": "sent",
+      "sent_at": "2026-08-13T20:20:36.634+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "9e093266-c826-460e-920c-ef575e28e700",
+      "lead_id": null,
+      "lead_email": "abdulrafay40023@gmail.com",
+      "sequence_type": "meeting_confirmed",
+      "subject": "Meeting Confirmed: 2026-08-14 at 01:25 AM",
+      "status": "sent",
+      "sent_at": "2026-08-13T20:21:19.822+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "fbce739b-a194-4785-8e14-31bb2e8a9810",
+      "lead_id": null,
+      "lead_email": "annusraees@gmail.com",
+      "sequence_type": "meeting_confirmed",
+      "subject": "Meeting Confirmed: 2026-08-13 at 01:30 AM",
+      "status": "sent",
+      "sent_at": "2026-08-13T20:21:49.087+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "91456af9-93b5-46ee-871d-d8a7b9469403",
+      "lead_id": null,
+      "lead_email": "annusraees@gmail.com",
+      "sequence_type": "meeting_confirmed",
+      "subject": "Meeting Confirmed: 2026-08-13 at 10:00 AM",
+      "status": "sent",
+      "sent_at": "2026-08-13T20:26:18.009+00:00",
+      "replied_at": null
+    }
+  ],
+  "meetings": [
+    {
+      "id": "c6f58ec4-fe89-4e36-b54f-39d5b031be20",
+      "lead_id": null,
+      "agent_id": null,
+      "title": "Sales Meeting with Annus Raees (annusraees@gmail.com) @ 01:30 AM || ZOOM: https://us05web.zoom.us/j/89259249350?pwd=Q5aRPxNI0qS9zjIL4UaaGOgn9w8kV6.1",
+      "scheduled_time": "2026-08-13T08:30:00+00:00",
+      "reminder_24h_sent": true,
+      "reminder_1h_sent": true,
+      "completed": true,
+      "created_at": "2026-08-13T20:21:49.398026+00:00",
+      "agent_email": "tzafar04@gmail.com"
+    },
+    {
+      "id": "de19b6f1-1bc4-485c-b238-b9cf9111944d",
+      "lead_id": null,
+      "agent_id": null,
+      "title": "Sales Meeting with Abdul Rafay (abdulrafay40023@gmail.com) @ 01:25 AM || ZOOM: https://us05web.zoom.us/j/84375158519?pwd=bkXSp6U1blbTPbNBTTi8ouRCHhZDCe.1",
+      "scheduled_time": "2026-08-13T20:25:00+00:00",
+      "reminder_24h_sent": true,
+      "reminder_1h_sent": true,
+      "completed": true,
+      "created_at": "2026-08-13T20:21:20.193019+00:00",
+      "agent_email": "tzafar04@gmail.com"
+    },
+    {
+      "id": "357af766-553c-4a75-83bc-8a2c83c34627",
+      "lead_id": null,
+      "agent_id": null,
+      "title": "Sales Meeting with Mahnaz Yasieen (annusraees@gmail.com) @ 10:00 AM || ZOOM: https://us05web.zoom.us/j/87098646855?pwd=XaHjoFCewv8SMA12qz6ceDOhNDk2Kz.1",
+      "scheduled_time": "2026-08-13T17:00:00+00:00",
+      "reminder_24h_sent": true,
+      "reminder_1h_sent": true,
+      "completed": true,
+      "created_at": "2026-08-13T20:26:18.321222+00:00",
+      "agent_email": "tzafar04@gmail.com"
+    }
+  ],
+  "email_sequences": [
+    {
+      "id": "a455c732-de04-48aa-aa76-2dcc5d355a86",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Nexa — Quick question regarding {{company}}",
+      "body_template": "Hi {{first_name}},\\n\\nThanks for your interest! I noticed you are leading outreach at {{company}}. I would love to show you how our automated sales workspace can help you double response rates.\\n\\nAre you open for a quick 10-min chat this week?\\n\\nBest,\\nSales Team",
+      "delay_hours": 0,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "8d906e4d-f8c1-4ff6-8570-8a3270b95b67",
+      "sequence_type": "reminder_1",
+      "subject": "Re: Quick question regarding {{company}}",
+      "body_template": "Hi {{first_name}},\\n\\nFollowing up on my previous note. Did you get a chance to check my email?\\n\\nLet me know if tomorrow works for a quick call.\\n\\nBest,\\nSales Team",
+      "delay_hours": 48,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "d9d214ba-0ee0-43c3-9030-9dd5d744710e",
+      "sequence_type": "reminder_2",
+      "subject": "How teams like {{company}} scale lead response by 3x",
+      "body_template": "Hi {{first_name}},\\n\\nJust wanted to share how similar teams automated their lead follow-ups and saw a 3.1x increase in booked meetings.\\n\\nWould you be interested in a 5-minute video demo?\\n\\nBest,\\nSales Team",
+      "delay_hours": 120,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "2d241888-3b99-440d-b02a-e3cd48ad8028",
+      "sequence_type": "reminder_3",
+      "subject": "Final follow-up — should I close your file?",
+      "body_template": "Hi {{first_name}},\\n\\nI haven't heard back so I assume now might not be the best time. I will close your file for now, but feel free to reply whenever you're ready!\\n\\nBest,\\nSales Team",
+      "delay_hours": 192,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    }
+  ],
+  "auth_users": [
+    {
+      "id": "142f0278-452b-4055-b830-377a03030e88",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "tzafar04@gmail.com",
+      "email_confirmed_at": "2026-08-13T20:18:29.076644Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T20:18:29.076644Z",
+      "last_sign_in_at": "2026-08-13T20:18:29.084429Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocJJezlHAuHzwlroIw6N8v6aLYZc9x9JcJBhnE_VQeItsRwDTPMy=s96-c",
+        "email": "tzafar04@gmail.com",
+        "email_verified": true,
+        "full_name": "Talha Zafar",
+        "iss": "https://accounts.google.com",
+        "name": "Talha Zafar",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocJJezlHAuHzwlroIw6N8v6aLYZc9x9JcJBhnE_VQeItsRwDTPMy=s96-c",
+        "provider_id": "103456319064215401167",
+        "sub": "103456319064215401167"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T20:18:29.044529Z",
+      "updated_at": "2026-08-13T20:18:29.123456Z",
+      "is_anonymous": false
+    },
+    {
+      "id": "4c3bdaf8-3158-4580-b2eb-ac1ed9d5b40d",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "garryamelia6265@gmail.com",
+      "email_confirmed_at": "2026-08-13T18:33:17.418008Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T18:33:17.418008Z",
+      "last_sign_in_at": "2026-08-13T18:51:09.022027Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocJO-TBZQyhYO8gpGx5TW6U_1bJmOVTiI5WmnAD58ocTn0iSxA=s96-c",
+        "email": "garryamelia6265@gmail.com",
+        "email_verified": true,
+        "full_name": "Garry Amelia",
+        "iss": "https://accounts.google.com",
+        "name": "Garry Amelia",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocJO-TBZQyhYO8gpGx5TW6U_1bJmOVTiI5WmnAD58ocTn0iSxA=s96-c",
+        "provider_id": "118032325080064739968",
+        "sub": "118032325080064739968"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T18:33:17.39384Z",
+      "updated_at": "2026-08-13T20:48:45.556231Z",
+      "is_anonymous": false
+    }
+  ]
+}

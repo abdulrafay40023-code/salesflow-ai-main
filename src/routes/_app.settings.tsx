@@ -25,6 +25,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useCrm } from "@/lib/crm-store";
 import { supabase } from "@/lib/supabase";
+import {
+  fetchPendingSignups,
+  approvePendingSignup,
+  removePendingOrApprovedSignup,
+  type PendingSignup,
+} from "@/lib/pending-signups";
 
 export const Route = createFileRoute("/_app/settings")({
   head: () => ({
@@ -45,21 +51,12 @@ type DbProfile = {
   created_at: string;
 };
 
-type PendingRequest = {
-  id: string;
-  email: string;
-  name: string;
-  phone: string;
-  status: string;
-  sent_at: string;
-};
-
 function SettingsPage() {
   const { user } = useCrm();
   const isAdmin = Boolean(user && (user.role === "admin" || user.email === "garryamelia6265@gmail.com"));
 
   const [teamMembers, setTeamMembers] = useState<DbProfile[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<PendingSignup[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(true);
 
   async function fetchTeam() {
@@ -72,51 +69,18 @@ function SettingsPage() {
         .order("created_at", { ascending: true });
       if (profiles) setTeamMembers(profiles as DbProfile[]);
 
-      // Fetch pending approval requests from emails_sent queue
-      const { data: pendingRows } = await supabase
-        .from("emails_sent")
-        .select("id,lead_email,subject,status,sent_at")
-        .eq("sequence_type", "agent_approval_request")
-        .eq("status", "pending")
-        .order("sent_at", { ascending: true });
-
-      if (pendingRows) {
-        const parsed: PendingRequest[] = pendingRows.map((row: any) => {
-          let name = row.lead_email?.split("@")[0] || "Unknown";
-          let phone = "";
-          try {
-            const p = JSON.parse(row.subject);
-            if (p.name) name = p.name;
-            if (p.phone) phone = p.phone;
-          } catch {}
-          return { id: row.id, email: row.lead_email, name, phone, status: row.status, sent_at: row.sent_at };
-        });
-        setPendingRequests(parsed);
-      }
+      // Fetch pending signups from pending_signups table / queue
+      const pendingList = await fetchPendingSignups();
+      setPendingRequests(pendingList);
     } catch (e) {
       console.error("Team fetch error", e);
     }
     setLoadingTeam(false);
   }
 
-  async function handleApprovePendingRequest(req: PendingRequest) {
+  async function handleApprovePendingRequest(req: PendingSignup) {
     try {
-      // 1. Update the pending request status to "approved" in emails_sent
-      await supabase
-        .from("emails_sent")
-        .update({ status: "approved" })
-        .eq("id", req.id);
-
-      // 2. Create the profile entry for the approved agent (they now exist in the system!)
-      const meta = JSON.stringify({ phone: req.phone, approved: true, status: "approved" });
-      await supabase.from("profiles").upsert({
-        id: "agent-" + req.id,
-        email: req.email,
-        full_name: req.name,
-        avatar_url: meta,
-        role: "agent",
-      });
-
+      await approvePendingSignup(req);
       toast.success(`✅ Approved ${req.name || req.email}! They now have CRM access.`);
       fetchTeam();
     } catch (err: any) {
@@ -124,18 +88,27 @@ function SettingsPage() {
     }
   }
 
-  async function handleRejectPendingRequest(req: PendingRequest) {
+  async function handleRejectPendingRequest(req: PendingSignup) {
     try {
-      // Mark the request as rejected — no profile is ever created
-      await supabase
-        .from("emails_sent")
-        .update({ status: "rejected" })
-        .eq("id", req.id);
-
-      toast.success(`❌ Rejected request from ${req.name || req.email}.`);
+      await removePendingOrApprovedSignup(req.email);
+      toast.success(`❌ Removed pending request from ${req.name || req.email}.`);
       fetchTeam();
     } catch (err: any) {
-      toast.error("Failed to reject: " + err.message);
+      toast.error("Failed to remove: " + err.message);
+    }
+  }
+
+  async function handleRemoveMember(m: DbProfile) {
+    if (m.email === "garryamelia6265@gmail.com") {
+      toast.error("Main Admin cannot be removed.");
+      return;
+    }
+    try {
+      await removePendingOrApprovedSignup(m.email);
+      toast.success(`Removed ${m.full_name || m.email} from CRM.`);
+      fetchTeam();
+    } catch (err: any) {
+      toast.error("Failed to remove member: " + err.message);
     }
   }
 

@@ -1,0 +1,207 @@
+{
+  "profiles": [
+    {
+      "id": "46fa6473-4793-4ed0-b1aa-a7680597e131",
+      "email": "digitalsphere346@gmail.com",
+      "full_name": "Digital Sphere",
+      "avatar_url": "{\"phone\":\"03002824012\",\"approved\":false,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-14T15:33:09.663274+00:00"
+    },
+    {
+      "id": "d22dffcc-8c24-4c97-ab13-35d3ebd8a60b",
+      "email": "samscafe087@gmail.com",
+      "full_name": "Sams Cafe",
+      "avatar_url": "{\"phone\":\"\",\"approved\":false,\"status\":\"unsubmitted\"}",
+      "role": "agent",
+      "created_at": "2026-08-14T15:34:10.39817+00:00"
+    },
+    {
+      "id": "9b9a7757-82ee-4032-8196-06fac62c9de9",
+      "email": "adrianajames267263@gmail.com",
+      "full_name": "Adriana James",
+      "avatar_url": "{\"phone\":\"03422457765\",\"approved\":false,\"status\":\"pending\"}",
+      "role": "agent",
+      "created_at": "2026-08-14T15:32:43.989757+00:00"
+    },
+    {
+      "id": "4c3bdaf8-3158-4580-b2eb-ac1ed9d5b40d",
+      "email": "garryamelia6265@gmail.com",
+      "full_name": "Garry Amelia",
+      "avatar_url": "{\"phone\":\"\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "admin",
+      "created_at": "2026-08-13T18:33:19.66937+00:00"
+    }
+  ],
+  "leads": [],
+  "emails_sent": [],
+  "meetings": [],
+  "email_sequences": [
+    {
+      "id": "a455c732-de04-48aa-aa76-2dcc5d355a86",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Nexa — Quick question regarding {{company}}",
+      "body_template": "Hi {{first_name}},\\n\\nThanks for your interest! I noticed you are leading outreach at {{company}}. I would love to show you how our automated sales workspace can help you double response rates.\\n\\nAre you open for a quick 10-min chat this week?\\n\\nBest,\\nSales Team",
+      "delay_hours": 0,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "8d906e4d-f8c1-4ff6-8570-8a3270b95b67",
+      "sequence_type": "reminder_1",
+      "subject": "Re: Quick question regarding {{company}}",
+      "body_template": "Hi {{first_name}},\\n\\nFollowing up on my previous note. Did you get a chance to check my email?\\n\\nLet me know if tomorrow works for a quick call.\\n\\nBest,\\nSales Team",
+      "delay_hours": 48,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "d9d214ba-0ee0-43c3-9030-9dd5d744710e",
+      "sequence_type": "reminder_2",
+      "subject": "How teams like {{company}} scale lead response by 3x",
+      "body_template": "Hi {{first_name}},\\n\\nJust wanted to share how similar teams automated their lead follow-ups and saw a 3.1x increase in booked meetings.\\n\\nWould you be interested in a 5-minute video demo?\\n\\nBest,\\nSales Team",
+      "delay_hours": 120,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "2d241888-3b99-440d-b02a-e3cd48ad8028",
+      "sequence_type": "reminder_3",
+      "subject": "Final follow-up — should I close your file?",
+      "body_template": "Hi {{first_name}},\\n\\nI haven't heard back so I assume now might not be the best time. I will close your file for now, but feel free to reply whenever you're ready!\\n\\nBest,\\nSales Team",
+      "delay_hours": 192,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    }
+  ],
+  "auth_users": [
+    {
+      "id": "d22dffcc-8c24-4c97-ab13-35d3ebd8a60b",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "samscafe087@gmail.com",
+      "email_confirmed_at": "2026-08-14T15:34:08.669261Z",
+      "phone": "",
+      "confirmed_at": "2026-08-14T15:34:08.669261Z",
+      "last_sign_in_at": "2026-08-14T15:34:08.672483Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocIitvMBXPBqotxyH6R5bDdPYme0nzEBsPBD9Z_k1svCsqXXHw=s96-c",
+        "email": "samscafe087@gmail.com",
+        "email_verified": true,
+        "full_name": "Sams Cafe",
+        "iss": "https://accounts.google.com",
+        "name": "Sams Cafe",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocIitvMBXPBqotxyH6R5bDdPYme0nzEBsPBD9Z_k1svCsqXXHw=s96-c",
+        "provider_id": "114751723577970449351",
+        "sub": "114751723577970449351"
+      },
+      "identities": null,
+      "created_at": "2026-08-14T15:34:08.657827Z",
+      "updated_at": "2026-08-14T15:34:08.677004Z",
+      "is_anonymous": false
+    },
+    {
+      "id": "46fa6473-4793-4ed0-b1aa-a7680597e131",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "digitalsphere346@gmail.com",
+      "email_confirmed_at": "2026-08-14T15:33:07.906538Z",
+      "phone": "",
+      "confirmed_at": "2026-08-14T15:33:07.906538Z",
+      "last_sign_in_at": "2026-08-14T15:33:07.908571Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocKaWf_G1ctRtAgQXPJRld09U7viOK-tYdVswkkeJ60yaqZJWQ=s96-c",
+        "email": "digitalsphere346@gmail.com",
+        "email_verified": true,
+        "full_name": "Digital Sphere",
+        "iss": "https://accounts.google.com",
+        "name": "Digital Sphere",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocKaWf_G1ctRtAgQXPJRld09U7viOK-tYdVswkkeJ60yaqZJWQ=s96-c",
+        "provider_id": "108211997413956645248",
+        "sub": "108211997413956645248"
+      },
+      "identities": null,
+      "created_at": "2026-08-14T15:33:07.901282Z",
+      "updated_at": "2026-08-14T15:33:07.912722Z",
+      "is_anonymous": false
+    },
+    {
+      "id": "9b9a7757-82ee-4032-8196-06fac62c9de9",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "adrianajames267263@gmail.com",
+      "email_confirmed_at": "2026-08-14T15:32:42.499644Z",
+      "phone": "",
+      "confirmed_at": "2026-08-14T15:32:42.499644Z",
+      "last_sign_in_at": "2026-08-14T15:32:42.505515Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocJhwZmdGrqQNHW78IDPN0OOe_z0SKMxTwds6Qb4WA9uRd9FKA=s96-c",
+        "email": "adrianajames267263@gmail.com",
+        "email_verified": true,
+        "full_name": "Adriana James",
+        "iss": "https://accounts.google.com",
+        "name": "Adriana James",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocJhwZmdGrqQNHW78IDPN0OOe_z0SKMxTwds6Qb4WA9uRd9FKA=s96-c",
+        "provider_id": "108114158782820755885",
+        "sub": "108114158782820755885"
+      },
+      "identities": null,
+      "created_at": "2026-08-14T15:32:42.48686Z",
+      "updated_at": "2026-08-14T15:32:42.507897Z",
+      "is_anonymous": false
+    },
+    {
+      "id": "4c3bdaf8-3158-4580-b2eb-ac1ed9d5b40d",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "garryamelia6265@gmail.com",
+      "email_confirmed_at": "2026-08-13T18:33:17.418008Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T18:33:17.418008Z",
+      "last_sign_in_at": "2026-08-14T15:32:26.059659Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocJO-TBZQyhYO8gpGx5TW6U_1bJmOVTiI5WmnAD58ocTn0iSxA=s96-c",
+        "email": "garryamelia6265@gmail.com",
+        "email_verified": true,
+        "full_name": "Garry Amelia",
+        "iss": "https://accounts.google.com",
+        "name": "Garry Amelia",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocJO-TBZQyhYO8gpGx5TW6U_1bJmOVTiI5WmnAD58ocTn0iSxA=s96-c",
+        "provider_id": "118032325080064739968",
+        "sub": "118032325080064739968"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T18:33:17.39384Z",
+      "updated_at": "2026-08-14T15:32:26.098229Z",
+      "is_anonymous": false
+    }
+  ]
+}

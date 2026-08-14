@@ -23,6 +23,12 @@ import {
 } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
 import { supabase } from "@/lib/supabase";
+import {
+  fetchPendingSignups,
+  approvePendingSignup,
+  removePendingOrApprovedSignup,
+  type PendingSignup,
+} from "@/lib/pending-signups";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -131,20 +137,18 @@ function AdminPage() {
   async function fetchData() {
     setLoading(true);
     try {
-      const [{ data: leadsData }, { data: emailData }, { data: profileData }, { data: pendingData }] = await Promise.all([
+      const [{ data: leadsData }, { data: emailData }, { data: profileData }] = await Promise.all([
         supabase.from("leads").select("*").order("created_at", { ascending: false }),
         supabase.from("emails_sent").select("*").order("sent_at", { ascending: false }),
         supabase.from("profiles").select("*").order("created_at", { ascending: true }),
-        supabase.from("emails_sent")
-          .select("id,lead_email,subject,status,sent_at")
-          .eq("sequence_type", "agent_approval_request")
-          .eq("status", "pending")
-          .order("sent_at", { ascending: false }),
       ]);
       if (leadsData) setLeads(leadsData as SupabaseLead[]);
       if (emailData) setEmailLogs(emailData as SupabaseEmailLog[]);
       if (profileData) setProfiles(profileData as SupabaseProfile[]);
-      if (pendingData) setPendingApprovalRequests(pendingData);
+
+      // Fetch from pending_signups table (with fallback to emails_sent queue)
+      const pendingList = await fetchPendingSignups();
+      setPendingApprovalRequests(pendingList);
     } catch (e) {
       console.error("Admin fetch error", e);
     }
@@ -153,49 +157,34 @@ function AdminPage() {
   }
 
   async function handleApproveAgent(req: any) {
-    let reqName = req.lead_email?.split("@")[0] || "Unknown";
-    let reqPhone = "";
     try {
-      const p = JSON.parse(req.subject);
-      if (p.name) reqName = p.name;
-      if (p.phone) reqPhone = p.phone;
-    } catch {}
+      // req may be a PendingSignup from the new module or a raw emails_sent row
+      const signup: PendingSignup = {
+        id: req.id,
+        name: req.name || req.lead_email?.split("@")[0] || "Unknown",
+        email: req.email || req.lead_email,
+        phone: req.phone || "",
+        avatar_initials: req.avatar_initials || (req.name || req.lead_email || "AG").slice(0, 2).toUpperCase(),
+        status: "pending",
+        created_at: req.created_at || req.sent_at,
+      };
 
-    // Mark pending request as approved
-    const { error: updateErr } = await supabase
-      .from("emails_sent")
-      .update({ status: "approved" })
-      .eq("id", req.id);
-
-    if (updateErr) {
-      toast.error("Failed to approve agent: " + updateErr.message);
-      return;
+      await approvePendingSignup(signup);
+      toast.success(`✅ Approved ${signup.name}! CRM access granted.`);
+      fetchData();
+    } catch (err: any) {
+      toast.error("Failed to approve agent: " + err.message);
     }
-
-    // Create profile in profiles table
-    const meta = JSON.stringify({ phone: reqPhone, approved: true, status: "approved" });
-    await supabase.from("profiles").upsert({
-      id: "agent-" + req.id,
-      email: req.lead_email,
-      full_name: reqName,
-      avatar_url: meta,
-      role: "agent",
-    });
-
-    toast.success(`✅ Approved ${reqName}! CRM access granted.`);
-    fetchData();
   }
 
   async function handleRejectAgent(req: any) {
-    const { error } = await supabase
-      .from("emails_sent")
-      .update({ status: "rejected" })
-      .eq("id", req.id);
-    if (error) {
-      toast.error("Failed to reject request: " + error.message);
-    } else {
-      toast.success(`❌ Rejected access request for ${req.lead_email}.`);
+    try {
+      const email = req.email || req.lead_email;
+      await removePendingOrApprovedSignup(email);
+      toast.success(`❌ Removed pending request from ${req.name || email}.`);
       fetchData();
+    } catch (err: any) {
+      toast.error("Failed to reject request: " + err.message);
     }
   }
 

@@ -1,0 +1,313 @@
+{
+  "profiles": [
+    {
+      "id": "4c3bdaf8-3158-4580-b2eb-ac1ed9d5b40d",
+      "email": "garryamelia6265@gmail.com",
+      "full_name": "Garry Amelia",
+      "avatar_url": "{\"phone\":\"\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "admin",
+      "created_at": "2026-08-13T18:33:19.66937+00:00"
+    },
+    {
+      "id": "e8ca1da8-55ac-401f-b02a-ee374c66d2c2",
+      "email": "digitalsphere346@gmail.com",
+      "full_name": "Digital Sphere",
+      "avatar_url": "{\"phone\":\"03002824012\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-13T19:41:19.708528+00:00"
+    },
+    {
+      "id": "c05626bb-3244-4e4e-a674-5ea4cf5cc3b0",
+      "email": "adrianajames267263@gmail.com",
+      "full_name": "Adriana James",
+      "avatar_url": "{\"phone\":\"03422457765\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-13T19:40:43.279214+00:00"
+    },
+    {
+      "id": "ea8fdda6-f908-4efa-ad92-ddb773417a70",
+      "email": "johnsnow62674@gmail.com",
+      "full_name": "John Snow",
+      "avatar_url": "{\"phone\":\"03301035196\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-13T19:42:40.230217+00:00"
+    }
+  ],
+  "leads": [
+    {
+      "id": "1b97173c-5e84-4b4d-a005-28146686fc24",
+      "name": "Amelia Hart",
+      "company": "",
+      "email": "ameliahart0334@gmail.com",
+      "phone": null,
+      "status": "new",
+      "assigned_agent_id": null,
+      "assigned_agent_name": "adrianajames267263@gmail.com",
+      "last_contact": null,
+      "next_follow_up": null,
+      "notes": [
+        "Imported from file: Untitled spreadsheet - Sheet1 (3).csv"
+      ],
+      "value": 5000,
+      "created_at": "2026-08-13T19:43:28.153225+00:00"
+    },
+    {
+      "id": "baf61603-7cbd-427c-b25e-964c27d035b8",
+      "name": "Clara Bennet",
+      "company": "",
+      "email": "clarabennet92761@gmail.com",
+      "phone": null,
+      "status": "new",
+      "assigned_agent_id": null,
+      "assigned_agent_name": "digitalsphere346@gmail.com",
+      "last_contact": null,
+      "next_follow_up": null,
+      "notes": [
+        "Imported from file: Untitled spreadsheet - Sheet1 (3).csv"
+      ],
+      "value": 6000,
+      "created_at": "2026-08-13T19:43:28.153225+00:00"
+    },
+    {
+      "id": "697ae6d6-9fe8-4a63-956c-c04d9f956517",
+      "name": "Ava Reed",
+      "company": "",
+      "email": "avareed826@gmail.com",
+      "phone": null,
+      "status": "new",
+      "assigned_agent_id": null,
+      "assigned_agent_name": "johnsnow62674@gmail.com",
+      "last_contact": null,
+      "next_follow_up": null,
+      "notes": [
+        "Imported from file: Untitled spreadsheet - Sheet1 (3).csv"
+      ],
+      "value": 7000,
+      "created_at": "2026-08-13T19:43:28.153225+00:00"
+    }
+  ],
+  "emails_sent": [
+    {
+      "id": "3ce96d26-610d-4eb2-a964-84d17cca92f2",
+      "lead_id": "1b97173c-5e84-4b4d-a005-28146686fc24",
+      "lead_email": "ameliahart0334@gmail.com",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Teals CRM",
+      "status": "sent",
+      "sent_at": "2026-08-13T19:43:30.536+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "8ceaf4c4-5773-474e-b2c9-fb171d81f80a",
+      "lead_id": "baf61603-7cbd-427c-b25e-964c27d035b8",
+      "lead_email": "clarabennet92761@gmail.com",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Teals CRM",
+      "status": "sent",
+      "sent_at": "2026-08-13T19:43:30.946+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "8f677371-ba94-44c6-aae0-d02c3f1e5e8f",
+      "lead_id": "697ae6d6-9fe8-4a63-956c-c04d9f956517",
+      "lead_email": "avareed826@gmail.com",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Teals CRM",
+      "status": "sent",
+      "sent_at": "2026-08-13T19:43:31.191+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "eb2c3546-3955-45e8-b738-bfd6fe746146",
+      "lead_id": null,
+      "lead_email": "ameliahart0334@gmail.com",
+      "sequence_type": "meeting_confirmed",
+      "subject": "Meeting Confirmed: 2026-08-14 at 12:50 AM",
+      "status": "sent",
+      "sent_at": "2026-08-13T19:44:54.058+00:00",
+      "replied_at": null
+    }
+  ],
+  "meetings": [
+    {
+      "id": "40d13c22-4e18-47b1-a24f-dd05088e1494",
+      "lead_id": null,
+      "agent_id": null,
+      "title": "Sales Meeting with Amelia Hart (ameliahart0334@gmail.com) @ 12:50 AM || ZOOM: https://us05web.zoom.us/j/88972138308?pwd=9NKMClXxH4KHMAymLgTa965GYCNVhx.1",
+      "scheduled_time": "2026-08-13T19:50:00+00:00",
+      "reminder_24h_sent": true,
+      "reminder_1h_sent": true,
+      "completed": true,
+      "created_at": "2026-08-13T19:44:54.376658+00:00",
+      "agent_email": "adrianajames267263@gmail.com"
+    }
+  ],
+  "email_sequences": [
+    {
+      "id": "a455c732-de04-48aa-aa76-2dcc5d355a86",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Nexa — Quick question regarding {{company}}",
+      "body_template": "Hi {{first_name}},\\n\\nThanks for your interest! I noticed you are leading outreach at {{company}}. I would love to show you how our automated sales workspace can help you double response rates.\\n\\nAre you open for a quick 10-min chat this week?\\n\\nBest,\\nSales Team",
+      "delay_hours": 0,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "8d906e4d-f8c1-4ff6-8570-8a3270b95b67",
+      "sequence_type": "reminder_1",
+      "subject": "Re: Quick question regarding {{company}}",
+      "body_template": "Hi {{first_name}},\\n\\nFollowing up on my previous note. Did you get a chance to check my email?\\n\\nLet me know if tomorrow works for a quick call.\\n\\nBest,\\nSales Team",
+      "delay_hours": 48,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "d9d214ba-0ee0-43c3-9030-9dd5d744710e",
+      "sequence_type": "reminder_2",
+      "subject": "How teams like {{company}} scale lead response by 3x",
+      "body_template": "Hi {{first_name}},\\n\\nJust wanted to share how similar teams automated their lead follow-ups and saw a 3.1x increase in booked meetings.\\n\\nWould you be interested in a 5-minute video demo?\\n\\nBest,\\nSales Team",
+      "delay_hours": 120,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "2d241888-3b99-440d-b02a-e3cd48ad8028",
+      "sequence_type": "reminder_3",
+      "subject": "Final follow-up — should I close your file?",
+      "body_template": "Hi {{first_name}},\\n\\nI haven't heard back so I assume now might not be the best time. I will close your file for now, but feel free to reply whenever you're ready!\\n\\nBest,\\nSales Team",
+      "delay_hours": 192,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    }
+  ],
+  "auth_users": [
+    {
+      "id": "ea8fdda6-f908-4efa-ad92-ddb773417a70",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "johnsnow62674@gmail.com",
+      "email_confirmed_at": "2026-08-13T19:42:38.512784Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T19:42:38.512784Z",
+      "last_sign_in_at": "2026-08-13T19:42:38.516149Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocKZnl2U-QNSg2TeX8w9vXvMCjQq0VvuNADnrs31Hq0AFoovtA=s96-c",
+        "email": "johnsnow62674@gmail.com",
+        "email_verified": true,
+        "full_name": "John Snow",
+        "iss": "https://accounts.google.com",
+        "name": "John Snow",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocKZnl2U-QNSg2TeX8w9vXvMCjQq0VvuNADnrs31Hq0AFoovtA=s96-c",
+        "provider_id": "102794825250674555778",
+        "sub": "102794825250674555778"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T19:42:38.495298Z",
+      "updated_at": "2026-08-13T19:42:38.527166Z",
+      "is_anonymous": false
+    },
+    {
+      "id": "e8ca1da8-55ac-401f-b02a-ee374c66d2c2",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "digitalsphere346@gmail.com",
+      "email_confirmed_at": "2026-08-13T19:41:18.228415Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T19:41:18.228415Z",
+      "last_sign_in_at": "2026-08-13T19:41:18.231712Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocKaWf_G1ctRtAgQXPJRld09U7viOK-tYdVswkkeJ60yaqZJWQ=s96-c",
+        "email": "digitalsphere346@gmail.com",
+        "email_verified": true,
+        "full_name": "Digital Sphere",
+        "iss": "https://accounts.google.com",
+        "name": "Digital Sphere",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocKaWf_G1ctRtAgQXPJRld09U7viOK-tYdVswkkeJ60yaqZJWQ=s96-c",
+        "provider_id": "108211997413956645248",
+        "sub": "108211997413956645248"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T19:41:18.216578Z",
+      "updated_at": "2026-08-13T19:41:18.235128Z",
+      "is_anonymous": false
+    },
+    {
+      "id": "c05626bb-3244-4e4e-a674-5ea4cf5cc3b0",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "adrianajames267263@gmail.com",
+      "email_confirmed_at": "2026-08-13T19:40:41.637996Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T19:40:41.637996Z",
+      "last_sign_in_at": "2026-08-13T19:40:41.640385Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocJhwZmdGrqQNHW78IDPN0OOe_z0SKMxTwds6Qb4WA9uRd9FKA=s96-c",
+        "email": "adrianajames267263@gmail.com",
+        "email_verified": true,
+        "full_name": "Adriana James",
+        "iss": "https://accounts.google.com",
+        "name": "Adriana James",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocJhwZmdGrqQNHW78IDPN0OOe_z0SKMxTwds6Qb4WA9uRd9FKA=s96-c",
+        "provider_id": "108114158782820755885",
+        "sub": "108114158782820755885"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T19:40:41.616465Z",
+      "updated_at": "2026-08-13T19:40:41.653758Z",
+      "is_anonymous": false
+    },
+    {
+      "id": "4c3bdaf8-3158-4580-b2eb-ac1ed9d5b40d",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "garryamelia6265@gmail.com",
+      "email_confirmed_at": "2026-08-13T18:33:17.418008Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T18:33:17.418008Z",
+      "last_sign_in_at": "2026-08-13T18:51:09.022027Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocJO-TBZQyhYO8gpGx5TW6U_1bJmOVTiI5WmnAD58ocTn0iSxA=s96-c",
+        "email": "garryamelia6265@gmail.com",
+        "email_verified": true,
+        "full_name": "Garry Amelia",
+        "iss": "https://accounts.google.com",
+        "name": "Garry Amelia",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocJO-TBZQyhYO8gpGx5TW6U_1bJmOVTiI5WmnAD58ocTn0iSxA=s96-c",
+        "provider_id": "118032325080064739968",
+        "sub": "118032325080064739968"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T18:33:17.39384Z",
+      "updated_at": "2026-08-13T19:50:10.517763Z",
+      "is_anonymous": false
+    }
+  ]
+}

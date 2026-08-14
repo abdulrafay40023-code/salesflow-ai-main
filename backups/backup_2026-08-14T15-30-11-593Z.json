@@ -1,0 +1,87 @@
+{
+  "profiles": [
+    {
+      "id": "4c3bdaf8-3158-4580-b2eb-ac1ed9d5b40d",
+      "email": "garryamelia6265@gmail.com",
+      "full_name": "Garry Amelia",
+      "avatar_url": "{\"phone\":\"\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "admin",
+      "created_at": "2026-08-13T18:33:19.66937+00:00"
+    }
+  ],
+  "leads": [],
+  "emails_sent": [],
+  "meetings": [],
+  "email_sequences": [
+    {
+      "id": "a455c732-de04-48aa-aa76-2dcc5d355a86",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Nexa — Quick question regarding {{company}}",
+      "body_template": "Hi {{first_name}},\\n\\nThanks for your interest! I noticed you are leading outreach at {{company}}. I would love to show you how our automated sales workspace can help you double response rates.\\n\\nAre you open for a quick 10-min chat this week?\\n\\nBest,\\nSales Team",
+      "delay_hours": 0,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "8d906e4d-f8c1-4ff6-8570-8a3270b95b67",
+      "sequence_type": "reminder_1",
+      "subject": "Re: Quick question regarding {{company}}",
+      "body_template": "Hi {{first_name}},\\n\\nFollowing up on my previous note. Did you get a chance to check my email?\\n\\nLet me know if tomorrow works for a quick call.\\n\\nBest,\\nSales Team",
+      "delay_hours": 48,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "d9d214ba-0ee0-43c3-9030-9dd5d744710e",
+      "sequence_type": "reminder_2",
+      "subject": "How teams like {{company}} scale lead response by 3x",
+      "body_template": "Hi {{first_name}},\\n\\nJust wanted to share how similar teams automated their lead follow-ups and saw a 3.1x increase in booked meetings.\\n\\nWould you be interested in a 5-minute video demo?\\n\\nBest,\\nSales Team",
+      "delay_hours": 120,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "2d241888-3b99-440d-b02a-e3cd48ad8028",
+      "sequence_type": "reminder_3",
+      "subject": "Final follow-up — should I close your file?",
+      "body_template": "Hi {{first_name}},\\n\\nI haven't heard back so I assume now might not be the best time. I will close your file for now, but feel free to reply whenever you're ready!\\n\\nBest,\\nSales Team",
+      "delay_hours": 192,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    }
+  ],
+  "auth_users": [
+    {
+      "id": "4c3bdaf8-3158-4580-b2eb-ac1ed9d5b40d",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "garryamelia6265@gmail.com",
+      "email_confirmed_at": "2026-08-13T18:33:17.418008Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T18:33:17.418008Z",
+      "last_sign_in_at": "2026-08-13T18:51:09.022027Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocJO-TBZQyhYO8gpGx5TW6U_1bJmOVTiI5WmnAD58ocTn0iSxA=s96-c",
+        "email": "garryamelia6265@gmail.com",
+        "email_verified": true,
+        "full_name": "Garry Amelia",
+        "iss": "https://accounts.google.com",
+        "name": "Garry Amelia",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocJO-TBZQyhYO8gpGx5TW6U_1bJmOVTiI5WmnAD58ocTn0iSxA=s96-c",
+        "provider_id": "118032325080064739968",
+        "sub": "118032325080064739968"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T18:33:17.39384Z",
+      "updated_at": "2026-08-14T14:56:17.729203Z",
+      "is_anonymous": false
+    }
+  ]
+}

@@ -70,12 +70,24 @@ CREATE TABLE IF NOT EXISTS public.meetings (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 6. PENDING SIGNUPS TABLE (Separate Queue for Unapproved Agent Requests)
+CREATE TABLE IF NOT EXISTS public.pending_signups (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    phone TEXT,
+    avatar_initials TEXT,
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- ROW LEVEL SECURITY (RLS) POLICIES
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.email_sequences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.emails_sent ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.meetings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pending_signups ENABLE ROW LEVEL SECURITY;
 
 -- Allow public access for CRM demo/authed users
 CREATE POLICY "Allow read/write access for authenticated users" ON public.profiles FOR ALL USING (true);
@@ -83,6 +95,7 @@ CREATE POLICY "Allow lead access for agents" ON public.leads FOR ALL USING (true
 CREATE POLICY "Allow sequence access" ON public.email_sequences FOR ALL USING (true);
 CREATE POLICY "Allow email history access" ON public.emails_sent FOR ALL USING (true);
 CREATE POLICY "Allow meeting access" ON public.meetings FOR ALL USING (true);
+CREATE POLICY "Allow access to pending signups" ON public.pending_signups FOR ALL USING (true);
 
 -- DEFAULT EMAIL TEMPLATES INSERTS
 INSERT INTO public.email_sequences (sequence_type, subject, body_template, delay_hours, is_active)

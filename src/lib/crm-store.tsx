@@ -7,6 +7,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { supabase } from "@/lib/supabase";
+import { createPendingSignup, getPendingSignupByEmail } from "@/lib/pending-signups";
 import {
   agents,
   seedFollowUps,
@@ -15,7 +17,6 @@ import {
   type Lead,
   type LeadStatus,
 } from "./crm-data";
-import { supabase } from "./supabase";
 
 export type SessionUser = {
   name: string;
@@ -149,7 +150,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ── Submit approval request (agent form) ───────────────────────────────────
-  // Creates record ONLY in pending requests (emails_sent queue), NOT in profiles table!
+  // Creates record ONLY in pending_signups table, NOT in profiles table!
   const submitApprovalRequest = useCallback(
     async ({ name, email, phone }: { name: string; email: string; phone: string }) => {
       // First update UI immediately so agent sees the lock screen right away
@@ -165,22 +166,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       saveSession(pendingUser);
 
       try {
-        const payload = JSON.stringify({
-          name,
-          email,
-          phone,
-          status: "pending",
-          created_at: new Date().toISOString(),
-        });
-
-        // Insert pending approval request into notification/request queue (NOT profiles table!)
-        await supabase.from("emails_sent").insert({
-          lead_email: email,
-          sequence_type: "agent_approval_request",
-          subject: payload,
-          status: "pending",
-          sent_at: new Date().toISOString(),
-        });
+        await createPendingSignup({ name, email, phone });
       } catch (err) {
         console.log("Approval submission notice:", err);
       }
@@ -230,35 +216,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // 2. Check pending requests queue in emails_sent
-      const { data: pendingReq } = await supabase
-        .from("emails_sent")
-        .select("id, subject, status")
-        .eq("lead_email", email)
-        .eq("sequence_type", "agent_approval_request")
-        .order("sent_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // 2. Check pending signups table / queue
+      const pendingReq = await getPendingSignupByEmail(email);
 
       if (pendingReq) {
-        let reqName = email.split("@")[0];
-        let reqPhone = "";
-        try {
-          const parsed = JSON.parse(pendingReq.subject);
-          if (parsed.name) reqName = parsed.name;
-          if (parsed.phone) reqPhone = parsed.phone;
-        } catch {}
-
         if (pendingReq.status === "approved") {
           // Admin approved! Create profile row now!
           const { data: authData } = await supabase.auth.getUser();
           const userId = authData?.user?.id || "usr-" + Date.now();
-          const meta = JSON.stringify({ phone: reqPhone, approved: true, status: "approved" });
+          const meta = JSON.stringify({ phone: pendingReq.phone, approved: true, status: "approved" });
 
           await supabase.from("profiles").upsert({
             id: userId,
             email,
-            full_name: reqName,
+            full_name: pendingReq.name,
             avatar_url: meta,
             role: "agent",
           });
@@ -267,8 +238,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             if (!prev || prev.email !== email) return prev;
             const next: SessionUser = {
               ...prev,
-              name: reqName,
-              phone: reqPhone,
+              name: pendingReq.name,
+              phone: pendingReq.phone,
               approved: true,
               status: "approved",
             };
@@ -294,8 +265,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             if (!prev || prev.email !== email) return prev;
             const next: SessionUser = {
               ...prev,
-              name: reqName || prev.name,
-              phone: reqPhone || prev.phone,
+              name: pendingReq.name || prev.name,
+              phone: pendingReq.phone || prev.phone,
               approved: false,
               status: "pending",
             };
@@ -311,6 +282,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return false;
     }
   }, []);
+
 
   // ── Bootstrap on mount ─────────────────────────────────────────────────────
   useEffect(() => {

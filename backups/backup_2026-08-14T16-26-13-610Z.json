@@ -1,0 +1,366 @@
+{
+  "profiles": [
+    {
+      "id": "1797d8f8-f6fd-4c97-99e0-a7c16d17f9cf",
+      "email": "adrianajames267263@gmail.com",
+      "full_name": "Adriana James",
+      "avatar_url": "{\"phone\":\"03422457765\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-14T15:59:53.280766+00:00"
+    },
+    {
+      "id": "4c3bdaf8-3158-4580-b2eb-ac1ed9d5b40d",
+      "email": "garryamelia6265@gmail.com",
+      "full_name": "Garry Amelia",
+      "avatar_url": "{\"phone\":\"\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "admin",
+      "created_at": "2026-08-13T18:33:19.66937+00:00"
+    },
+    {
+      "id": "1625d18a-24ee-4cc7-babe-69b2c1fcdc8d",
+      "email": "samscafe087@gmail.com",
+      "full_name": "Sams Cafe",
+      "avatar_url": "{\"phone\":\"03002824012\",\"approved\":true,\"status\":\"approved\"}",
+      "role": "agent",
+      "created_at": "2026-08-14T16:00:18.188211+00:00"
+    }
+  ],
+  "leads": [
+    {
+      "id": "86291282-e924-41d6-9cbc-3c1e723d1746",
+      "name": "Walt",
+      "company": "",
+      "email": "waltcafe6@gmail.com",
+      "phone": null,
+      "status": "new",
+      "assigned_agent_id": null,
+      "assigned_agent_name": "adrianajames267263@gmail.com",
+      "last_contact": null,
+      "next_follow_up": null,
+      "notes": [
+        "Imported from file: Untitled spreadsheet - Sheet1 (4).csv"
+      ],
+      "value": 5000,
+      "created_at": "2026-08-14T16:04:34.040162+00:00"
+    },
+    {
+      "id": "1fe769d4-df22-4d02-bc5c-81fb153e93d6",
+      "name": "Emma",
+      "company": "",
+      "email": "emmajohnson01732@gmail.com",
+      "phone": null,
+      "status": "new",
+      "assigned_agent_id": null,
+      "assigned_agent_name": "samscafe087@gmail.com",
+      "last_contact": null,
+      "next_follow_up": null,
+      "notes": [
+        "Imported from file: Untitled spreadsheet - Sheet1 (4).csv"
+      ],
+      "value": 6000,
+      "created_at": "2026-08-14T16:04:34.040162+00:00"
+    },
+    {
+      "id": "14df1cab-dc77-489e-b444-0a9fcec3de8a",
+      "name": "Jana Kramer",
+      "company": "",
+      "email": "j66196443@gmail.com",
+      "phone": null,
+      "status": "new",
+      "assigned_agent_id": null,
+      "assigned_agent_name": "samscafe087@gmail.com",
+      "last_contact": null,
+      "next_follow_up": null,
+      "notes": [
+        "Imported from file: Untitled spreadsheet - Sheet1 (4).csv"
+      ],
+      "value": 7000,
+      "created_at": "2026-08-14T16:04:34.040162+00:00"
+    },
+    {
+      "id": "0a68cd04-b3c6-4b8b-b0a7-cb55461b6ac6",
+      "name": "John",
+      "company": "",
+      "email": "johnwick9272782@gmail.com",
+      "phone": null,
+      "status": "new",
+      "assigned_agent_id": null,
+      "assigned_agent_name": "samscafe087@gmail.com",
+      "last_contact": null,
+      "next_follow_up": null,
+      "notes": [
+        "Imported from file: Untitled spreadsheet - Sheet1 (4).csv"
+      ],
+      "value": 8000,
+      "created_at": "2026-08-14T16:04:34.040162+00:00"
+    }
+  ],
+  "emails_sent": [
+    {
+      "id": "e9af66c1-a894-41bf-8e6a-d65be65f7703",
+      "lead_id": "1fe769d4-df22-4d02-bc5c-81fb153e93d6",
+      "lead_email": "emmajohnson01732@gmail.com",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Teals CRM",
+      "status": "sent",
+      "sent_at": "2026-08-14T16:04:35.926+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "3dd3fa3e-cf6e-4b83-8d1f-f4d07f472ef1",
+      "lead_id": "0a68cd04-b3c6-4b8b-b0a7-cb55461b6ac6",
+      "lead_email": "johnwick9272782@gmail.com",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Teals CRM",
+      "status": "sent",
+      "sent_at": "2026-08-14T16:04:36.347+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "6295772d-36f1-44aa-83ee-73bcb6248077",
+      "lead_id": "14df1cab-dc77-489e-b444-0a9fcec3de8a",
+      "lead_email": "j66196443@gmail.com",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Teals CRM",
+      "status": "sent",
+      "sent_at": "2026-08-14T16:04:36.538+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "0c940721-ef45-4b3a-b60d-dfbef56528b8",
+      "lead_id": "86291282-e924-41d6-9cbc-3c1e723d1746",
+      "lead_email": "waltcafe6@gmail.com",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Teals CRM",
+      "status": "sent",
+      "sent_at": "2026-08-14T16:04:36.737+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "0a24ba51-4f46-4b3f-8ff1-acd4cdfae248",
+      "lead_id": null,
+      "lead_email": "waltcafe6@gmail.com",
+      "sequence_type": "meeting_confirmed",
+      "subject": "Meeting Confirmed: 2026-08-14 at 09:10 PM",
+      "status": "sent",
+      "sent_at": "2026-08-14T16:06:05.442+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "e2b9b12c-c6ed-471a-a8bb-7e9c3354d354",
+      "lead_id": null,
+      "lead_email": "emmajohnson01732@gmail.com",
+      "sequence_type": "meeting_confirmed",
+      "subject": "Meeting Confirmed: 2026-08-14 at 09:20 PM",
+      "status": "sent",
+      "sent_at": "2026-08-14T16:07:09.686+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "1eade7eb-b443-4688-b551-7b2bdfa9fa14",
+      "lead_id": null,
+      "lead_email": "j66196443@gmail.com",
+      "sequence_type": "meeting_confirmed",
+      "subject": "Meeting Confirmed: 2026-08-14 at 10:10 PM",
+      "status": "sent",
+      "sent_at": "2026-08-14T16:07:44.704+00:00",
+      "replied_at": null
+    },
+    {
+      "id": "d6886753-68df-4926-a837-b5d6a885a5e1",
+      "lead_id": null,
+      "lead_email": "johnwick9272782@gmail.com",
+      "sequence_type": "meeting_confirmed",
+      "subject": "Meeting Confirmed: 2026-08-15 at 09:15 PM",
+      "status": "sent",
+      "sent_at": "2026-08-14T16:08:20.982+00:00",
+      "replied_at": null
+    }
+  ],
+  "meetings": [
+    {
+      "id": "ab1080e1-f50e-4f20-bd98-169c2a81d753",
+      "lead_id": null,
+      "agent_id": null,
+      "title": "Sales Meeting with Walt Cafe (waltcafe6@gmail.com) @ 09:10 PM || ZOOM: https://us05web.zoom.us/j/86545536740?pwd=Mgr4D4MZbUlEK4gYGJTvcYpcQK5TdA.1",
+      "scheduled_time": "2026-08-14T16:10:00+00:00",
+      "reminder_24h_sent": true,
+      "reminder_1h_sent": true,
+      "completed": true,
+      "created_at": "2026-08-14T16:06:05.81064+00:00",
+      "agent_email": "adrianajames267263@gmail.com"
+    },
+    {
+      "id": "e0277bea-9cff-4bb1-95b7-da1b058d5728",
+      "lead_id": null,
+      "agent_id": null,
+      "title": "Sales Meeting with Jana Kramer (j66196443@gmail.com) @ 10:10 PM || ZOOM: https://us05web.zoom.us/j/84976844171?pwd=zV6vBebXdpPZMI9PFnJj7cTYW0DU5r.1",
+      "scheduled_time": "2026-08-14T17:10:00+00:00",
+      "reminder_24h_sent": true,
+      "reminder_1h_sent": true,
+      "completed": false,
+      "created_at": "2026-08-14T16:07:45.033847+00:00",
+      "agent_email": "samscafe087@gmail.com"
+    },
+    {
+      "id": "027f131b-b446-494d-8fd1-783e41789b17",
+      "lead_id": null,
+      "agent_id": null,
+      "title": "Sales Meeting with John Wick (johnwick9272782@gmail.com) @ 09:15 PM || ZOOM: https://us05web.zoom.us/j/87970056189?pwd=37dWWHqVcC7B4uVWVZFlYRLDNlwKpe.1",
+      "scheduled_time": "2026-08-15T16:15:00+00:00",
+      "reminder_24h_sent": true,
+      "reminder_1h_sent": false,
+      "completed": false,
+      "created_at": "2026-08-14T16:08:21.336796+00:00",
+      "agent_email": "samscafe087@gmail.com"
+    },
+    {
+      "id": "613251f3-f746-45fd-9218-be9a625204be",
+      "lead_id": null,
+      "agent_id": null,
+      "title": "Sales Meeting with Emma Johnson (emmajohnson01732@gmail.com) @ 09:20 PM || ZOOM: https://us05web.zoom.us/j/81801963616?pwd=YC9VXDVGBdtcNhUmntff69apcTRDC9.1",
+      "scheduled_time": "2026-08-14T16:20:00+00:00",
+      "reminder_24h_sent": true,
+      "reminder_1h_sent": true,
+      "completed": true,
+      "created_at": "2026-08-14T16:07:09.992096+00:00",
+      "agent_email": "samscafe087@gmail.com"
+    }
+  ],
+  "email_sequences": [
+    {
+      "id": "a455c732-de04-48aa-aa76-2dcc5d355a86",
+      "sequence_type": "welcome",
+      "subject": "Welcome to Nexa — Quick question regarding {{company}}",
+      "body_template": "Hi {{first_name}},\\n\\nThanks for your interest! I noticed you are leading outreach at {{company}}. I would love to show you how our automated sales workspace can help you double response rates.\\n\\nAre you open for a quick 10-min chat this week?\\n\\nBest,\\nSales Team",
+      "delay_hours": 0,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "8d906e4d-f8c1-4ff6-8570-8a3270b95b67",
+      "sequence_type": "reminder_1",
+      "subject": "Re: Quick question regarding {{company}}",
+      "body_template": "Hi {{first_name}},\\n\\nFollowing up on my previous note. Did you get a chance to check my email?\\n\\nLet me know if tomorrow works for a quick call.\\n\\nBest,\\nSales Team",
+      "delay_hours": 48,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "d9d214ba-0ee0-43c3-9030-9dd5d744710e",
+      "sequence_type": "reminder_2",
+      "subject": "How teams like {{company}} scale lead response by 3x",
+      "body_template": "Hi {{first_name}},\\n\\nJust wanted to share how similar teams automated their lead follow-ups and saw a 3.1x increase in booked meetings.\\n\\nWould you be interested in a 5-minute video demo?\\n\\nBest,\\nSales Team",
+      "delay_hours": 120,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    },
+    {
+      "id": "2d241888-3b99-440d-b02a-e3cd48ad8028",
+      "sequence_type": "reminder_3",
+      "subject": "Final follow-up — should I close your file?",
+      "body_template": "Hi {{first_name}},\\n\\nI haven't heard back so I assume now might not be the best time. I will close your file for now, but feel free to reply whenever you're ready!\\n\\nBest,\\nSales Team",
+      "delay_hours": 192,
+      "is_active": true,
+      "updated_at": "2026-08-06T10:54:53.840656+00:00"
+    }
+  ],
+  "auth_users": [
+    {
+      "id": "1625d18a-24ee-4cc7-babe-69b2c1fcdc8d",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "samscafe087@gmail.com",
+      "email_confirmed_at": "2026-08-14T16:00:04.610882Z",
+      "phone": "",
+      "confirmed_at": "2026-08-14T16:00:04.610882Z",
+      "last_sign_in_at": "2026-08-14T16:00:16.407562Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocIitvMBXPBqotxyH6R5bDdPYme0nzEBsPBD9Z_k1svCsqXXHw=s96-c",
+        "email": "samscafe087@gmail.com",
+        "email_verified": true,
+        "full_name": "Sams Cafe",
+        "iss": "https://accounts.google.com",
+        "name": "Sams Cafe",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocIitvMBXPBqotxyH6R5bDdPYme0nzEBsPBD9Z_k1svCsqXXHw=s96-c",
+        "provider_id": "114751723577970449351",
+        "sub": "114751723577970449351"
+      },
+      "identities": null,
+      "created_at": "2026-08-14T16:00:04.606435Z",
+      "updated_at": "2026-08-14T16:00:16.409863Z",
+      "is_anonymous": false
+    },
+    {
+      "id": "1797d8f8-f6fd-4c97-99e0-a7c16d17f9cf",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "adrianajames267263@gmail.com",
+      "email_confirmed_at": "2026-08-14T15:59:51.328891Z",
+      "phone": "",
+      "confirmed_at": "2026-08-14T15:59:51.328891Z",
+      "last_sign_in_at": "2026-08-14T15:59:51.332096Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocJhwZmdGrqQNHW78IDPN0OOe_z0SKMxTwds6Qb4WA9uRd9FKA=s96-c",
+        "email": "adrianajames267263@gmail.com",
+        "email_verified": true,
+        "full_name": "Adriana James",
+        "iss": "https://accounts.google.com",
+        "name": "Adriana James",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocJhwZmdGrqQNHW78IDPN0OOe_z0SKMxTwds6Qb4WA9uRd9FKA=s96-c",
+        "provider_id": "108114158782820755885",
+        "sub": "108114158782820755885"
+      },
+      "identities": null,
+      "created_at": "2026-08-14T15:59:51.306572Z",
+      "updated_at": "2026-08-14T15:59:51.353719Z",
+      "is_anonymous": false
+    },
+    {
+      "id": "4c3bdaf8-3158-4580-b2eb-ac1ed9d5b40d",
+      "aud": "authenticated",
+      "role": "authenticated",
+      "email": "garryamelia6265@gmail.com",
+      "email_confirmed_at": "2026-08-13T18:33:17.418008Z",
+      "phone": "",
+      "confirmed_at": "2026-08-13T18:33:17.418008Z",
+      "last_sign_in_at": "2026-08-14T15:32:26.059659Z",
+      "app_metadata": {
+        "provider": "google",
+        "providers": [
+          "google"
+        ]
+      },
+      "user_metadata": {
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocJO-TBZQyhYO8gpGx5TW6U_1bJmOVTiI5WmnAD58ocTn0iSxA=s96-c",
+        "email": "garryamelia6265@gmail.com",
+        "email_verified": true,
+        "full_name": "Garry Amelia",
+        "iss": "https://accounts.google.com",
+        "name": "Garry Amelia",
+        "phone_verified": false,
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocJO-TBZQyhYO8gpGx5TW6U_1bJmOVTiI5WmnAD58ocTn0iSxA=s96-c",
+        "provider_id": "118032325080064739968",
+        "sub": "118032325080064739968"
+      },
+      "identities": null,
+      "created_at": "2026-08-13T18:33:17.39384Z",
+      "updated_at": "2026-08-14T15:32:26.098229Z",
+      "is_anonymous": false
+    }
+  ]
+}
