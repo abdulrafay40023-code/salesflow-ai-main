@@ -288,6 +288,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             return next;
           });
           return false;
+        } else {
+          // pendingReq.status === "pending"
+          setUser((prev) => {
+            if (!prev || prev.email !== email) return prev;
+            const next: SessionUser = {
+              ...prev,
+              name: reqName || prev.name,
+              phone: reqPhone || prev.phone,
+              approved: false,
+              status: "pending",
+            };
+            saveSession(next);
+            return next;
+          });
+          return false;
         }
       }
 
@@ -335,14 +350,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           const existing = loadSession();
           let preservedStatus: SessionUser["status"] = "unsubmitted";
           let preservedPhone: string | undefined = undefined;
+          let preservedName: string = name;
 
           if (existing && existing.email === email) {
             preservedStatus = existing.status ?? "unsubmitted";
             preservedPhone = existing.phone;
+            if (existing.name) preservedName = existing.name;
           }
 
           const googleUser: SessionUser = {
-            name,
+            name: preservedName,
             email,
             role: isMainAdmin ? "admin" : "agent",
             approved: isMainAdmin ? true : false,
@@ -353,8 +370,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           setUser(googleUser);
           saveSession(googleUser);
 
-          // Sync to DB — will further update status from DB if needed
-          syncProfileToSupabase(googleUser);
+          // Sync to DB & verify approval status
+          if (isMainAdmin) {
+            syncProfileToSupabase(googleUser);
+          } else {
+            checkUserApprovalStatus(email);
+          }
         }
         setIsAuthLoading(false);
       });

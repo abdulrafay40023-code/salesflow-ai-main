@@ -24,10 +24,15 @@ function AppLayout() {
   const isApproved = isAdmin || Boolean(user?.approved);
 
   // Form states for first-time registration submission
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [name, setName] = useState(user?.name || "");
+  const [phone, setPhone] = useState(user?.phone || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
+
+  useEffect(() => {
+    if (user?.name && !name) setName(user.name);
+    if (user?.phone && !phone) setPhone(user.phone);
+  }, [user?.name, user?.phone]);
 
   // Polling approval status every 6 seconds if waiting for admin
   useEffect(() => {
@@ -56,20 +61,26 @@ function AppLayout() {
   // Handle initial submission of agent details (Name, Email, Phone)
   const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !phone.trim()) {
+    const trimmedName = name.trim();
+    const trimmedPhone = phone.trim();
+    const trimmedEmail = (user?.email || "").trim();
+
+    if (!trimmedName || !trimmedPhone || !trimmedEmail) {
       toast.error("Please enter your name and phone number.");
       return;
     }
     setIsSubmitting(true);
     try {
       await submitApprovalRequest({
-        name: name.trim(),
-        email: user?.email ?? "",
-        phone: phone.trim(),
+        name: trimmedName,
+        email: trimmedEmail,
+        phone: trimmedPhone,
       });
+      // Re-verify immediately to transition view without delay
+      await checkUserApprovalStatus(trimmedEmail);
       toast.success("Request submitted to Admin for approval!");
-    } catch {
-      toast.error("Submission failed. Please try again.");
+    } catch (err: any) {
+      toast.error(err?.message || "Submission failed. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
