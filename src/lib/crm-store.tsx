@@ -83,7 +83,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
 
   // ── Sync user profile to Supabase DB ───────────────────────────────────────
-  // Only syncs DB; does NOT downgrade status (e.g. won't reset "pending" → "unsubmitted")
+  // Only syncs DB if user is admin OR profile already exists (approved)
   const syncProfileToSupabase = useCallback(async (u: SessionUser) => {
     if (!u.email) return;
     try {
@@ -96,66 +96,60 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         .eq("email", u.email)
         .maybeSingle();
 
-      // Read values from DB; don't downgrade status if current session has higher state
-      let phone = u.phone || "";
-      let approved = isMainAdmin ? true : (u.approved ?? false);
-      let status: SessionUser["status"] = isMainAdmin ? "approved" : (u.status ?? "unsubmitted");
+      // Only admin or already-approved users get profile updates/inserts
+      if (isMainAdmin) {
+        const meta = JSON.stringify({ phone: u.phone || "", approved: true, status: "approved" });
+        if (existingProf) {
+          await supabase
+            .from("profiles")
+            .update({ full_name: name, avatar_url: meta, role: "admin" })
+            .eq("email", u.email);
+        } else {
+          const { data: authData } = await supabase.auth.getUser();
+          const userId = authData?.user?.id || "usr-" + Date.now();
+          await supabase.from("profiles").insert({
+            id: userId,
+            email: u.email,
+            full_name: name,
+            avatar_url: meta,
+            role: "admin",
+          });
+        }
+      } else if (existingProf) {
+        // Read values from DB profile if existing
+        let phone = u.phone || "";
+        let approved = false;
+        let status: SessionUser["status"] = "unsubmitted";
 
-      if (existingProf?.avatar_url) {
-        try {
-          const parsed = JSON.parse(existingProf.avatar_url);
-          if (parsed.phone) phone = parsed.phone;
-          if (typeof parsed.approved === "boolean" && !isMainAdmin) approved = parsed.approved;
-          // Only update status from DB; never downgrade "pending" to "unsubmitted"
-          if (parsed.status && !isMainAdmin) {
-            if (parsed.status === "approved" || parsed.status === "rejected") {
-              status = parsed.status;
-            } else if (parsed.status === "pending" && status !== "approved") {
-              status = "pending";
-            }
-            // if DB says "unsubmitted" but session says "pending", keep "pending"
-          }
-        } catch {}
-      }
+        if (existingProf.avatar_url) {
+          try {
+            const parsed = JSON.parse(existingProf.avatar_url);
+            if (parsed.phone) phone = parsed.phone;
+            approved = Boolean(parsed.approved);
+            status = parsed.status || (approved ? "approved" : "unsubmitted");
+          } catch {}
+        }
 
-      const meta = JSON.stringify({ phone, approved, status });
-
-      if (existingProf) {
-        await supabase
-          .from("profiles")
-          .update({ full_name: name, avatar_url: meta, role: isMainAdmin ? "admin" : "agent" })
-          .eq("email", u.email);
-      } else {
-        const { data: authData } = await supabase.auth.getUser();
-        const userId = authData?.user?.id || "usr-" + Date.now();
-        await supabase.from("profiles").insert({
-          id: userId,
-          email: u.email,
-          full_name: name,
-          avatar_url: meta,
-          role: isMainAdmin ? "admin" : "agent",
+        setUser((prev) => {
+          if (!prev || prev.email !== u.email) return prev;
+          const merged: SessionUser = {
+            ...prev,
+            name: existingProf.full_name || prev.name,
+            phone: phone || prev.phone,
+            approved,
+            status,
+          };
+          saveSession(merged);
+          return merged;
         });
       }
-
-      // Update user state — preserve session-level status if it's "pending" and DB isn't "approved"
-      setUser((prev) => {
-        if (!prev || prev.email !== u.email) return prev;
-        const merged: SessionUser = {
-          ...prev,
-          name: existingProf?.full_name || prev.name,
-          phone: phone || prev.phone,
-          approved,
-          status,
-        };
-        saveSession(merged);
-        return merged;
-      });
     } catch (err) {
       console.log("Profile sync notice:", err);
     }
   }, []);
 
   // ── Submit approval request (agent form) ───────────────────────────────────
+  // Creates record ONLY in pending requests (emails_sent queue), NOT in profiles table!
   const submitApprovalRequest = useCallback(
     async ({ name, email, phone }: { name: string; email: string; phone: string }) => {
       // First update UI immediately so agent sees the lock screen right away
@@ -170,34 +164,23 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       setUser(pendingUser);
       saveSession(pendingUser);
 
-      // Then persist to DB
-      const meta = JSON.stringify({ phone, approved: false, status: "pending" });
       try {
-        const { data: authData } = await supabase.auth.getUser();
-        const authUserId = authData?.user?.id;
+        const payload = JSON.stringify({
+          name,
+          email,
+          phone,
+          status: "pending",
+          created_at: new Date().toISOString(),
+        });
 
-        const { data: existing } = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("email", email)
-          .maybeSingle();
-
-        const profileId = existing?.id || authUserId || "usr-" + Date.now();
-
-        if (existing) {
-          await supabase
-            .from("profiles")
-            .update({ full_name: name, avatar_url: meta, role: "agent" })
-            .eq("email", email);
-        } else {
-          await supabase.from("profiles").insert({
-            id: profileId,
-            email,
-            full_name: name,
-            avatar_url: meta,
-            role: "agent",
-          });
-        }
+        // Insert pending approval request into notification/request queue (NOT profiles table!)
+        await supabase.from("emails_sent").insert({
+          lead_email: email,
+          sequence_type: "agent_approval_request",
+          subject: payload,
+          status: "pending",
+          sent_at: new Date().toISOString(),
+        });
       } catch (err) {
         console.log("Approval submission notice:", err);
       }
@@ -209,40 +192,106 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const checkUserApprovalStatus = useCallback(async (email: string): Promise<boolean> => {
     if (email === ADMIN_EMAIL) return true;
     try {
+      // 1. Check if profile exists in profiles table (created ONLY when admin approves)
       const { data: prof } = await supabase
         .from("profiles")
         .select("id, email, full_name, avatar_url, role")
         .eq("email", email)
         .maybeSingle();
 
-      if (!prof) return false;
+      if (prof) {
+        let phone = "";
+        let approved = false;
+        let status: SessionUser["status"] = "unsubmitted";
 
-      let phone = "";
-      let approved = false;
-      let status: SessionUser["status"] = "unsubmitted";
+        if (prof.avatar_url) {
+          try {
+            const parsed = JSON.parse(prof.avatar_url);
+            phone = parsed.phone || "";
+            approved = Boolean(parsed.approved);
+            status = parsed.status || (approved ? "approved" : "unsubmitted");
+          } catch {}
+        }
 
-      if (prof.avatar_url) {
-        try {
-          const parsed = JSON.parse(prof.avatar_url);
-          phone = parsed.phone || "";
-          approved = Boolean(parsed.approved);
-          status = parsed.status || (approved ? "approved" : "unsubmitted");
-        } catch {}
+        if (approved) {
+          setUser((prev) => {
+            if (!prev || prev.email !== email) return prev;
+            const next: SessionUser = {
+              ...prev,
+              name: prof.full_name || prev.name,
+              phone: phone || prev.phone,
+              approved: true,
+              status: "approved",
+            };
+            saveSession(next);
+            return next;
+          });
+          return true;
+        }
       }
 
-      setUser((prev) => {
-        if (!prev || prev.email !== email) return prev;
-        const next: SessionUser = {
-          ...prev,
-          name: prof.full_name || prev.name,
-          phone: phone || prev.phone,
-          approved,
-          status,
-        };
-        saveSession(next);
-        return next;
-      });
-      return approved;
+      // 2. Check pending requests queue in emails_sent
+      const { data: pendingReq } = await supabase
+        .from("emails_sent")
+        .select("id, subject, status")
+        .eq("lead_email", email)
+        .eq("sequence_type", "agent_approval_request")
+        .order("sent_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (pendingReq) {
+        let reqName = email.split("@")[0];
+        let reqPhone = "";
+        try {
+          const parsed = JSON.parse(pendingReq.subject);
+          if (parsed.name) reqName = parsed.name;
+          if (parsed.phone) reqPhone = parsed.phone;
+        } catch {}
+
+        if (pendingReq.status === "approved") {
+          // Admin approved! Create profile row now!
+          const { data: authData } = await supabase.auth.getUser();
+          const userId = authData?.user?.id || "usr-" + Date.now();
+          const meta = JSON.stringify({ phone: reqPhone, approved: true, status: "approved" });
+
+          await supabase.from("profiles").upsert({
+            id: userId,
+            email,
+            full_name: reqName,
+            avatar_url: meta,
+            role: "agent",
+          });
+
+          setUser((prev) => {
+            if (!prev || prev.email !== email) return prev;
+            const next: SessionUser = {
+              ...prev,
+              name: reqName,
+              phone: reqPhone,
+              approved: true,
+              status: "approved",
+            };
+            saveSession(next);
+            return next;
+          });
+          return true;
+        } else if (pendingReq.status === "rejected") {
+          setUser((prev) => {
+            if (!prev || prev.email !== email) return prev;
+            const next: SessionUser = {
+              ...prev,
+              approved: false,
+              status: "rejected",
+            };
+            saveSession(next);
+            return next;
+          });
+          return false;
+        }
+      }
+
+      return false;
     } catch {
       return false;
     }

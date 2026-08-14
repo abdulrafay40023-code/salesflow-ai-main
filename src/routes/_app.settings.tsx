@@ -45,25 +45,98 @@ type DbProfile = {
   created_at: string;
 };
 
+type PendingRequest = {
+  id: string;
+  email: string;
+  name: string;
+  phone: string;
+  status: string;
+  sent_at: string;
+};
+
 function SettingsPage() {
   const { user } = useCrm();
   const isAdmin = Boolean(user && (user.role === "admin" || user.email === "garryamelia6265@gmail.com"));
 
   const [teamMembers, setTeamMembers] = useState<DbProfile[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(true);
 
   async function fetchTeam() {
     setLoadingTeam(true);
     try {
-      const { data } = await supabase
+      // Fetch approved/active profiles
+      const { data: profiles } = await supabase
         .from("profiles")
         .select("id,email,full_name,avatar_url,role,created_at")
         .order("created_at", { ascending: true });
-      if (data) setTeamMembers(data as DbProfile[]);
+      if (profiles) setTeamMembers(profiles as DbProfile[]);
+
+      // Fetch pending approval requests from emails_sent queue
+      const { data: pendingRows } = await supabase
+        .from("emails_sent")
+        .select("id,lead_email,subject,status,sent_at")
+        .eq("sequence_type", "agent_approval_request")
+        .eq("status", "pending")
+        .order("sent_at", { ascending: true });
+
+      if (pendingRows) {
+        const parsed: PendingRequest[] = pendingRows.map((row: any) => {
+          let name = row.lead_email?.split("@")[0] || "Unknown";
+          let phone = "";
+          try {
+            const p = JSON.parse(row.subject);
+            if (p.name) name = p.name;
+            if (p.phone) phone = p.phone;
+          } catch {}
+          return { id: row.id, email: row.lead_email, name, phone, status: row.status, sent_at: row.sent_at };
+        });
+        setPendingRequests(parsed);
+      }
     } catch (e) {
       console.error("Team fetch error", e);
     }
     setLoadingTeam(false);
+  }
+
+  async function handleApprovePendingRequest(req: PendingRequest) {
+    try {
+      // 1. Update the pending request status to "approved" in emails_sent
+      await supabase
+        .from("emails_sent")
+        .update({ status: "approved" })
+        .eq("id", req.id);
+
+      // 2. Create the profile entry for the approved agent (they now exist in the system!)
+      const meta = JSON.stringify({ phone: req.phone, approved: true, status: "approved" });
+      await supabase.from("profiles").upsert({
+        id: "agent-" + req.id,
+        email: req.email,
+        full_name: req.name,
+        avatar_url: meta,
+        role: "agent",
+      });
+
+      toast.success(`✅ Approved ${req.name || req.email}! They now have CRM access.`);
+      fetchTeam();
+    } catch (err: any) {
+      toast.error("Failed to approve: " + err.message);
+    }
+  }
+
+  async function handleRejectPendingRequest(req: PendingRequest) {
+    try {
+      // Mark the request as rejected — no profile is ever created
+      await supabase
+        .from("emails_sent")
+        .update({ status: "rejected" })
+        .eq("id", req.id);
+
+      toast.success(`❌ Rejected request from ${req.name || req.email}.`);
+      fetchTeam();
+    } catch (err: any) {
+      toast.error("Failed to reject: " + err.message);
+    }
   }
 
   async function handleApproveMember(m: DbProfile) {
@@ -184,12 +257,68 @@ function SettingsPage() {
 
         {/* ── TEAM MEMBERS (live from Supabase profiles with Approval & Removal) ── */}
         <TabsContent value="team" className="mt-5">
-          <div className="panel divide-y divide-border">
+          <div className="space-y-4">
+
+            {/* ── PENDING APPROVAL REQUESTS ── */}
+            {isAdmin && pendingRequests.length > 0 && (
+              <div className="panel divide-y divide-border">
+                <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+                  <div>
+                    <h2 className="font-display text-lg font-bold flex items-center gap-2">
+                      🟡 Pending Approval Requests
+                      <span className="rounded-full bg-amber-500/20 text-amber-400 text-xs font-bold px-2 py-0.5">{pendingRequests.length}</span>
+                    </h2>
+                    <p className="text-sm text-muted-foreground">New agents waiting for your approval to access the CRM</p>
+                  </div>
+                </div>
+                {pendingRequests.map((req) => {
+                  const reqInitials = req.name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
+                  return (
+                    <div key={req.id} className="flex flex-wrap items-center justify-between gap-4 p-5 bg-amber-500/5">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <Avatar className="size-10 shrink-0">
+                          <AvatarFallback className="bg-amber-500/20 text-amber-400 text-xs font-bold">{reqInitials}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-semibold">{req.name}</p>
+                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-bold text-amber-400">Pending Approval</span>
+                          </div>
+                          <p className="truncate text-xs text-muted-foreground">{req.email}</p>
+                          {req.phone && <p className="text-[11px] text-muted-foreground/80 mt-0.5">📞 {req.phone}</p>}
+                          <p className="text-[10px] text-muted-foreground/60 mt-0.5">Requested: {new Date(req.sent_at).toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleApprovePendingRequest(req)}
+                          className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 shadow-sm"
+                        >
+                          ✅ Approve Access
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleRejectPendingRequest(req)}
+                          className="rounded-xl text-xs font-semibold px-3 py-1.5"
+                        >
+                          ❌ Reject
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ── APPROVED / ACTIVE MEMBERS ── */}
+            <div className="panel divide-y divide-border">
             <div className="flex flex-wrap items-center justify-between gap-3 p-5">
               <div>
-                <h2 className="font-display text-lg font-bold">Team Members & Approvals</h2>
+                <h2 className="font-display text-lg font-bold">Active Team Members</h2>
                 <p className="text-sm text-muted-foreground">
-                  {loadingTeam ? "Loading..." : `${teamMembers.length} member${teamMembers.length !== 1 ? "s" : ""} registered`}
+                  {loadingTeam ? "Loading..." : `${teamMembers.length} member${teamMembers.length !== 1 ? "s" : ""} with CRM access`}
                 </p>
               </div>
             </div>
@@ -200,7 +329,7 @@ function SettingsPage() {
               <div className="flex flex-col items-center justify-center gap-2 p-12 text-center text-muted-foreground">
                 <Users className="h-8 w-8 opacity-30" />
                 <p className="text-sm font-medium">No team members yet</p>
-                <p className="text-xs">Members appear here when they sign in with Google</p>
+                <p className="text-xs">Members appear here once you approve their access request</p>
               </div>
             ) : (
               teamMembers.map((m) => {
@@ -279,6 +408,7 @@ function SettingsPage() {
                 );
               })
             )}
+            </div>
           </div>
         </TabsContent>
 

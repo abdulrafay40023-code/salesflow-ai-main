@@ -120,6 +120,7 @@ function AdminPage() {
   const [leads, setLeads] = useState<SupabaseLead[]>([]);
   const [emailLogs, setEmailLogs] = useState<SupabaseEmailLog[]>([]);
   const [profiles, setProfiles] = useState<SupabaseProfile[]>([]);
+  const [pendingApprovalRequests, setPendingApprovalRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [tab, setTab] = useState<"agents" | "leads" | "emails">("agents");
@@ -130,17 +131,20 @@ function AdminPage() {
   async function fetchData() {
     setLoading(true);
     try {
-      // Ensure non-admin users in DB profiles table are set to 'agent'
-      await supabase.from("profiles").update({ role: "agent" }).neq("email", ADMIN_EMAIL);
-
-      const [{ data: leadsData }, { data: emailData }, { data: profileData }] = await Promise.all([
+      const [{ data: leadsData }, { data: emailData }, { data: profileData }, { data: pendingData }] = await Promise.all([
         supabase.from("leads").select("*").order("created_at", { ascending: false }),
         supabase.from("emails_sent").select("*").order("sent_at", { ascending: false }),
         supabase.from("profiles").select("*").order("created_at", { ascending: true }),
+        supabase.from("emails_sent")
+          .select("id,lead_email,subject,status,sent_at")
+          .eq("sequence_type", "agent_approval_request")
+          .eq("status", "pending")
+          .order("sent_at", { ascending: false }),
       ]);
       if (leadsData) setLeads(leadsData as SupabaseLead[]);
       if (emailData) setEmailLogs(emailData as SupabaseEmailLog[]);
       if (profileData) setProfiles(profileData as SupabaseProfile[]);
+      if (pendingData) setPendingApprovalRequests(pendingData);
     } catch (e) {
       console.error("Admin fetch error", e);
     }
@@ -148,35 +152,49 @@ function AdminPage() {
     setLoading(false);
   }
 
-  async function handleApproveAgent(p: SupabaseProfile) {
-    let phone = "";
-    if ((p as any).avatar_url) {
-      try {
-        const parsed = JSON.parse((p as any).avatar_url);
-        phone = parsed.phone || "";
-      } catch {}
-    }
-    const meta = JSON.stringify({ phone, approved: true, status: "approved" });
-    const { error } = await supabase
-      .from("profiles")
-      .update({ avatar_url: meta, role: "agent" })
-      .eq("id", p.id);
+  async function handleApproveAgent(req: any) {
+    let reqName = req.lead_email?.split("@")[0] || "Unknown";
+    let reqPhone = "";
+    try {
+      const p = JSON.parse(req.subject);
+      if (p.name) reqName = p.name;
+      if (p.phone) reqPhone = p.phone;
+    } catch {}
 
-    if (error) {
-      toast.error("Failed to approve agent: " + error.message);
-    } else {
-      toast.success(`Approved ${p.full_name || p.email}! Access granted.`);
-      fetchData();
+    // Mark pending request as approved
+    const { error: updateErr } = await supabase
+      .from("emails_sent")
+      .update({ status: "approved" })
+      .eq("id", req.id);
+
+    if (updateErr) {
+      toast.error("Failed to approve agent: " + updateErr.message);
+      return;
     }
+
+    // Create profile in profiles table
+    const meta = JSON.stringify({ phone: reqPhone, approved: true, status: "approved" });
+    await supabase.from("profiles").upsert({
+      id: "agent-" + req.id,
+      email: req.lead_email,
+      full_name: reqName,
+      avatar_url: meta,
+      role: "agent",
+    });
+
+    toast.success(`✅ Approved ${reqName}! CRM access granted.`);
+    fetchData();
   }
 
-  async function handleRejectAgent(p: SupabaseProfile) {
-    if (p.email === ADMIN_EMAIL) return;
-    const { error } = await supabase.from("profiles").delete().eq("id", p.id);
+  async function handleRejectAgent(req: any) {
+    const { error } = await supabase
+      .from("emails_sent")
+      .update({ status: "rejected" })
+      .eq("id", req.id);
     if (error) {
-      toast.error("Failed to decline request: " + error.message);
+      toast.error("Failed to reject request: " + error.message);
     } else {
-      toast.success(`Declined access request for ${p.full_name || p.email}.`);
+      toast.success(`❌ Rejected access request for ${req.lead_email}.`);
       fetchData();
     }
   }
@@ -224,27 +242,12 @@ function AdminPage() {
     );
   }
 
-  // Filter pending agent approval requests
-  const pendingProfiles = profiles.filter((p) => {
-    if (!p || !p.email || p.email === ADMIN_EMAIL) return false;
-    if (p.role === "admin") return false;
-    if ((p as any).avatar_url) {
-      try {
-        const parsed = JSON.parse((p as any).avatar_url);
-        return parsed.status === "pending" && parsed.approved !== true;
-      } catch {}
-    }
-    return false;
-  });
-
-
-
-
-
+  // Pending approval requests come from emails_sent queue (NOT profiles table)
+  const pendingProfiles = pendingApprovalRequests;
 
   // Filter out internal system logs from customer email logs
   const customerEmailLogs = emailLogs.filter(
-    (e: any) => e.sequence_type !== "agent_login" && e.type !== "agent_login" && e.sequence_type !== "agent_presence"
+    (e: any) => e.sequence_type !== "agent_login" && e.type !== "agent_login" && e.sequence_type !== "agent_presence" && e.sequence_type !== "agent_approval_request"
   );
 
   const totalLeads = leads.length;
@@ -458,36 +461,38 @@ function AdminPage() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {pendingProfiles.map((p) => {
-              let phone = "";
-              if ((p as any).avatar_url) {
-                try {
-                  phone = JSON.parse((p as any).avatar_url).phone || "";
-                } catch {}
-              }
+            {pendingProfiles.map((req: any) => {
+              let reqName = req.lead_email?.split("@")[0] || "Unknown";
+              let reqPhone = "";
+              try {
+                const parsed = JSON.parse(req.subject);
+                if (parsed.name) reqName = parsed.name;
+                if (parsed.phone) reqPhone = parsed.phone;
+              } catch {}
               return (
                 <div
-                  key={p.id}
+                  key={req.id}
                   className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-slate-900/90 p-3.5 shadow-md"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-white">
-                      {p.full_name || p.email.split("@")[0]}
+                      {reqName}
                     </p>
-                    <p className="truncate text-xs text-slate-400">{p.email}</p>
-                    {phone && <p className="text-[11px] text-amber-300/90 mt-0.5 font-medium">📞 {phone}</p>}
+                    <p className="truncate text-xs text-slate-400">{req.lead_email}</p>
+                    {reqPhone && <p className="text-[11px] text-amber-300/90 mt-0.5 font-medium">📞 {reqPhone}</p>}
+                    <p className="text-[10px] text-slate-500 mt-0.5">Requested: {new Date(req.sent_at).toLocaleString()}</p>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
-                      onClick={() => handleApproveAgent(p)}
+                      onClick={() => handleApproveAgent(req)}
                       title="Approve Access"
                       className="flex items-center justify-center size-8 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-md active:scale-95"
                     >
                       <Check className="size-4" />
                     </button>
                     <button
-                      onClick={() => handleRejectAgent(p)}
+                      onClick={() => handleRejectAgent(req)}
                       title="Decline / Reject Request"
                       className="flex items-center justify-center size-8 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white transition-all shadow-md active:scale-95"
                     >
