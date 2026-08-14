@@ -71,9 +71,15 @@ function BookingPage() {
     const emailParam = params.get("email");
     const nameParam = params.get("name");
     const agentParam = params.get("agent");
+    const confirmedParam = params.get("confirmed") || params.get("booked");
     if (emailParam) setEmail(emailParam);
     if (nameParam) setName(nameParam);
     if (agentParam) setAgentEmail(agentParam);
+    if (confirmedParam === "true" || confirmedParam === "1") {
+      setBooked(true);
+      setDate(new Date().toISOString().split("T")[0]);
+      setConfirmedTimeLabel("10:00 AM");
+    }
   }, []);
 
   async function handleBook(e: React.FormEvent) {
