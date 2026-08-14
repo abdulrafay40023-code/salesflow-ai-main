@@ -88,6 +88,10 @@ function EmptyState({ icon: Icon, text }: { icon: React.ElementType; text: strin
 // MeetingNotifications — isolated notification component
 // Handles Zoom vs non-Zoom meetings with different visibility logic
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// MeetingNotifications — isolated notification component
+// Handles Zoom vs non-Zoom meetings with consistent 10-min post-start retention logic
+// ─────────────────────────────────────────────
 function MeetingNotifications({
   meetings,
   dismissedNotifs,
@@ -97,7 +101,7 @@ function MeetingNotifications({
   dismissedNotifs: Set<string>;
   dismissNotif: (id: string) => void;
 }) {
-  // Live ticker updates every 2 seconds so start-time state transitions happen cleanly & live
+  // Live ticker updates every 2 seconds so start-time state transitions & auto-disappears happen live
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
@@ -105,15 +109,20 @@ function MeetingNotifications({
     return () => clearInterval(timer);
   }, []);
 
+  // Filter out cancelled meetings
+  const activeMeetings = meetings.filter(
+    (m) => m && m.scheduled_time && (!m.title || !m.title.includes("[CANCELLED]"))
+  );
+
   // Separate Zoom meetings from non-Zoom meetings
-  const zoomMeetings = meetings.filter((m) => m.title && m.title.includes("|| ZOOM:"));
-  const nonZoomMeetings = meetings.filter((m) => !m.title || !m.title.includes("|| ZOOM:"));
+  const zoomMeetings = activeMeetings.filter((m) => m.title && m.title.includes("|| ZOOM:"));
+  const nonZoomMeetings = activeMeetings.filter((m) => !m.title || !m.title.includes("|| ZOOM:"));
 
   // ── Zoom Meeting Cards ──
   // Per-meeting independent evaluation:
-  // 1. Appears when booked in normal/default color (orange/blue).
-  // 2. Turns RED at THAT SPECIFIC meeting's own scheduled start time (nowMs >= meetingStartMs).
-  // 3. Stays RED for exactly 10 minutes after scheduled start time.
+  // 1. Appears when booked in normal/default color.
+  // 2. Turns RED at THAT SPECIFIC meeting's scheduled start time (nowMs >= meetingStartMs).
+  // 3. Stays RED and visible until exactly 10 minutes AFTER scheduled start time.
   // 4. Auto-disappears 10 minutes after scheduled start time (nowMs - meetingStartMs > 10 * 60 * 1000).
   // 5. Always has a manual "X" dismiss button at any stage.
   const zoomCards: Array<{
@@ -132,13 +141,13 @@ function MeetingNotifications({
     // Elapsed time since meeting start time (ms)
     const elapsedPostStart = nowMs - meetingStartMs;
 
-    // Requirement: Auto-disappear 10 minutes after start time
+    // REQUIREMENT: Auto-disappear exactly 10 minutes AFTER scheduled start time
     if (elapsedPostStart > 10 * 60 * 1000) continue;
 
     const id = `zoom-${m.id}`;
     if (dismissedNotifs.has(id)) continue;
 
-    // Requirement: Turn RED at THAT meeting's start time
+    // Turn RED at THAT meeting's scheduled start time
     const isRed = nowMs >= meetingStartMs;
 
     let timeLabel = "";
@@ -165,7 +174,11 @@ function MeetingNotifications({
     zoomCards.push({ id, isRed, meeting: m, label: timeLabel, formattedTime });
   }
 
-  // ── Non-Zoom Meeting Cards ──
+  // ── Non-Zoom / Stage Meeting Cards ──
+  // REQUIREMENT FOR ALL CARDS:
+  // Appear at their normal trigger time (1h before, 24h before, etc.),
+  // BUT remain visible through the start time until EXACTLY 10 minutes AFTER scheduled start time,
+  // then auto-disappear together.
   const nonZoomCards: Array<{
     id: string;
     type: "now" | "1h" | "24h";
@@ -175,23 +188,39 @@ function MeetingNotifications({
 
   for (const m of nonZoomMeetings) {
     if (!m.scheduled_time) continue;
-    const mt = new Date(m.scheduled_time);
-    if (isNaN(mt.getTime())) continue;
-    const diffMs = mt.getTime() - nowMs;
+    const meetingStartMs = new Date(m.scheduled_time).getTime();
+    if (isNaN(meetingStartMs)) continue;
 
-    let timeLabel = mt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    // Elapsed time since meeting start time (ms)
+    const elapsedPostStart = nowMs - meetingStartMs;
+
+    // REQUIREMENT: Auto-disappear 10 minutes AFTER scheduled start time
+    if (elapsedPostStart > 10 * 60 * 1000) continue;
+
+    const diffMs = meetingStartMs - nowMs;
+
+    let timeLabel = new Date(m.scheduled_time).toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
     const titlePart = m.title ? m.title.trim() : "";
     if (titlePart.includes("@ ")) {
       timeLabel = titlePart.split("@ ")[1]?.trim() || timeLabel;
     }
 
-    if (diffMs <= 0 && diffMs >= -10 * 60 * 1000) {
+    // Card 1: Starting NOW / 5-min card (Appears when start time is <= 5 mins away or has passed, stays visible until start_time + 10 mins)
+    if (diffMs <= 5 * 60 * 1000 && elapsedPostStart <= 10 * 60 * 1000) {
       const id = `now-${m.id}`;
       if (!dismissedNotifs.has(id)) nonZoomCards.push({ id, type: "now", meeting: m, label: timeLabel });
-    } else if (diffMs > 0 && diffMs <= 65 * 60 * 1000) {
+    }
+    // Card 2: 1-Hour Reminder card (Appears when start time is <= 65 mins away, stays visible until start_time + 10 mins)
+    else if (diffMs <= 65 * 60 * 1000 && elapsedPostStart <= 10 * 60 * 1000) {
       const id = `1h-${m.id}`;
       if (!dismissedNotifs.has(id)) nonZoomCards.push({ id, type: "1h", meeting: m, label: timeLabel });
-    } else if (diffMs > 65 * 60 * 1000 && diffMs <= 25 * 60 * 60 * 1000) {
+    }
+    // Card 3: 24-Hour / Tomorrow Reminder card (Appears when start time is <= 25 hours away, stays visible until start_time + 10 mins)
+    else if (diffMs <= 25 * 60 * 60 * 1000 && elapsedPostStart <= 10 * 60 * 1000) {
       const id = `24h-${m.id}`;
       if (!dismissedNotifs.has(id)) nonZoomCards.push({ id, type: "24h", meeting: m, label: timeLabel });
     }
@@ -788,8 +817,8 @@ function DashboardPage() {
       })()}
 
 
-      {/* ── Notification Sections (agents only, not admin) ── */}
-      {!isAdmin && <MeetingNotifications meetings={safeMeetings} dismissedNotifs={dismissedNotifs} dismissNotif={dismissNotif} />}
+      {/* ── Notification Sections (Meeting Cards for Admin & Agents) ── */}
+      <MeetingNotifications meetings={safeMeetings} dismissedNotifs={dismissedNotifs} dismissNotif={dismissNotif} />
 
       {/* Charts Row */}
       <div className="grid gap-4 lg:grid-cols-3">
