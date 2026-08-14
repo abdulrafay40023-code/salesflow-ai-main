@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import {
   send1DayMeetingReminderEmail,
   send1HourMeetingReminderEmail,
+  send5MinMeetingReminderEmail,
   sendBookingFormEmail,
   sendMeetingConfirmationEmail,
   sendMeetingStartedNowEmail,
@@ -102,9 +103,6 @@ export const triggerBookingFormEmailFn = createServerFn({ method: "POST" })
 /**
  * 4. Trigger Meeting Booking & Confirmation Emails
  */
-/**
- * 4. Trigger Meeting Booking & Confirmation Emails
- */
 export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
   .validator(
     (data: {
@@ -124,19 +122,17 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
       const cleanLeadEmail = (data.leadEmail || "").trim().toLowerCase();
       let realAgentEmail = (data.agentEmail || "").trim();
 
-      // 1. Case-insensitive lookup for existing lead in Supabase leads table
-      const { data: leadRows } = await supabase
-        .from("leads")
-        .select("id, assigned_agent_name, agent, email")
-        .ilike("email", cleanLeadEmail);
+      // 1. Fetch or verify lead
+      if (!leadId && cleanLeadEmail) {
+        const { data: foundLead } = await supabase
+          .from("leads")
+          .select("id, assigned_agent_name, agent")
+          .ilike("email", cleanLeadEmail)
+          .maybeSingle();
 
-      const existingLead = leadRows && leadRows.length > 0 ? leadRows[0] : null;
-
-      if (existingLead) {
-        if (existingLead.id) leadId = existingLead.id;
-        const agentField = existingLead.assigned_agent_name || existingLead.agent;
-        if (agentField && agentField !== "Unassigned" && agentField.trim() !== "") {
-          realAgentEmail = agentField.trim();
+        if (foundLead) {
+          leadId = foundLead.id;
+          realAgentEmail = foundLead.assigned_agent_name || foundLead.agent || realAgentEmail;
         }
       }
 
@@ -144,15 +140,22 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         realAgentEmail = "garryamelia6265@gmail.com";
       }
 
-      // 1.5 Auto-create live unique Zoom Meeting room via Zoom Server-to-Server OAuth API
-      const zoomRes = await createZoomMeeting({
-        topic: `Sales Meeting with ${data.leadName || data.leadEmail}`,
-        startTimeIso: data.scheduledIso,
-        durationMinutes: 30,
-      });
-      const zoomJoinUrl = zoomRes.joinUrl;
+      // 2. Generate dynamic Zoom Meeting Link
+      let zoomJoinUrl = "https://zoom.us/j/5539578967";
+      try {
+        const zoomRes = await createZoomMeeting({
+          topic: `Sales Call with ${data.leadName || data.leadEmail}`,
+          startTimeIso: data.scheduledIso,
+          durationMinutes: 30,
+        });
+        if (zoomRes.success && zoomRes.joinUrl) {
+          zoomJoinUrl = zoomRes.joinUrl;
+        }
+      } catch (e) {
+        console.log("Zoom API fallback to default link");
+      }
 
-      // 2. Send immediate Confirmation Email to Lead, Working Agent & Admin
+      // 3. Send initial confirmation email to BOTH Lead & Agent
       await sendMeetingConfirmationEmail({
         leadEmail: data.leadEmail,
         agentEmail: realAgentEmail,
@@ -160,13 +163,7 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         meetingTime: data.time,
       });
 
-      // 3. Update lead status in Supabase to "booked" by leadId or leadEmail
-      if (leadId) {
-        await supabase
-          .from("leads")
-          .update({ status: "booked", assigned_agent_name: realAgentEmail })
-          .eq("id", leadId);
-      }
+      // 4. Update lead status in Supabase to "booked"
       if (data.leadEmail) {
         await supabase
           .from("leads")
@@ -174,7 +171,7 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
           .eq("email", data.leadEmail.trim());
       }
 
-      // 4. Log confirmation email in emails_sent
+      // 5. Log confirmation email in emails_sent
       await supabase.from("emails_sent").insert({
         lead_id: leadId || null,
         lead_email: data.leadEmail,
@@ -184,10 +181,8 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         sent_at: new Date().toISOString(),
       });
 
-      // 5. Calculate exact scheduled ISO timestamp & short-notice flags
+      // 6. Calculate exact scheduled ISO timestamp & short-notice reminder flags
       const now = new Date();
-      const rawTime = data.rawTime || "10:00";
-      // Calculate scheduled ISO timestamp strictly from date & time
       let scheduledIso = data.scheduledIso;
       if (!scheduledIso || isNaN(new Date(scheduledIso).getTime())) {
         const [y, m, d] = (data.date || "").split("-").map(Number);
@@ -196,19 +191,37 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
           const dt = new Date(y, m - 1, d, h || 10, min || 0, 0);
           scheduledIso = dt.toISOString();
         } else {
-          // If no date provided, default to 24h in future, NEVER 'now'
           scheduledIso = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
         }
       }
 
       const meetingDateTime = new Date(scheduledIso);
       const diffMs = meetingDateTime.getTime() - now.getTime();
-      const isWithin24h = diffMs <= 24 * 60 * 60 * 1000;
-      const isWithin1h = diffMs <= 60 * 60 * 1000;
-      // isRightNow: Only true if the meeting start time is current minute or up to 1 min in past
-      const isRightNow = diffMs <= 60 * 1000 && diffMs >= -2 * 60 * 1000;
 
-      // 6. Insert meeting into Supabase — always completed:false so check-reminders handles timing
+      // Rule: If booked with LESS than 24h remaining, skip 24h reminder (mark sent = true immediately)
+      const isWithin24h = diffMs < 24 * 60 * 60 * 1000;
+
+      // Rule: If booked with <= 1 hour remaining, fire 1h reminder IMMEDIATELY at booking time
+      const isWithin1h = diffMs <= 60 * 60 * 1000;
+      if (isWithin1h && diffMs > 5 * 60 * 1000) {
+        send1HourMeetingReminderEmail({
+          leadEmail: data.leadEmail,
+          agentEmail: realAgentEmail,
+          meetingTime: data.time,
+        }).catch((err) => console.log("Short-notice 1h reminder send notice:", err));
+      }
+
+      // Rule: If booked with <= 5 minutes remaining, fire 5m reminder IMMEDIATELY at booking time
+      const isWithin5m = diffMs <= 5 * 60 * 1000 && diffMs > 0;
+      if (isWithin5m) {
+        send5MinMeetingReminderEmail({
+          leadEmail: data.leadEmail,
+          agentEmail: realAgentEmail,
+          meetingTime: data.time,
+        }).catch((err) => console.log("Short-notice 5m reminder send notice:", err));
+      }
+
+      // Insert meeting into Supabase
       const { data: insertedMeeting } = await supabase
         .from("meetings")
         .insert({
@@ -223,11 +236,7 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
         .select("id")
         .single();
 
-      // 7. Email sending is handled SOLELY by /api/check-reminders (called every 15s from frontend).
-      //    No setTimeout here — that caused duplicate emails. check-reminders uses atomic DB claim
-      //    to guarantee exactly ONE email is sent when meeting time arrives.
-
-      return { success: true };
+      return { success: true, meetingId: insertedMeeting?.id };
     } catch (err: any) {
       console.error("Confirm meeting server error:", err);
       return { success: false, error: err?.message };
@@ -235,7 +244,7 @@ export const confirmMeetingBookingFn = createServerFn({ method: "POST" })
   });
 
 /**
- * 5. Automated Background Check for 24-Hour, 1-Hour, and Meeting Starting NOW Emails
+ * 5. Automated Background Check for 24-Hour, 1-Hour, 5-Minute and Meeting Starting NOW Emails
  */
 export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
   .validator(() => ({}))
@@ -248,7 +257,7 @@ export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
       // Fetch pending meetings
       const { data: upcomingMeetings } = await supabase
         .from("meetings")
-        .select("id, lead_id, scheduled_time, reminder_24h_sent, reminder_1h_sent, completed")
+        .select("id, lead_id, scheduled_time, reminder_24h_sent, reminder_1h_sent, completed, title")
         .eq("completed", false);
 
       if (!upcomingMeetings) return { success: true, processed: 0 };
@@ -278,6 +287,9 @@ export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
 
         const formattedTimeStr = meetingTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+        // Ignore cancelled meetings
+        if (m.title && m.title.includes("[CANCELLED]")) continue;
+
         // Stage 1: 24-Hour Reminder (Sent 1 day before)
         if (!m.reminder_24h_sent && meetingTime <= oneDayLater && meetingTime > oneHourLater) {
           await send1DayMeetingReminderEmail({
@@ -291,7 +303,7 @@ export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
         }
 
         // Stage 2: 1-Hour Reminder (Sent 60 minutes before)
-        if (!m.reminder_1h_sent && meetingTime <= oneHourLater && meetingTime > now) {
+        if (!m.reminder_1h_sent && meetingTime <= oneHourLater && meetingTime > new Date(now.getTime() + 5 * 60 * 1000)) {
           await send1HourMeetingReminderEmail({
             leadEmail: leadEmail,
             agentEmail: agentEmail,
@@ -301,7 +313,18 @@ export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
           count++;
         }
 
-        // Stage 3: Meeting Starting NOW (Sent right at the scheduled meeting time)
+        // Stage 3: 5-Minute Reminder (Sent 5 minutes before)
+        const fiveMinLater = new Date(now.getTime() + 5 * 60 * 1000);
+        if (meetingTime <= fiveMinLater && meetingTime > now) {
+          await send5MinMeetingReminderEmail({
+            leadEmail: leadEmail,
+            agentEmail: agentEmail,
+            meetingTime: formattedTimeStr,
+          }).catch(() => {});
+          count++;
+        }
+
+        // Stage 4: Meeting Starting NOW (Sent right at the scheduled meeting time)
         if (!m.completed && now.getTime() >= meetingTime.getTime()) {
           await sendMeetingStartedNowEmail({
             leadEmail: leadEmail,
@@ -319,6 +342,48 @@ export const checkAndSendMeetingRemindersFn = createServerFn({ method: "POST" })
       return { success: true, processed: count };
     } catch (err: any) {
       console.error("Meeting reminder check error:", err);
+      return { success: false, error: err?.message };
+    }
+  });
+
+/**
+ * Cancel Meeting Session
+ */
+export const cancelMeetingBookingFn = createServerFn({ method: "POST" })
+  .validator((data: { meetingId?: string; leadEmail?: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      if (data.meetingId) {
+        await supabase
+          .from("meetings")
+          .update({ completed: true, title: `[CANCELLED] Meeting Session` })
+          .eq("id", data.meetingId);
+      }
+      if (data.leadEmail) {
+        const { data: foundMeetings } = await supabase
+          .from("meetings")
+          .select("id, title")
+          .eq("completed", false);
+
+        if (foundMeetings) {
+          for (const m of foundMeetings) {
+            if (m.title && m.title.toLowerCase().includes(data.leadEmail.toLowerCase())) {
+              await supabase
+                .from("meetings")
+                .update({ completed: true, title: `[CANCELLED] ${m.title}` })
+                .eq("id", m.id);
+            }
+          }
+        }
+
+        await supabase
+          .from("leads")
+          .update({ status: "cancelled" })
+          .eq("email", data.leadEmail.trim());
+      }
+      return { success: true };
+    } catch (err: any) {
+      console.error("Cancel meeting error:", err);
       return { success: false, error: err?.message };
     }
   });

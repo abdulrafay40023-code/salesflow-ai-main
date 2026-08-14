@@ -245,11 +245,8 @@ export async function send1HourMeetingReminderEmail({
   agentEmail: string;
   meetingTime: string;
 }) {
-  const recipients = Array.from(new Set([leadEmail, agentEmail].filter(Boolean))).join(", ");
-
   const mailOptions = {
     from: `"Teals CRM Reminders" <${GMAIL_USER}>`,
-    to: recipients,
     subject: `⏰ 1-Hour Reminder: Your Sales Meeting Starts in 60 Minutes (${meetingTime})`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; background-color: #ffffff;">
@@ -272,7 +269,52 @@ export async function send1HourMeetingReminderEmail({
     `,
   };
 
-  return await transporter.sendMail(mailOptions);
+  if (leadEmail) await transporter.sendMail({ ...mailOptions, to: leadEmail });
+  if (agentEmail && agentEmail.toLowerCase() !== leadEmail.toLowerCase()) {
+    await transporter.sendMail({ ...mailOptions, to: agentEmail });
+  }
+}
+
+/**
+ * 6b. Meeting Reminder — 5 Minutes Before (Sent to BOTH Lead & Agent)
+ */
+export async function send5MinMeetingReminderEmail({
+  leadEmail,
+  agentEmail,
+  meetingTime,
+}: {
+  leadEmail: string;
+  agentEmail: string;
+  meetingTime: string;
+}) {
+  const mailOptions = {
+    from: `"Teals CRM Reminders" <${GMAIL_USER}>`,
+    subject: `⚡ 5-Minute Reminder: Your Sales Meeting Starts Soon (${meetingTime})`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; background-color: #ffffff;">
+        <div style="background-color: #ef4444; padding: 20px; text-align: center; color: white; border-radius: 8px 8px 0 0;">
+          <h2 style="margin: 0;">⚡ Meeting Starts in 5 Minutes!</h2>
+        </div>
+        <div style="padding: 24px; color: #334155; line-height: 1.6;">
+          <p>Hello,</p>
+          <p>Your sales meeting is starting in 5 minutes at <strong>${meetingTime}</strong>!</p>
+          <div style="background-color: #fef2f2; border: 1px solid #fecaca; padding: 16px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 4px 0; color: #991b1b;"><strong>Scheduled Time:</strong> ${meetingTime}</p>
+            <p style="margin: 4px 0; color: #991b1b;"><strong>Participants:</strong> ${leadEmail} & Sales Representative (${agentEmail})</p>
+          </div>
+          <p>Please log in and get ready to connect.</p>
+        </div>
+        <div style="background-color: #f8fafc; padding: 16px; text-align: center; font-size: 12px; color: #94a3b8; border-radius: 0 0 8px 8px;">
+          &copy; ${new Date().getFullYear()} Teals CRM. All rights reserved.
+        </div>
+      </div>
+    `,
+  };
+
+  if (leadEmail) await transporter.sendMail({ ...mailOptions, to: leadEmail });
+  if (agentEmail && agentEmail.toLowerCase() !== leadEmail.toLowerCase()) {
+    await transporter.sendMail({ ...mailOptions, to: agentEmail });
+  }
 }
 
 /**
@@ -289,7 +331,6 @@ export async function sendMeetingStartedNowEmail({
   meetingTime: string;
   zoomJoinUrl?: string;
 }) {
-  const recipients = Array.from(new Set([leadEmail, agentEmail].filter(Boolean))).join(", ");
   const zoomBtn = zoomJoinUrl
     ? `
     <div style="margin: 25px 0; text-align: center;">

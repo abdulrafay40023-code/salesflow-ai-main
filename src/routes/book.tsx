@@ -1,11 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Calendar as CalendarIcon, CheckCircle2, Clock, Mail, Sparkles, User } from "lucide-react";
+import { Calendar as CalendarIcon, CheckCircle2, Clock, Mail, Sparkles, User, XCircle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { confirmMeetingBookingFn } from "@/lib/server-actions";
+import { confirmMeetingBookingFn, cancelMeetingBookingFn } from "@/lib/server-actions";
 
 export const Route = createFileRoute("/book")({
   head: () => ({
@@ -52,6 +59,9 @@ function BookingPage() {
   const [loading, setLoading] = useState(false);
   const [booked, setBooked] = useState(false);
 
+  const [bookedMeetingId, setBookedMeetingId] = useState<string | null>(null);
+  const [manageModalOpen, setManageModalOpen] = useState(false);
+  const [sessionCancelled, setSessionCancelled] = useState(false);
   const [confirmedTimeLabel, setConfirmedTimeLabel] = useState("");
 
   // Auto pre-fill from query params if available
@@ -103,6 +113,8 @@ function BookingPage() {
 
       if (res.success) {
         setBooked(true);
+        setSessionCancelled(false);
+        if (res.meetingId) setBookedMeetingId(res.meetingId);
         toast.success("Meeting booked & confirmation emails sent!");
 
         // Trigger reminder check immediately
@@ -124,6 +136,29 @@ function BookingPage() {
     setLoading(false);
   }
 
+  async function handleCancelCurrentSession() {
+    try {
+      await cancelMeetingBookingFn({
+        data: {
+          meetingId: bookedMeetingId || undefined,
+          leadEmail: email,
+        },
+      });
+      setSessionCancelled(true);
+      setManageModalOpen(false);
+      toast.success("Your meeting session has been cancelled.");
+    } catch (e: any) {
+      toast.error("Failed to cancel meeting session: " + e.message);
+    }
+  }
+
+  function handleBookAnotherSession() {
+    setManageModalOpen(false);
+    setBooked(false);
+    setSessionCancelled(false);
+    setBookedMeetingId(null);
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-xl rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-xl">
@@ -136,21 +171,54 @@ function BookingPage() {
 
         {booked ? (
           <div className="flex flex-col items-center justify-center py-10 text-center space-y-4">
-            <div className="grid size-16 place-items-center rounded-full bg-emerald-500/20 text-emerald-500">
-              <CheckCircle2 className="size-10" />
-            </div>
-            <h2 className="text-2xl font-bold text-foreground">Meeting Confirmed!</h2>
-            <p className="text-sm text-muted-foreground max-w-md">
-              A confirmation email has been sent to <span className="font-semibold text-foreground">{email}</span> and your assigned sales representative.
-            </p>
+            {sessionCancelled ? (
+              <>
+                <div className="grid size-16 place-items-center rounded-full bg-rose-500/20 text-rose-500">
+                  <XCircle className="size-10" />
+                </div>
+                <h2 className="text-2xl font-bold text-foreground">Meeting Session Cancelled</h2>
+                <p className="text-sm text-muted-foreground max-w-md">
+                  Your scheduled session for <span className="font-semibold text-foreground">{email}</span> has been cancelled. All upcoming reminder emails have been stopped.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="grid size-16 place-items-center rounded-full bg-emerald-500/20 text-emerald-500">
+                  <CheckCircle2 className="size-10" />
+                </div>
+                <h2 className="text-2xl font-bold text-foreground">Meeting Confirmed!</h2>
+                <p className="text-sm text-muted-foreground max-w-md">
+                  A confirmation email has been sent to <span className="font-semibold text-foreground">{email}</span> and your assigned sales representative.
+                </p>
+              </>
+            )}
+
             <div className="rounded-xl border border-border bg-accent/40 p-4 text-xs space-y-1 w-full max-w-sm text-left">
               <p>🗓️ <strong>Date:</strong> {date}</p>
               <p>⏰ <strong>Time:</strong> {confirmedTimeLabel || time}</p>
-              <p>📧 <strong>Notifications:</strong> 1-day & 1-hour email reminders active</p>
+              <p>📧 <strong>Notifications:</strong> {sessionCancelled ? "Cancelled — all future email reminders stopped" : "24h, 1h, 5m & meeting-start email reminders active"}</p>
             </div>
-            <Button variant="outline" className="mt-4 rounded-xl" onClick={() => setBooked(false)}>
+
+            <Button
+              variant="outline"
+              className="mt-4 rounded-xl"
+              onClick={() => setManageModalOpen(true)}
+            >
               Book Another Session
             </Button>
+
+            {/* Website Link */}
+            <p className="mt-4 text-xs text-muted-foreground text-center">
+              Need more information? Visit{" "}
+              <a
+                href="https://tealsinternational.com"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-primary underline hover:text-primary/80 transition-colors inline-flex items-center gap-0.5"
+              >
+                Teals International <ExternalLink className="size-3" />
+              </a>
+            </p>
           </div>
         ) : (
           <form onSubmit={handleBook} className="space-y-6">
@@ -235,6 +303,52 @@ function BookingPage() {
           </form>
         )}
       </div>
+
+      {/* "Book Another Session" Modal with Cancel Option & Book Option */}
+      <Dialog open={manageModalOpen} onOpenChange={setManageModalOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg">Manage Your Meeting Session</DialogTitle>
+            <DialogDescription className="text-xs">
+              What would you like to do with your booking?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            {/* Option A: Cancel Current Session */}
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4 space-y-2">
+              <p className="text-xs font-bold text-rose-500">Option A: Cancel my current session</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Cancels your currently booked meeting slot and stops all future 24h, 1h, and 5m reminder emails.
+              </p>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="w-full rounded-xl mt-1 text-xs font-semibold"
+                onClick={handleCancelCurrentSession}
+              >
+                🚫 Cancel My Current Session
+              </Button>
+            </div>
+
+            {/* Option B: Book Another Session */}
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-2">
+              <p className="text-xs font-bold text-primary">Option B: Book another session</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Keep your current booking active and proceed to schedule an additional new meeting slot.
+              </p>
+              <Button
+                variant="default"
+                size="sm"
+                className="w-full rounded-xl mt-1 text-xs font-semibold"
+                onClick={handleBookAnotherSession}
+              >
+                📅 Book Another Session →
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
