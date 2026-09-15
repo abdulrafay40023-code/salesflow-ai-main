@@ -12,11 +12,15 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as BookRouteImport } from './routes/book'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppAdminRouteImport } from './routes/_app.admin'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppEmailRouteImport } from './routes/_app.email'
 import { Route as AppFollowUpsRouteImport } from './routes/_app.follow-ups'
 import { Route as AppLeadsRouteImport } from './routes/_app.leads'
+import { Route as AppLivechatRouteImport } from './routes/_app.livechat'
+import { Route as AppMetaLeadsRouteImport } from './routes/_app.meta-leads'
+import { Route as AppNotificationsRouteImport } from './routes/_app.notifications'
 import { Route as AppReportsRouteImport } from './routes/_app.reports'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 
@@ -32,6 +36,11 @@ const AppRoute = AppRouteImport.update({
 const BookRoute = BookRouteImport.update({
   id: '/book',
   path: '/book',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppAdminRoute = AppAdminRouteImport.update({
@@ -59,6 +68,21 @@ const AppLeadsRoute = AppLeadsRouteImport.update({
   path: '/leads',
   getParentRoute: () => AppRoute,
 } as any)
+const AppLivechatRoute = AppLivechatRouteImport.update({
+  id: '/livechat',
+  path: '/livechat',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMetaLeadsRoute = AppMetaLeadsRouteImport.update({
+  id: '/meta-leads',
+  path: '/meta-leads',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppNotificationsRoute = AppNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppReportsRoute = AppReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -73,22 +97,30 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/book': typeof BookRoute
+  '/login': typeof LoginRoute
   '/admin': typeof AppAdminRoute
   '/dashboard': typeof AppDashboardRoute
   '/email': typeof AppEmailRoute
   '/follow-ups': typeof AppFollowUpsRoute
   '/leads': typeof AppLeadsRoute
+  '/livechat': typeof AppLivechatRoute
+  '/meta-leads': typeof AppMetaLeadsRoute
+  '/notifications': typeof AppNotificationsRoute
   '/reports': typeof AppReportsRoute
   '/settings': typeof AppSettingsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/book': typeof BookRoute
+  '/login': typeof LoginRoute
   '/admin': typeof AppAdminRoute
   '/dashboard': typeof AppDashboardRoute
   '/email': typeof AppEmailRoute
   '/follow-ups': typeof AppFollowUpsRoute
   '/leads': typeof AppLeadsRoute
+  '/livechat': typeof AppLivechatRoute
+  '/meta-leads': typeof AppMetaLeadsRoute
+  '/notifications': typeof AppNotificationsRoute
   '/reports': typeof AppReportsRoute
   '/settings': typeof AppSettingsRoute
 }
@@ -97,11 +129,15 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/book': typeof BookRoute
+  '/login': typeof LoginRoute
   '/_app/admin': typeof AppAdminRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/email': typeof AppEmailRoute
   '/_app/follow-ups': typeof AppFollowUpsRoute
   '/_app/leads': typeof AppLeadsRoute
+  '/_app/livechat': typeof AppLivechatRoute
+  '/_app/meta-leads': typeof AppMetaLeadsRoute
+  '/_app/notifications': typeof AppNotificationsRoute
   '/_app/reports': typeof AppReportsRoute
   '/_app/settings': typeof AppSettingsRoute
 }
@@ -110,22 +146,30 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/book'
+    | '/login'
     | '/admin'
     | '/dashboard'
     | '/email'
     | '/follow-ups'
     | '/leads'
+    | '/livechat'
+    | '/meta-leads'
+    | '/notifications'
     | '/reports'
     | '/settings'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/book'
+    | '/login'
     | '/admin'
     | '/dashboard'
     | '/email'
     | '/follow-ups'
     | '/leads'
+    | '/livechat'
+    | '/meta-leads'
+    | '/notifications'
     | '/reports'
     | '/settings'
   id:
@@ -133,11 +177,15 @@ export interface FileRouteTypes {
     | '/'
     | '/_app'
     | '/book'
+    | '/login'
     | '/_app/admin'
     | '/_app/dashboard'
     | '/_app/email'
     | '/_app/follow-ups'
     | '/_app/leads'
+    | '/_app/livechat'
+    | '/_app/meta-leads'
+    | '/_app/notifications'
     | '/_app/reports'
     | '/_app/settings'
   fileRoutesById: FileRoutesById
@@ -146,6 +194,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   BookRoute: typeof BookRoute
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -169,6 +218,13 @@ declare module '@tanstack/react-router' {
       path: '/book'
       fullPath: '/book'
       preLoaderRoute: typeof BookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/admin': {
@@ -206,6 +262,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLeadsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/livechat': {
+      id: '/_app/livechat'
+      path: '/livechat'
+      fullPath: '/livechat'
+      preLoaderRoute: typeof AppLivechatRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/meta-leads': {
+      id: '/_app/meta-leads'
+      path: '/meta-leads'
+      fullPath: '/meta-leads'
+      preLoaderRoute: typeof AppMetaLeadsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/notifications': {
+      id: '/_app/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof AppNotificationsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/reports': {
       id: '/_app/reports'
       path: '/reports'
@@ -229,6 +306,9 @@ interface AppRouteChildren {
   AppEmailRoute: typeof AppEmailRoute
   AppFollowUpsRoute: typeof AppFollowUpsRoute
   AppLeadsRoute: typeof AppLeadsRoute
+  AppLivechatRoute: typeof AppLivechatRoute
+  AppMetaLeadsRoute: typeof AppMetaLeadsRoute
+  AppNotificationsRoute: typeof AppNotificationsRoute
   AppReportsRoute: typeof AppReportsRoute
   AppSettingsRoute: typeof AppSettingsRoute
 }
@@ -239,6 +319,9 @@ const AppRouteChildren: AppRouteChildren = {
   AppEmailRoute: AppEmailRoute,
   AppFollowUpsRoute: AppFollowUpsRoute,
   AppLeadsRoute: AppLeadsRoute,
+  AppLivechatRoute: AppLivechatRoute,
+  AppMetaLeadsRoute: AppMetaLeadsRoute,
+  AppNotificationsRoute: AppNotificationsRoute,
   AppReportsRoute: AppReportsRoute,
   AppSettingsRoute: AppSettingsRoute,
 }
@@ -249,6 +332,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   BookRoute: BookRoute,
+  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

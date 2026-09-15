@@ -13,6 +13,7 @@ import {
   Bell,
   Clock,
   AlertCircle,
+  PhoneCall,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -22,9 +23,35 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { statusLabels } from "@/lib/crm-data";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ALL_STATUSES, isAdminEmail, statusLabels } from "@/lib/crm-data";
 import { statusTone, useCrm } from "@/lib/crm-store";
 import { supabase } from "@/lib/supabase";
+import {
+  fetchPendingSignups,
+  approvePendingSignup,
+  removePendingOrApprovedSignup,
+  type PendingSignup,
+} from "@/lib/pending-signups";
+import { cancelMeetingBookingFn } from "@/lib/server-actions";
+import { AiCallDialog } from "@/components/crm/AiCallDialog";
+
+function formatRequestedDate(d?: string) {
+  if (!d) return "Recently";
+  try {
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return "Recently";
+    return date.toLocaleString();
+  } catch {
+    return "Recently";
+  }
+}
 
 export const Route = createFileRoute("/_app/dashboard")({
   head: () => ({
@@ -92,16 +119,25 @@ function EmptyState({ icon: Icon, text }: { icon: React.ElementType; text: strin
 // MeetingNotifications — isolated notification component
 // Handles Zoom vs non-Zoom meetings with consistent 10-min post-start retention logic
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// MeetingNotifications — Unified Meeting Notification Banner for Working Agents
+// Exact Color States:
+// 🔴 RED: Meeting is LIVE right now (nowMs >= meetingStartMs and up to 10 mins post-start)
+// 🟧 ORANGE: Meeting scheduled for TODAY (before start time)
+// 🟦 BLUE: Meeting scheduled for TOMORROW / Future
+// ─────────────────────────────────────────────
 function MeetingNotifications({
   meetings,
+  leads,
   dismissedNotifs,
   dismissNotif,
 }: {
   meetings: DbMeeting[];
+  leads: DbLead[];
   dismissedNotifs: Set<string>;
-  dismissNotif: (id: string) => void;
+  dismissNotif: (id: string, type: "today" | "future") => void;
 }) {
-  // Live ticker updates every 2 seconds so start-time state transitions & auto-disappears happen live
+  // Live ticker updates every 2 seconds for real-time state changes and auto-dismissal
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
@@ -109,49 +145,45 @@ function MeetingNotifications({
     return () => clearInterval(timer);
   }, []);
 
-  // Filter out cancelled meetings
-  const activeMeetings = meetings.filter(
-    (m) => m && m.scheduled_time && (!m.title || !m.title.includes("[CANCELLED]"))
+  // Filter out cancelled or completed meetings
+  const activeMeetings = (meetings || []).filter(
+    (m) => m && m.scheduled_time && !m.completed && (!m.title || !m.title.includes("[CANCELLED]"))
   );
 
-  // Separate Zoom meetings from non-Zoom meetings
-  const zoomMeetings = activeMeetings.filter((m) => m.title && m.title.includes("|| ZOOM:"));
-  const nonZoomMeetings = activeMeetings.filter((m) => !m.title || !m.title.includes("|| ZOOM:"));
+  const now = new Date(nowMs);
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+  const endOfTomorrow = endOfToday + 24 * 60 * 60 * 1000;
 
-  // ── Zoom Meeting Cards ──
-  // Per-meeting independent evaluation:
-  // 1. Appears when booked in normal/default color.
-  // 2. Turns RED at THAT SPECIFIC meeting's scheduled start time (nowMs >= meetingStartMs).
-  // 3. Stays RED and visible until exactly 10 minutes AFTER scheduled start time.
-  // 4. Auto-disappears 10 minutes after scheduled start time (nowMs - meetingStartMs > 10 * 60 * 1000).
-  // 5. Always has a manual "X" dismiss button at any stage.
-  const zoomCards: Array<{
+  const cards: Array<{
     id: string;
-    isRed: boolean;
+    isLive: boolean;
+    isToday: boolean;
+    isTomorrow: boolean;
+    isFuture: boolean;
     meeting: DbMeeting;
     label: string;
     formattedTime: string;
+    clientName: string;
+    clientEmail: string;
+    zoomLink: string;
   }> = [];
 
-  for (const m of zoomMeetings) {
+  for (const m of activeMeetings) {
     if (!m.scheduled_time) continue;
     const meetingStartMs = new Date(m.scheduled_time).getTime();
     if (isNaN(meetingStartMs)) continue;
 
-    // Elapsed time since meeting start time (ms)
+    // Elapsed time since meeting start (in ms)
     const elapsedPostStart = nowMs - meetingStartMs;
 
-    // REQUIREMENT: Auto-disappear exactly 10 minutes AFTER scheduled start time
+    // Auto-disappear 10 minutes AFTER scheduled start time
     if (elapsedPostStart > 10 * 60 * 1000) continue;
 
-    const id = `zoom-${m.id}`;
-    if (dismissedNotifs.has(id)) continue;
-
-    // Turn RED at THAT meeting's scheduled start time
-    const isRed = nowMs >= meetingStartMs;
-
+    // Extract time label (e.g., "10:30 AM")
     let timeLabel = "";
-    const cleanTitle = m.title ? (m.title.split("|| ZOOM:")[0] || "").trim() : "";
+    const rawTitleWithoutNow = m.title ? m.title.split("|| NOW_SENT")[0].trim() : "";
+    const cleanTitle = rawTitleWithoutNow ? (rawTitleWithoutNow.split("|| ZOOM:")[0] || "").trim() : "";
     if (cleanTitle.includes("@ ")) {
       timeLabel = cleanTitle.split("@ ")[1]?.trim() || "";
     }
@@ -171,165 +203,190 @@ function MeetingNotifications({
       hour12: true,
     });
 
-    zoomCards.push({ id, isRed, meeting: m, label: timeLabel, formattedTime });
-  }
+    // Extract client name & email cleanly
+    let clientName = "";
+    let clientEmail = "";
+    let linkedLead: DbLead | undefined = undefined;
 
-  // ── Non-Zoom / Stage Meeting Cards ──
-  // REQUIREMENT FOR ALL CARDS:
-  // Appear at their normal trigger time (1h before, 24h before, etc.),
-  // BUT remain visible through the start time until EXACTLY 10 minutes AFTER scheduled start time,
-  // then auto-disappear together.
-  const nonZoomCards: Array<{
-    id: string;
-    type: "now" | "1h" | "24h";
-    meeting: DbMeeting;
-    label: string;
-  }> = [];
+    if (m.lead_id && leads) {
+      linkedLead = leads.find((l) => l.id === m.lead_id);
+      if (linkedLead) {
+        clientName = linkedLead.name || "";
+        clientEmail = linkedLead.email || "";
+      }
+    }
 
-  for (const m of nonZoomMeetings) {
-    if (!m.scheduled_time) continue;
-    const meetingStartMs = new Date(m.scheduled_time).getTime();
-    if (isNaN(meetingStartMs)) continue;
+    if (!clientEmail && m.title) {
+      const emailMatch = m.title.match(/[\w.-]+@[\w.-]+\.\w+/);
+      if (emailMatch) clientEmail = emailMatch[0].trim();
+    }
 
-    // Elapsed time since meeting start time (ms)
-    const elapsedPostStart = nowMs - meetingStartMs;
+    if (!clientName && cleanTitle) {
+      // Clean title format: "Sales Meeting with [Name] ([Email]) on YYYY-MM-DD @ HH:MM AM/PM"
+      const withMatch = cleanTitle.match(/Sales Meeting with ([^(]+?)(?:\s*\([^)]*\))?\s+on\s+/i);
+      if (withMatch && withMatch[1]) {
+        clientName = withMatch[1].trim();
+      } else if (cleanTitle.includes("Sales Meeting with ")) {
+        const afterWith = cleanTitle.split("Sales Meeting with ")[1]?.split(" on ")[0]?.trim() || "";
+        clientName = afterWith.replace(/\([^)]*\)/g, "").trim();
+      } else if (clientEmail) {
+        clientName = clientEmail.split("@")[0];
+      }
+    }
 
-    // REQUIREMENT: Auto-disappear 10 minutes AFTER scheduled start time
-    if (elapsedPostStart > 10 * 60 * 1000) continue;
+    clientName = (clientName || "").replace(/\(\s*\)/g, "").trim();
+    if (!clientName && clientEmail) {
+      clientName = clientEmail.split("@")[0];
+    }
 
-    const diffMs = meetingStartMs - nowMs;
+    if (!linkedLead && leads) {
+      linkedLead = leads.find(
+        (l) =>
+          (clientEmail && l.email && l.email.toLowerCase() === clientEmail.toLowerCase()) ||
+          (clientName && l.name && l.name.trim().toLowerCase() === clientName.toLowerCase()) ||
+          (l.email && m.title && m.title.toLowerCase().includes(l.email.toLowerCase()))
+      );
+    }
 
-    let timeLabel = new Date(m.scheduled_time).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
+    // If meeting has started (red/live state) AND the linked lead has been marked contacted, won, or replied → hide immediately!
+    if (elapsedPostStart >= 0 && linkedLead) {
+      if (linkedLead.status === "contacted" || linkedLead.status === "won" || linkedLead.status === "replied") {
+        continue;
+      }
+    }
+
+    const isLive = nowMs >= meetingStartMs;
+    const isToday = meetingStartMs >= startOfToday && meetingStartMs <= endOfToday && !isLive;
+    const isTomorrow = meetingStartMs > endOfToday && meetingStartMs <= endOfTomorrow;
+    const isFuture = meetingStartMs > endOfToday;
+
+    const id = `meeting-notif-${m.id}`;
+
+    // Dismissal Resurfacing Logic (Req 4):
+    // If meeting is Today or Live, only hide if dismissed today. If it was previously dismissed
+    // when it was in the future, it automatically resurfaces on the meeting day!
+    if (isLive || isToday) {
+      if (dismissedNotifs.has(`${id}_today`)) continue;
+    } else {
+      if (dismissedNotifs.has(`${id}_future`)) continue;
+    }
+
+    // Format clean YYYY-MM-DD date string (e.g. 2026-08-18)
+    const mDateObj = new Date(m.scheduled_time);
+    const yStr = mDateObj.getFullYear();
+    const monStr = String(mDateObj.getMonth() + 1).padStart(2, "0");
+    const dStr = String(mDateObj.getDate()).padStart(2, "0");
+    const meetingDateStr = `${yStr}-${monStr}-${dStr}`;
+
+    // Extract Zoom Link
+    let zoomLink = "https://zoom.us/j/5539578967";
+    if (rawTitleWithoutNow.includes("|| ZOOM:")) {
+      zoomLink = rawTitleWithoutNow.split("|| ZOOM:")[1]?.trim() || zoomLink;
+    }
+
+    cards.push({
+      id,
+      isLive,
+      isToday,
+      isTomorrow,
+      isFuture,
+      meeting: m,
+      label: timeLabel,
+      formattedTime,
+      meetingDateStr,
+      clientName,
+      clientEmail,
+      zoomLink,
     });
-    const titlePart = m.title ? m.title.trim() : "";
-    if (titlePart.includes("@ ")) {
-      timeLabel = titlePart.split("@ ")[1]?.trim() || timeLabel;
-    }
-
-    // Card 1: Starting NOW / 5-min card (Appears when start time is <= 5 mins away or has passed, stays visible until start_time + 10 mins)
-    if (diffMs <= 5 * 60 * 1000 && elapsedPostStart <= 10 * 60 * 1000) {
-      const id = `now-${m.id}`;
-      if (!dismissedNotifs.has(id)) nonZoomCards.push({ id, type: "now", meeting: m, label: timeLabel });
-    }
-    // Card 2: 1-Hour Reminder card (Appears when start time is <= 65 mins away, stays visible until start_time + 10 mins)
-    else if (diffMs <= 65 * 60 * 1000 && elapsedPostStart <= 10 * 60 * 1000) {
-      const id = `1h-${m.id}`;
-      if (!dismissedNotifs.has(id)) nonZoomCards.push({ id, type: "1h", meeting: m, label: timeLabel });
-    }
-    // Card 3: 24-Hour / Tomorrow Reminder card (Appears when start time is <= 25 hours away, stays visible until start_time + 10 mins)
-    else if (diffMs <= 25 * 60 * 60 * 1000 && elapsedPostStart <= 10 * 60 * 1000) {
-      const id = `24h-${m.id}`;
-      if (!dismissedNotifs.has(id)) nonZoomCards.push({ id, type: "24h", meeting: m, label: timeLabel });
-    }
   }
 
-  if (zoomCards.length === 0 && nonZoomCards.length === 0) return null;
+  if (cards.length === 0) return null;
+
+  // Stacking in order: Live meetings first, followed by today's meetings, then tomorrow/future meetings
+  cards.sort((a, b) => {
+    if (a.isLive && !b.isLive) return -1;
+    if (!a.isLive && b.isLive) return 1;
+    const timeA = new Date(a.meeting.scheduled_time).getTime();
+    const timeB = new Date(b.meeting.scheduled_time).getTime();
+    return timeA - timeB;
+  });
 
   return (
-    <div className="space-y-2">
-      {/* Zoom Meeting Notifications */}
-      {zoomCards.map((n) => {
-        const isRed = n.isRed;
-        const borderColor = isRed
-          ? "border-red-500/50 bg-red-950/40 text-red-100"
-          : "border-orange-500/30 bg-orange-500/10 text-foreground";
-        const iconBg = isRed ? "bg-red-500/20 text-red-400" : "bg-orange-500/20 text-orange-400";
-        const Icon = isRed ? AlertCircle : CalendarCheck;
+    <div className="space-y-3">
+      {cards.map((n) => {
+        let borderColor = "border-orange-500/40 bg-orange-950/40 text-orange-100";
+        let iconBg = "bg-orange-500/20 text-orange-400";
+        let btnColor = "bg-orange-600 hover:bg-orange-500 text-white";
+        let Icon = CalendarCheck;
+        let title = `🟧 Meeting Scheduled Today — ${n.label}`;
+        let subtitle = `Your sales meeting is scheduled for Today at ${n.label}.`;
 
-        const title = isRed
-          ? `🔴 Zoom Meeting Started — ${n.label}`
-          : `📹 Zoom Meeting Scheduled — ${n.label}`;
-        const subtitle = isRed
-          ? "Meeting in progress! Join Zoom now to connect."
-          : `Scheduled for ${n.formattedTime}`;
-
-        let zoomLink = "https://zoom.us/j/5539578967";
-        if (n.meeting.title && n.meeting.title.includes("|| ZOOM: ")) {
-          zoomLink = n.meeting.title.split("|| ZOOM: ")[1]?.trim() || zoomLink;
+        if (n.isLive) {
+          // 🔴 RED: Meeting is happening right now (active for 10 mins post-start)
+          borderColor = "border-red-500/60 bg-red-950/70 text-red-100 ring-2 ring-red-500/30";
+          iconBg = "bg-red-500/25 text-red-400";
+          btnColor = "bg-red-600 hover:bg-red-500 animate-pulse text-white shadow-lg shadow-red-900/50";
+          Icon = AlertCircle;
+          title = `🔴 Meeting in Progress (Started ${n.label})`;
+          subtitle = "Meeting is live right now! Click Join Zoom to enter the call.";
+        } else if (n.isFuture) {
+          // 🟦 BLUE: Tomorrow or Future meeting
+          borderColor = "border-blue-500/40 bg-blue-950/40 text-blue-100";
+          iconBg = "bg-blue-500/20 text-blue-400";
+          btnColor = "bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-950/50";
+          Icon = CalendarCheck;
+          title = n.isTomorrow ? `🟦 Meeting Scheduled Tomorrow — ${n.label}` : `🟦 Meeting Scheduled (${n.meetingDateStr}) — ${n.label}`;
+          subtitle = n.isTomorrow
+            ? `Your sales meeting is scheduled for Tomorrow at ${n.label}.`
+            : `Your sales meeting is scheduled for ${n.meetingDateStr} at ${n.label}.`;
         }
 
         return (
           <div
             key={n.id}
-            className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 ${borderColor} transition-all duration-500 shadow-md`}
+            className={`flex flex-wrap items-center gap-3 rounded-2xl border p-4 ${borderColor} transition-all duration-500 shadow-xl backdrop-blur-md animate-fade-in`}
           >
-            <span className={`grid size-8 place-items-center rounded-lg shrink-0 ${iconBg}`}>
-              <Icon className={`size-4 ${isRed ? "animate-pulse" : ""}`} />
+            <span className={`grid size-10 place-items-center rounded-xl shrink-0 ${iconBg} border border-current/20`}>
+              <Icon className={`size-5 ${n.isLive ? "animate-pulse" : ""}`} />
             </span>
 
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold">{title}</p>
-              <p className="text-xs text-muted-foreground">{subtitle}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-bold tracking-tight">{title}</p>
+                {n.isLive && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-300 border border-red-500/40 animate-pulse">
+                    LIVE NOW
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 mt-1 text-xs opacity-90">
+                <span>{subtitle}</span>
+                {(n.clientName || n.clientEmail) && (
+                  <span className="inline-flex items-center gap-1 font-semibold text-amber-300 bg-amber-500/15 px-2.5 py-0.5 rounded-lg border border-amber-500/30">
+                    👤 Client: {n.clientName || "Lead"} {n.clientEmail && n.clientEmail !== n.clientName ? `(${n.clientEmail})` : ""}
+                  </span>
+                )}
+              </div>
             </div>
 
-            <a
-              href={zoomLink}
-              target="_blank"
-              rel="noreferrer"
-              className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors text-white ${
-                isRed ? "bg-red-600 hover:bg-red-500 animate-pulse" : "bg-blue-600 hover:bg-blue-500"
-              }`}
-            >
-              📹 Join Zoom
-            </a>
+            <div className="flex items-center gap-2">
+              <a
+                href={n.zoomLink}
+                target="_blank"
+                rel="noreferrer"
+                className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold shadow-md transition-all active:scale-95 ${btnColor}`}
+              >
+                📹 Join Zoom
+              </a>
 
-            {/* Manual X dismiss button — available at all times */}
-            <button
-              onClick={() => dismissNotif(n.id)}
-              className="ml-auto shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
-              title="Dismiss notification"
-            >
-              <X className="size-4" />
-            </button>
-          </div>
-        );
-      })}
-
-      {/* Non-Zoom Meeting Notifications */}
-      {nonZoomCards.map((n) => {
-        const isNow = n.type === "now";
-        const is1h = n.type === "1h";
-        const borderColor = isNow
-          ? "border-red-500/30 bg-red-500/8"
-          : is1h
-          ? "border-yellow-500/30 bg-yellow-500/8"
-          : "border-blue-500/30 bg-blue-500/8";
-        const iconColor = isNow ? "text-red-400" : is1h ? "text-yellow-400" : "text-blue-400";
-        const iconBg = isNow ? "bg-red-500/15" : is1h ? "bg-yellow-500/15" : "bg-blue-500/15";
-        const Icon = isNow ? AlertCircle : is1h ? Clock : Bell;
-        const title = isNow
-          ? `🔴 Meeting Starting NOW — ${n.label}`
-          : is1h
-          ? `⏰ Meeting in 1 Hour — ${n.label}`
-          : `📅 Meeting Tomorrow — ${n.label}`;
-        const subtitle = isNow
-          ? "Your meeting is happening right now!"
-          : is1h
-          ? "Prepare your notes — meeting starts in less than 1 hour."
-          : "Meeting scheduled for tomorrow — be prepared.";
-
-        return (
-          <div
-            key={n.id}
-            className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 ${borderColor} transition-all duration-300`}
-          >
-            <span className={`grid size-8 place-items-center rounded-lg shrink-0 ${iconBg}`}>
-              <Icon className={`size-4 ${iconColor}`} />
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold">{title}</p>
-              <p className="text-xs text-muted-foreground">{subtitle}</p>
+              <button
+                onClick={() => dismissNotif(n.id, n.isToday || n.isLive ? "today" : "future")}
+                className="shrink-0 flex items-center justify-center size-8 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all active:scale-95 border border-white/10"
+                title="Dismiss notification"
+              >
+                <X className="size-4" />
+              </button>
             </div>
-            <button
-              onClick={() => dismissNotif(n.id)}
-              className="ml-auto shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
-              title="Dismiss"
-            >
-              <X className="size-3.5" />
-            </button>
           </div>
         );
       })}
@@ -339,7 +396,7 @@ function MeetingNotifications({
 
 function DashboardPage() {
   const { user } = useCrm();
-  const isAdmin = Boolean(user && (user.role === "admin" || user.email === "garryamelia6265@gmail.com"));
+  const isAdmin = Boolean(user && (user.role === "admin" || isAdminEmail(user.email)));
 
   const [dbLeads, setDbLeads] = useState<DbLead[]>([]);
   const [dbEmails, setDbEmails] = useState<DbEmailLog[]>([]);
@@ -347,6 +404,8 @@ function DashboardPage() {
   const [pendingProfiles, setPendingProfiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastSync, setLastSync] = useState<Date>(new Date());
+  const [callingLead, setCallingLead] = useState<any>(null);
+  const [isCallOpen, setIsCallOpen] = useState(false);
   const [dismissedNotifs, setDismissedNotifs] = useState<Set<string>>(() => {
     try {
       const stored = localStorage.getItem("crm_dismissed_notifs");
@@ -360,14 +419,15 @@ function DashboardPage() {
     } catch { return new Set<string>(); }
   });
 
-  function dismissNotif(id: string) {
+  function dismissNotif(id: string, type: "today" | "future" = "today") {
+    const taggedId = `${id}_${type}`;
     setDismissedNotifs((prev) => {
       const next = new Set(prev);
-      next.add(id);
+      next.add(taggedId);
       try {
         const stored = localStorage.getItem("crm_dismissed_notifs");
         const existing: Array<{id: string; time: number}> = stored ? JSON.parse(stored) : [];
-        existing.push({ id, time: Date.now() });
+        existing.push({ id: taggedId, time: Date.now() });
         localStorage.setItem("crm_dismissed_notifs", JSON.stringify(existing));
       } catch {}
       return next;
@@ -384,11 +444,11 @@ function DashboardPage() {
         .order("created_at", { ascending: false })
         .limit(100);
 
-      // Working agent sees only their own leads — use simple eq filter (email is stored as assigned_agent_name)
+      // Working agent sees only their own leads
       if (!isAdmin) {
         const agentEmail = (user?.email || "").trim();
         if (agentEmail) {
-          leadsQuery = leadsQuery.eq("assigned_agent_name", agentEmail);
+          leadsQuery = leadsQuery.ilike("assigned_agent_name", agentEmail);
         } else {
           leadsQuery = leadsQuery.eq("id", "00000000-0000-0000-0000-000000000000");
         }
@@ -400,12 +460,13 @@ function DashboardPage() {
           .from("emails_sent")
           .select("id,subject,status,sequence_type,sent_at,lead_id,lead_email")
           .order("sent_at", { ascending: false })
-          .limit(50),
+          .limit(200),
         supabase
           .from("meetings")
-          .select("id,title,scheduled_time,completed,lead_id,agent_email")
+          .select("id,title,scheduled_time,completed,lead_id,agent_email,reminder_5m_sent,reminder_1h_sent,reminder_24h_sent")
+          .gte("scheduled_time", new Date(Date.now() - 15 * 60 * 1000).toISOString()) // Only upcoming + last 15 mins
           .order("scheduled_time", { ascending: true })
-          .limit(50),
+          .limit(100),
         isAdmin
           ? supabase.from("profiles").select("*").order("created_at", { ascending: true })
           : Promise.resolve({ data: [] }),
@@ -423,6 +484,17 @@ function DashboardPage() {
             return assigned === myEmail;
           });
         }
+
+        // Auto-check 24h age: if a lead is "new" and > 24 hours old without booking/reply, mark "no_answer"
+        fetchedLeads = fetchedLeads.map((l) => {
+          const createdAtTime = new Date(l.created_at || 0).getTime();
+          const isOlderThan24h = createdAtTime > 0 && (Date.now() - createdAtTime) >= 24 * 60 * 60 * 1000;
+          if (l.status === "new" && isOlderThan24h) {
+            supabase.from("leads").update({ status: "no_answer" }).eq("id", l.id).then(() => {});
+            return { ...l, status: "no_answer" };
+          }
+          return l;
+        });
 
         setDbLeads(fetchedLeads);
       } else {
@@ -473,23 +545,9 @@ function DashboardPage() {
         setDbMeetings(meetings);
       }
 
-      if (isAdmin && profilesRes.status === "fulfilled" && Array.isArray((profilesRes.value as any)?.data)) {
-        const allProfiles = (profilesRes.value as any).data;
-        const pending = allProfiles.filter((p: any) => {
-          if (!p || !p.email || p.email === "garryamelia6265@gmail.com") return false;
-          if (p.role === "admin") return false;
-          if (p.avatar_url) {
-            try {
-              const parsed = JSON.parse(p.avatar_url);
-              return parsed.status === "pending" && parsed.approved !== true;
-            } catch {}
-          }
-          return false;
-        });
-
-
-
-        setPendingProfiles(pending);
+      if (isAdmin) {
+        const pending = await fetchPendingSignups();
+        setPendingProfiles(pending as any);
       }
 
     } catch (e) {
@@ -511,58 +569,47 @@ function DashboardPage() {
     fetchLive();
   }
 
-  async function handleApproveAgent(p: any) {
-    let phone = "";
-    if (p.avatar_url) {
-      try {
-        phone = JSON.parse(p.avatar_url).phone || "";
-      } catch {}
-    }
-    const meta = JSON.stringify({ phone, approved: true, status: "approved" });
-    const { error } = await supabase
-      .from("profiles")
-      .update({ avatar_url: meta, role: "agent" })
-      .eq("id", p.id);
-
-    if (error) {
-      toast.error("Failed to approve agent: " + error.message);
-    } else {
-      toast.success(`Approved ${p.full_name || p.email}! Access granted.`);
+  async function handleApproveAgent(req: any) {
+    try {
+      await approvePendingSignup(req);
+      toast.success(`✅ Approved ${req.name || req.email}! Access granted.`);
       fetchLive();
+    } catch (err: any) {
+      toast.error("Failed to approve agent: " + err.message);
     }
   }
 
-  async function handleRejectAgent(p: any) {
-    if (p.email === "garryamelia6265@gmail.com") return;
-    const { error } = await supabase.from("profiles").delete().eq("id", p.id);
-    if (error) {
-      toast.error("Failed to decline request: " + error.message);
-    } else {
-      toast.success(`Declined access request for ${p.full_name || p.email}.`);
+  async function handleRejectAgent(req: any) {
+    try {
+      await removePendingOrApprovedSignup(req.email);
+      toast.success(`❌ Declined request from ${req.name || req.email}.`);
       fetchLive();
+    } catch (err: any) {
+      toast.error("Failed to decline request: " + err.message);
     }
   }
 
   useEffect(() => {
     fetchLive();
 
+    const subId = Math.random().toString(36).substring(2, 9);
+
     const leadsSub = supabase
-      .channel("dash-leads")
+      .channel(`dash-leads-${subId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => fetchLive())
       .subscribe();
 
     const emailSub = supabase
-      .channel("dash-emails")
+      .channel(`dash-emails-${subId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "emails_sent" }, () =>
         fetchLive(),
       )
       .subscribe();
 
     const meetingSub = supabase
-      .channel("dash-meetings")
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "meetings" }, (payload) => {
+      .channel(`dash-meetings-${subId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "meetings" }, (payload) => {
         fetchLive();
-        // Show toast notification when meeting starts (completed becomes true)
         if (payload?.new?.completed === true && payload?.old?.completed === false) {
           const title = payload?.new?.title || "Your meeting";
           toast(`🔴 Meeting Started! ${title}`, {
@@ -576,28 +623,92 @@ function DashboardPage() {
     let profileSub: any;
     if (isAdmin) {
       profileSub = supabase
-        .channel("dash-profiles")
+        .channel(`dash-profiles-${subId}`)
         .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => fetchLive())
         .subscribe();
     }
 
-    const interval = setInterval(fetchLive, 30000);
+    // Auto-refresh when tab comes into focus
+    const onVisibilityOrFocus = () => {
+      fetchLive();
+    };
+    window.addEventListener("focus", onVisibilityOrFocus);
+    document.addEventListener("visibilitychange", onVisibilityOrFocus);
+
+    // Poll reminders every 60 seconds
+    const reminderInterval = setInterval(() => {
+      fetch("/api/check-reminders", { method: "POST" }).catch(() => {});
+      fetchLive();
+    }, 60000);
+
+    // Fast sync every 5 seconds so both admin and agent dashboards are always 100% matched
+    const interval = setInterval(fetchLive, 5000);
 
     return () => {
       leadsSub.unsubscribe();
       emailSub.unsubscribe();
       meetingSub.unsubscribe();
       if (profileSub) profileSub.unsubscribe();
+      window.removeEventListener("focus", onVisibilityOrFocus);
+      document.removeEventListener("visibilitychange", onVisibilityOrFocus);
       clearInterval(interval);
+      clearInterval(reminderInterval);
     };
   }, [user?.email, user?.role, user?.name, isAdmin]);
 
   async function handleUpdateLeadStatus(leadId: string, newStatus: string) {
+    const updatedLead = dbLeads.find((l) => l.id === leadId);
+    const leadEmail = updatedLead?.email?.toLowerCase();
+    const leadName = updatedLead?.name?.toLowerCase();
+
+    // Instantly update local state so notification and status disappear immediately
+    setDbLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, status: newStatus } : l));
+
+    if (newStatus === "contacted" || newStatus === "won" || newStatus === "replied" || newStatus === "booking_cancelled") {
+      setDbMeetings((prev) =>
+        prev.map((m) => {
+          const isMatch =
+            m.lead_id === leadId ||
+            (leadEmail && m.title && m.title.toLowerCase().includes(leadEmail)) ||
+            (leadName && m.title && m.title.toLowerCase().includes(leadName));
+          return isMatch ? { ...m, completed: true } : m;
+        })
+      );
+    }
+
+    if (newStatus === "booking_cancelled" && updatedLead?.email) {
+      cancelMeetingBookingFn({
+        data: {
+          leadEmail: updatedLead.email,
+          cancelledBy: "agent",
+        },
+      }).catch(console.error);
+    }
+
     try {
-      await supabase.from("leads").update({ status: newStatus }).eq("id", leadId);
-      fetchLive();
+      const nowIso = new Date().toISOString();
+      type DashboardLeadUpdate = {
+        status: string;
+        contacted_at?: string;
+        booked_at?: string;
+        won_at?: string;
+      };
+      const payload: DashboardLeadUpdate = { status: newStatus };
+      if (newStatus === "contacted" || newStatus === "replied") {
+        payload.contacted_at = nowIso;
+      } else if (newStatus === "booked") {
+        payload.contacted_at = nowIso;
+        payload.booked_at = nowIso;
+      } else if (newStatus === "won") {
+        payload.contacted_at = nowIso;
+        payload.won_at = nowIso;
+      }
+
+      await supabase.from("leads").update(payload).eq("id", leadId);
+      fetchLive(); // then re-sync from DB
     } catch (e) {
       console.error("Failed to update status:", e);
+      fetchLive(); // re-sync even on error
     }
   }
 
@@ -612,7 +723,10 @@ function DashboardPage() {
 
   // Stats from Supabase (live)
   const safeLeads = (dbLeads || []).filter(Boolean);
-  const safeMeetings = (dbMeetings || []).filter(Boolean);
+  // Exclude completed/cancelled meetings from active booked count
+  const safeMeetings = (dbMeetings || []).filter(
+    (m) => m && !m.completed && (!m.title || !m.title.includes("[CANCELLED]"))
+  );
   const safeEmails = (dbEmails || []).filter(Boolean);
 
   const total = safeLeads.length;
@@ -625,34 +739,54 @@ function DashboardPage() {
   const todayEnd = new Date();
   todayEnd.setHours(23, 59, 59, 999);
 
-  const uncompletedMeetings = safeMeetings.filter((m) => !m.completed);
-  const todayMeetings = uncompletedMeetings.filter((m) => {
+  const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+  const tomorrowEnd = new Date(todayEnd.getTime() + 24 * 60 * 60 * 1000);
+
+  const todayMeetings = safeMeetings.filter((m) => {
     if (!m.scheduled_time) return false;
     const mDate = new Date(m.scheduled_time);
     return !isNaN(mDate.getTime()) && mDate >= todayStart && mDate <= todayEnd;
   });
 
+  const tomorrowMeetings = safeMeetings.filter((m) => {
+    if (!m.scheduled_time) return false;
+    const mDate = new Date(m.scheduled_time);
+    return !isNaN(mDate.getTime()) && mDate >= tomorrowStart && mDate <= tomorrowEnd;
+  });
+
   const meetingsToday = todayMeetings.length;
+  const meetingsTomorrow = tomorrowMeetings.length;
 
   // Email Status counts
   // Sent = only welcome emails (sequence_type === "welcome")
   const emailSent = safeEmails.filter((e) => e && e.sequence_type === "welcome").length;
-  // Replied = leads/emails with replied status
-  const emailReplied = Math.max(
-    safeEmails.filter((e) => e && e.status === "replied").length,
-    safeLeads.filter((l) => l && l.status === "replied").length
-  );
-  // Booked = meetings booked count (from meetings table)
+  // Replied = ONLY leads whose status is explicitly "replied" (not double-counted with email rows)
+  const emailReplied = safeLeads.filter((l) => l && l.status === "replied").length;
+  // Booked = active meetings booked count
   const emailBooked = safeMeetings.length;
   const emailTotal = Math.max(emailSent + emailReplied + emailBooked, 1);
 
-  // Automated Follow-up Sequence Counts
+  // Automated Follow-up Sequence Counts (3 stages: 24h, 48h, 72h)
   const fu24Count = safeEmails.filter((e) => e && (e.sequence_type === "followup_24h" || (e.subject && e.subject.toLowerCase().includes("quick follow-up")))).length;
   const fu48Count = safeEmails.filter((e) => e && (e.sequence_type === "followup_48h" || (e.subject && e.subject.toLowerCase().includes("following up")))).length;
   const fu72Count = safeEmails.filter((e) => e && (e.sequence_type === "followup_72h" || (e.subject && e.subject.toLowerCase().includes("demo")))).length;
-  const fu10dCount = safeEmails.filter((e) => e && (e.sequence_type === "followup_10d" || (e.subject && e.subject.toLowerCase().includes("final check-in")))).length;
 
-  const latestLeads = safeLeads.slice(0, 5);
+  const latestLeads = [...safeLeads]
+    .sort((a, b) => {
+      const statusWeight: Record<string, number> = {
+        new: 1,
+        no_answer: 2,
+        contacted: 3,
+        replied: 4,
+        booked: 5,
+        won: 6,
+      };
+      const wA = statusWeight[a.status] || 1;
+      const wB = statusWeight[b.status] || 1;
+      if (wA !== wB) return wA - wB;
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    })
+    .slice(0, 5);
 
   return (
     <div className="space-y-6">
@@ -686,14 +820,25 @@ function DashboardPage() {
         }
       />
 
-      {/* Primary Metrics Grid (5 Clean Cards) */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      {/* Primary Metrics Grid (6 Clean Cards) — FIRST directly below Header */}
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Total Leads" value={total} icon={Users} hint="in workspace" />
         <StatCard label="Contacted" value={contacted} icon={Mail} tone="info" hint="calls & outreach" />
         <StatCard label="Meetings Booked" value={meetingsBooked} icon={CalendarCheck} tone="warning" hint="total booked" />
         <StatCard label="Meetings Today" value={meetingsToday} icon={CalendarCheck} tone="primary" hint="scheduled today" />
+        <StatCard label="Meetings Tomorrow" value={meetingsTomorrow} icon={CalendarCheck} tone="info" hint="scheduled tomorrow" />
         <StatCard label="Won Deals" value={wonLeads} icon={CheckCircle2} tone="success" hint="closed won" />
       </div>
+
+      {/* ── Notification Sections (Stacked BELOW the 5 Primary Metric Cards) ── */}
+      {!isAdmin && (
+        <MeetingNotifications
+          meetings={dbMeetings}
+          leads={safeLeads}
+          dismissedNotifs={dismissedNotifs}
+          dismissNotif={dismissNotif}
+        />
+      )}
 
       {/* Pending Agent Approval Notifications Banner (Admin Only) */}
       {isAdmin && pendingProfiles.length > 0 && (
@@ -715,12 +860,6 @@ function DashboardPage() {
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {pendingProfiles.map((p) => {
-              let phone = "";
-              if (p.avatar_url) {
-                try {
-                  phone = JSON.parse(p.avatar_url).phone || "";
-                } catch {}
-              }
               return (
                 <div
                   key={p.id}
@@ -728,10 +867,11 @@ function DashboardPage() {
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-white">
-                      {p.full_name || p.email.split("@")[0]}
+                      {p.name || p.full_name || p.email.split("@")[0]}
                     </p>
                     <p className="truncate text-xs text-slate-400">{p.email}</p>
-                    {phone && <p className="text-[11px] text-amber-300/90 mt-0.5 font-medium">📞 {phone}</p>}
+                    {p.phone && <p className="text-[11px] text-amber-300/90 mt-0.5 font-medium">📞 {p.phone}</p>}
+                    <p className="text-[10px] text-slate-500 mt-0.5">Requested: {formatRequestedDate(p.created_at || p.sent_at)}</p>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -817,8 +957,7 @@ function DashboardPage() {
       })()}
 
 
-      {/* ── Notification Sections (Meeting Cards for Admin & Agents) ── */}
-      <MeetingNotifications meetings={safeMeetings} dismissedNotifs={dismissedNotifs} dismissNotif={dismissNotif} />
+
 
       {/* Charts Row */}
       <div className="grid gap-4 lg:grid-cols-3">
@@ -840,21 +979,22 @@ function DashboardPage() {
             <EmptyState icon={Users} text="No leads yet. Import leads to see your pipeline." />
           ) : (
             <div className="mt-6 space-y-3">
-              {(["new", "contacted", "qualified", "meeting", "won", "lost"] as const).map((s) => {
+              {(["new", "no_answer", "contacted", "replied", "booked", "booking_cancelled", "won"] as const).map((s) => {
                 const count = dbLeads.filter((l) => l.status === s).length;
                 const pct = total > 0 ? Math.round((count / total) * 100) : 0;
                 const colors: Record<string, string> = {
                   new: "bg-blue-500",
+                  no_answer: "bg-slate-500",
                   contacted: "bg-purple-500",
-                  qualified: "bg-yellow-500",
-                  meeting: "bg-orange-500",
+                  replied: "bg-teal-500",
+                  booked: "bg-amber-500",
+                  booking_cancelled: "bg-rose-500",
                   won: "bg-emerald-500",
-                  lost: "bg-red-500",
                 };
                 return (
                   <div key={s} className="flex items-center gap-3">
                     <span className="w-20 shrink-0 text-xs capitalize text-muted-foreground">
-                      {s}
+                      {statusLabels[s] ?? s.replace(/_/g, " ")}
                     </span>
                     <div className="flex-1 overflow-hidden rounded-full bg-muted h-2">
                       <div
@@ -944,6 +1084,20 @@ function DashboardPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
+                    {l.phone && l.phone.trim().length > 3 && l.phone !== "—" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs rounded-lg text-violet-400 hover:text-white hover:bg-violet-600 border-violet-500/30 font-semibold gap-1 transition-all active:scale-95"
+                        onClick={() => {
+                          setCallingLead(l);
+                          setIsCallOpen(true);
+                        }}
+                      >
+                        <PhoneCall className="h-3 w-3" /> Call
+                      </Button>
+                    ) : null}
+
                     {l.status !== "contacted" && l.status !== "won" ? (
                       <Button
                         size="sm"
@@ -964,12 +1118,26 @@ function DashboardPage() {
                         <CheckCircle2 className="h-3 w-3 mr-1" /> Mark Won
                       </Button>
                     ) : null}
-                    <Badge
-                      variant="outline"
-                      className={`shrink-0 rounded-full capitalize ${statusTone[l.status as keyof typeof statusTone] ?? ""}`}
+
+                    {/* Inline Status Dropdown (Change status right from dashboard) */}
+                    <Select
+                      value={l.status}
+                      onValueChange={(v) => handleUpdateLeadStatus(l.id, v as any)}
                     >
-                      {statusLabels[l.status as keyof typeof statusLabels] ?? l.status}
-                    </Badge>
+                      <SelectTrigger
+                        className={`h-7 w-auto min-w-[110px] rounded-full border text-xs font-semibold px-2.5 py-0.5 gap-1 ${statusTone[l.status as keyof typeof statusTone] ?? "bg-slate-500/12 text-slate-400"}`}
+                        style={{ boxShadow: "none" }}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ALL_STATUSES.map((s) => (
+                          <SelectItem key={s} value={s} className="text-xs">
+                            {statusLabels[s]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               ))}
@@ -985,7 +1153,7 @@ function DashboardPage() {
               <h2 className="font-display text-base font-bold">Automated Follow-up Sequences</h2>
             </div>
             <p className="mt-1 text-xs text-primary-foreground/80">
-              Live tracking across 4 follow-up stages
+              Live tracking across 3 follow-up stages
             </p>
           </div>
           <div className="space-y-4 p-5">
@@ -993,7 +1161,6 @@ function DashboardPage() {
               ["24h Check-in Email", fu24Count, total > 0 ? Math.min(100, Math.round((fu24Count / total) * 100)) : 0],
               ["48h Value Touchpoint", fu48Count, total > 0 ? Math.min(100, Math.round((fu48Count / total) * 100)) : 0],
               ["72h Demo Invitation", fu72Count, total > 0 ? Math.min(100, Math.round((fu72Count / total) * 100)) : 0],
-              ["10d Final Touchpoint", fu10dCount, total > 0 ? Math.min(100, Math.round((fu10dCount / total) * 100)) : 0],
             ].map(([label, count, pct]) => (
               <div key={label as string}>
                 <div className="flex items-center justify-between text-sm">
@@ -1013,6 +1180,13 @@ function DashboardPage() {
           </div>
         </div>
       </div>
+
+      <AiCallDialog
+        open={isCallOpen}
+        onOpenChange={setIsCallOpen}
+        lead={callingLead}
+        onCallComplete={() => fetchLive()}
+      />
     </div>
   );
 }

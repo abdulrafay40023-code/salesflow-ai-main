@@ -4,6 +4,7 @@ const ZOOM_CLIENT_ID = "K2m6SbqPQlCzK354EmgePw";
 const ZOOM_CLIENT_SECRET = "7CwGWoM7Uzjr8XPCfdnoHJEI28P2gVIc";
 
 export type ZoomMeetingResult = {
+  success: boolean;
   joinUrl: string;
   startUrl?: string;
   meetingId?: string;
@@ -69,6 +70,7 @@ export async function createZoomMeeting({
     const meetingData = await meetingRes.json();
     if (meetingData && meetingData.join_url) {
       return {
+        success: true,
         joinUrl: meetingData.join_url,
         startUrl: meetingData.start_url,
         meetingId: String(meetingData.id || ""),
@@ -82,6 +84,7 @@ export async function createZoomMeeting({
     console.error("createZoomMeeting exception:", err);
     // Return fallback Zoom Personal Room URL if API call fails
     return {
+      success: false,
       joinUrl: "https://zoom.us/j/5539578967",
     };
   }

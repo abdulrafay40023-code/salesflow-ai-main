@@ -21,6 +21,7 @@ import {
   Check,
   X,
 } from "lucide-react";
+import { isAdminEmail, ADMIN_EMAILS } from "@/lib/crm-data";
 import { useCrm } from "@/lib/crm-store";
 import { supabase } from "@/lib/supabase";
 import {
@@ -107,8 +108,11 @@ function StatCard({ icon, label, value, sub, color }: StatCardProps) {
 function statusBadge(status: string) {
   const map: Record<string, string> = {
     new: "bg-blue-500/20 text-blue-300",
+    no_answer: "bg-slate-500/20 text-slate-300",
     contacted: "bg-purple-500/20 text-purple-300",
-    qualified: "bg-yellow-500/20 text-yellow-300",
+    replied: "bg-teal-500/20 text-teal-300",
+    booked: "bg-amber-500/20 text-amber-300",
+    booking_cancelled: "bg-rose-500/20 text-rose-300",
     meeting: "bg-orange-500/20 text-orange-300",
     won: "bg-emerald-500/20 text-emerald-300",
     lost: "bg-red-500/20 text-red-300",
@@ -132,7 +136,7 @@ function AdminPage() {
   const [tab, setTab] = useState<"agents" | "leads" | "emails">("agents");
   const [selectedAgent, setSelectedAgent] = useState<{ name: string; email: string } | null>(null);
 
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const isAdmin = Boolean(user && (user.role === "admin" || isAdminEmail(user.email)));
 
   async function fetchData() {
     setLoading(true);
@@ -277,10 +281,32 @@ function AdminPage() {
     { name: string; email: string; role: string; totalLeads: number; newLeads: number; contacted: number; won: number; emailsSent: number; replies: number }
   > = {};
 
+  // 0. Pre-populate all 3 registered Admins so they ALWAYS appear at the top
+  const defaultAdminNames: Record<string, string> = {
+    "garryamelia6265@gmail.com": "Garry Amelia",
+    "tzafar04@gmail.com": "T Zafar",
+    "annusraees@gmail.com": "Annus Raees",
+  };
+  ADMIN_EMAILS.forEach((email) => {
+    const key = email.toLowerCase();
+    const existingProf = profiles.find((p) => p.email.toLowerCase() === key);
+    agentStatsMap[key] = {
+      name: existingProf?.full_name || defaultAdminNames[key] || key.split("@")[0] || "Admin",
+      email: email,
+      role: "admin",
+      totalLeads: 0,
+      newLeads: 0,
+      contacted: 0,
+      won: 0,
+      emailsSent: 0,
+      replies: 0,
+    };
+  });
+
   // 1. Populate registered profiles from Supabase profiles table (ONLY APPROVED AGENTS AND ADMIN)
   profiles.forEach((p) => {
     if (!p.email) return;
-    const isMainAdmin = p.email.toLowerCase() === ADMIN_EMAIL;
+    const isMainAdmin = isAdminEmail(p.email);
     let isApproved = isMainAdmin;
     if ((p as any).avatar_url) {
       try {
@@ -295,17 +321,21 @@ function AdminPage() {
 
     const key = p.email.toLowerCase();
     const role = isMainAdmin ? "admin" : "agent";
-    agentStatsMap[key] = {
-      name: p.full_name || p.email.split("@")[0] || "Working Agent",
-      email: p.email,
-      role,
-      totalLeads: 0,
-      newLeads: 0,
-      contacted: 0,
-      won: 0,
-      emailsSent: 0,
-      replies: 0,
-    };
+    if (!agentStatsMap[key]) {
+      agentStatsMap[key] = {
+        name: p.full_name || p.email.split("@")[0] || "Working Agent",
+        email: p.email,
+        role,
+        totalLeads: 0,
+        newLeads: 0,
+        contacted: 0,
+        won: 0,
+        emailsSent: 0,
+        replies: 0,
+      };
+    } else if (p.full_name) {
+      agentStatsMap[key].name = p.full_name;
+    }
   });
 
   // 2. Populate active logged-in agents from emails_sent agent_presence records
@@ -321,7 +351,7 @@ function AdminPage() {
         agentStatsMap[email] = {
           name: name,
           email: e.lead_email,
-          role: e.lead_email === ADMIN_EMAIL ? "admin" : "agent",
+          role: isAdminEmail(e.lead_email) ? "admin" : "agent",
           totalLeads: 0,
           newLeads: 0,
           contacted: 0,
@@ -345,7 +375,7 @@ function AdminPage() {
       agentStatsMap[matchingKey] = {
         name: displayName,
         email: displayName.includes("@") ? displayName : "—",
-        role: displayName === "garryamelia6265@gmail.com" ? "admin" : "agent",
+        role: isAdminEmail(displayName) ? "admin" : "agent",
         totalLeads: 0,
         newLeads: 0,
         contacted: 0,
@@ -363,7 +393,20 @@ function AdminPage() {
     if (l.status === "won") stat.won++;
   });
 
-  const agentRows = Object.values(agentStatsMap);
+  // Admins always appear first (Garry Amelia, T Zafar, Annus Raees), then Working Agents
+  const adminOrder = ["garryamelia6265@gmail.com", "tzafar04@gmail.com", "annusraees@gmail.com"];
+  const agentRows = Object.values(agentStatsMap).sort((a, b) => {
+    const aIsAdmin = a.role === "admin" || isAdminEmail(a.email);
+    const bIsAdmin = b.role === "admin" || isAdminEmail(b.email);
+    if (aIsAdmin && !bIsAdmin) return -1;
+    if (!aIsAdmin && bIsAdmin) return 1;
+    if (aIsAdmin && bIsAdmin) {
+      const aIdx = adminOrder.indexOf(a.email.toLowerCase());
+      const bIdx = adminOrder.indexOf(b.email.toLowerCase());
+      return (aIdx !== -1 ? aIdx : 99) - (bIdx !== -1 ? bIdx : 99);
+    }
+    return a.name.localeCompare(b.name);
+  });
 
   return (
     <div className="min-h-screen space-y-8 pb-12">
@@ -451,13 +494,11 @@ function AdminPage() {
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {pendingProfiles.map((req: any) => {
-              let reqName = req.lead_email?.split("@")[0] || "Unknown";
-              let reqPhone = "";
-              try {
-                const parsed = JSON.parse(req.subject);
-                if (parsed.name) reqName = parsed.name;
-                if (parsed.phone) reqPhone = parsed.phone;
-              } catch {}
+              // fetchPendingSignups() returns PendingSignup objects with direct fields
+              const reqName = req.name || req.email?.split("@")[0] || "Unknown";
+              const reqEmail = req.email || req.lead_email || "";
+              const reqPhone = req.phone || "";
+              const reqDate = req.created_at || req.sent_at || "";
               return (
                 <div
                   key={req.id}
@@ -467,9 +508,11 @@ function AdminPage() {
                     <p className="truncate text-sm font-semibold text-white">
                       {reqName}
                     </p>
-                    <p className="truncate text-xs text-slate-400">{req.lead_email}</p>
+                    <p className="truncate text-xs text-slate-400">{reqEmail}</p>
                     {reqPhone && <p className="text-[11px] text-amber-300/90 mt-0.5 font-medium">📞 {reqPhone}</p>}
-                    <p className="text-[10px] text-slate-500 mt-0.5">Requested: {new Date(req.sent_at).toLocaleString()}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Requested: {reqDate ? (() => { try { const d = new Date(reqDate); return isNaN(d.getTime()) ? "Recently" : d.toLocaleString(); } catch { return "Recently"; } })() : "Recently"}
+                    </p>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -496,6 +539,7 @@ function AdminPage() {
       )}
 
 
+
       {/* Pipeline Bar */}
       <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-lg backdrop-blur">
         <div className="mb-4 flex items-center justify-between">
@@ -506,13 +550,13 @@ function AdminPage() {
           <span className="text-xs text-white/40">{totalLeads} total leads</span>
         </div>
         <div className="flex flex-wrap gap-3">
-          {["new", "contacted", "qualified", "meeting", "won", "lost"].map((s) => {
+          {["new", "no_answer", "contacted", "replied", "booked", "won"].map((s) => {
             const count = leads.filter((l) => l.status === s).length;
             const pct = totalLeads > 0 ? Math.round((count / totalLeads) * 100) : 0;
             return (
               <div key={s} className="flex flex-1 flex-col gap-1.5 min-w-[90px]">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="capitalize font-medium text-white/60">{s}</span>
+                  <span className="capitalize font-medium text-white/60">{s.replace(/_/g, " ")}</span>
                   <span className="text-white font-bold">{count}</span>
                 </div>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
@@ -520,15 +564,15 @@ function AdminPage() {
                     className={`h-full rounded-full transition-all duration-700 ${
                       s === "won"
                         ? "bg-emerald-500"
-                        : s === "lost"
-                          ? "bg-red-500"
-                          : s === "new"
-                            ? "bg-blue-500"
-                            : s === "contacted"
-                              ? "bg-purple-500"
-                              : s === "qualified"
-                                ? "bg-yellow-500"
-                                : "bg-orange-500"
+                        : s === "replied"
+                          ? "bg-teal-500"
+                          : s === "booked"
+                            ? "bg-amber-500"
+                            : s === "new"
+                              ? "bg-blue-500"
+                              : s === "contacted"
+                                ? "bg-purple-500"
+                                : "bg-slate-500"
                     }`}
                     style={{ width: `${pct}%` }}
                   />
@@ -800,6 +844,7 @@ function AdminPage() {
               const nameLower = (selectedAgent.name || "").toLowerCase();
               const usernameLower = emailLower.includes("@") ? emailLower.split("@")[0]! : "";
 
+              // All leads that belong to this agent (by assigned_agent_name or legacy agent field)
               const agentLeads = leads.filter((l) => {
                 const assigned = (l.assigned_agent_name || l.agent || "").toLowerCase();
                 if (!assigned) return false;
@@ -810,24 +855,56 @@ function AdminPage() {
                 );
               });
 
+              // Metric 1 — Assigned Leads: leads where Admin assigned to this agent
+              // (assigned_at is set AND imported_by is NOT the agent's own email)
+              const assignedLeads = agentLeads.filter((l: any) =>
+                l.assigned_at && (l.imported_by || "").toLowerCase() !== emailLower
+              );
+
+              // Metric 2 — Agent Imported: leads the agent personally imported
+              const agentImportedLeads = agentLeads.filter((l: any) =>
+                l.imported_by && l.imported_by.toLowerCase() === emailLower
+              );
+
+              // Metric 3 — Contacted: leads currently in contacted status
+              const contactedLeads = agentLeads.filter((l: any) => (l.status || "").toLowerCase() === "contacted");
+
+              // Metric 4 — Replied: leads currently in replied status
+              const repliedLeads = agentLeads.filter((l: any) => (l.status || "").toLowerCase() === "replied");
+
+              // Metric 5 — Booked: leads currently in booked status
+              const bookedLeads = agentLeads.filter((l: any) => (l.status || "").toLowerCase() === "booked");
+
+              // Metric 6 — Won: leads currently in won status
+              const wonLeads = agentLeads.filter((l: any) => (l.status || "").toLowerCase() === "won");
+
               return (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-3 text-center">
+                  {/* 6-Metric Reporting Grid */}
+                  <div className="grid grid-cols-6 gap-2 text-center">
                     <div className="rounded-xl bg-white/5 p-3">
-                      <p className="text-xs text-white/40">Assigned Leads</p>
-                      <p className="text-xl font-bold text-white">{agentLeads.length}</p>
+                      <p className="text-[10px] text-white/40 leading-tight mb-1">Assigned<br/>Leads</p>
+                      <p className="text-xl font-bold text-white">{assignedLeads.length}</p>
                     </div>
                     <div className="rounded-xl bg-white/5 p-3">
-                      <p className="text-xs text-white/40">Approached / Contacted</p>
-                      <p className="text-xl font-bold text-violet-300">
-                        {agentLeads.filter((l) => l.status !== "new" && l.status !== "lost").length}
-                      </p>
+                      <p className="text-[10px] text-white/40 leading-tight mb-1">Agent<br/>Imported</p>
+                      <p className="text-xl font-bold text-blue-300">{agentImportedLeads.length}</p>
                     </div>
                     <div className="rounded-xl bg-white/5 p-3">
-                      <p className="text-xs text-white/40">Won Deals</p>
-                      <p className="text-xl font-bold text-emerald-400">
-                        {agentLeads.filter((l) => l.status === "won").length}
-                      </p>
+                      <p className="text-[10px] text-white/40 leading-tight mb-1">Contacted</p>
+                      <p className="text-xl font-bold text-fuchsia-300">{contactedLeads.length}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/5 p-3">
+                      <p className="text-[10px] text-white/40 leading-tight mb-1">Replied</p>
+                      <p className="text-xl font-bold text-cyan-300">{repliedLeads.length}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/5 p-3">
+                      <p className="text-[10px] text-white/40 leading-tight mb-1">Booked</p>
+                      <p className="text-xl font-bold text-amber-300">{bookedLeads.length}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/5 p-3">
+                      <p className="text-[10px] text-white/40 leading-tight mb-1">Won</p>
+                      <p className="text-xl font-bold text-emerald-400">{wonLeads.length}</p>
                     </div>
                   </div>
 

@@ -2,12 +2,14 @@ import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/crm/AppSidebar";
+import { LiveChatAlertProvider } from "@/context/LiveChatAlertContext";
 import { Topbar } from "@/components/crm/Topbar";
 import { useCrm } from "@/lib/crm-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ShieldAlert, Clock, RefreshCw, LogOut, Sparkles, CheckCircle2, Loader2 } from "lucide-react";
+import { ShieldAlert, Clock, RefreshCw, LogOut, Sparkles, CheckCircle2, Loader2, X, BellRing } from "lucide-react";
+import { isAdminEmail } from "@/lib/crm-data";
 
 import { toast } from "sonner";
 
@@ -19,20 +21,85 @@ function AppLayout() {
   const { user, signOut, submitApprovalRequest, checkUserApprovalStatus, isAuthLoading } = useCrm();
   const navigate = useNavigate();
 
-
-  const isAdmin = Boolean(user && user.email === "garryamelia6265@gmail.com");
+  const isAdmin = Boolean(user && (user.role === "admin" || isAdminEmail(user.email)));
   const isApproved = isAdmin || Boolean(user?.approved);
 
-  // Form states for first-time registration submission
-  const [name, setName] = useState(user?.name || "");
-  const [phone, setPhone] = useState(user?.phone || "");
+  // Form states for first-time registration submission — ALWAYS EMPTY initially as requested!
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
 
+  // Lead Assignment Popup state for working agents (stays 5 minutes or until closed with X)
+  const [assignmentPopup, setAssignmentPopup] = useState<{
+    id: string;
+    subject: string;
+    sentAt: string;
+  } | null>(null);
+
+  // Check unread lead assignment notifications for working agents
   useEffect(() => {
-    if (user?.name && !name) setName(user.name);
-    if (user?.phone && !phone) setPhone(user.phone);
-  }, [user?.name, user?.phone]);
+    if (!user?.email || isAdmin) return;
+
+    let dismissTimeout: NodeJS.Timeout | null = null;
+
+    const checkAssignmentNotif = async () => {
+      try {
+        const { supabase } = await import("@/lib/supabase");
+        const { data } = await supabase
+          .from("emails_sent")
+          .select("id, subject, sent_at, status")
+          .eq("lead_email", user.email)
+          .in("sequence_type", ["lead_assignment", "assignment_notification"])
+          .eq("status", "unread")
+          .order("sent_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (data) {
+          setAssignmentPopup({
+            id: data.id,
+            subject: data.subject,
+            sentAt: data.sent_at,
+          });
+
+          // Auto dismiss after 5 minutes (300,000 ms)
+          if (dismissTimeout) clearTimeout(dismissTimeout);
+          dismissTimeout = setTimeout(() => {
+            dismissAssignmentPopup(data.id);
+          }, 300000);
+        }
+      } catch (err) {
+        console.error("Assignment notification check error:", err);
+      }
+    };
+
+    checkAssignmentNotif();
+    const pollInterval = setInterval(checkAssignmentNotif, 15000);
+
+    return () => {
+      if (dismissTimeout) clearTimeout(dismissTimeout);
+      clearInterval(pollInterval);
+    };
+  }, [user?.email, isAdmin]);
+
+  const dismissAssignmentPopup = async (notifId?: string) => {
+    const id = notifId || assignmentPopup?.id;
+    setAssignmentPopup(null);
+    if (id) {
+      try {
+        const { supabase } = await import("@/lib/supabase");
+        await supabase.from("emails_sent").update({ status: "read" }).eq("id", id);
+      } catch {}
+    }
+  };
+
+  // Redirect unauthenticated users — MUST be before any early returns (Rules of Hooks)
+  useEffect(() => {
+    if (!isAuthLoading && !user) {
+      navigate({ to: "/" });
+    }
+  }, [isAuthLoading, user, navigate]);
 
   // Polling approval status every 6 seconds if waiting for admin
   useEffect(() => {
@@ -43,20 +110,36 @@ function AppLayout() {
     checkReminders();
     const interval = setInterval(checkReminders, 15000);
 
-    // Periodic approval check for non-admin user
+    // Continuous live approval & eviction check for non-admin working agents
     let approvalInterval: NodeJS.Timeout | null = null;
-    if (user?.email && !isAdmin && !isApproved) {
+    let realtimeChannel: any = null;
+
+    if (user?.email && !isAdmin) {
       checkUserApprovalStatus(user.email);
       approvalInterval = setInterval(() => {
         checkUserApprovalStatus(user.email);
-      }, 6000);
+      }, 2500);
+
+      import("@/lib/supabase").then(({ supabase }) => {
+        realtimeChannel = supabase
+          .channel(`crm-guard-${user.email}`)
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "profiles" },
+            () => {
+              checkUserApprovalStatus(user.email);
+            }
+          )
+          .subscribe();
+      });
     }
 
     return () => {
       clearInterval(interval);
       if (approvalInterval) clearInterval(approvalInterval);
+      if (realtimeChannel) realtimeChannel.unsubscribe();
     };
-  }, [user?.email, isAdmin, isApproved, checkUserApprovalStatus]);
+  }, [user?.email, isAdmin, checkUserApprovalStatus]);
 
   // Handle initial submission of agent details (Name, Email, Phone)
   const handleSubmitForm = async (e: React.FormEvent) => {
@@ -71,13 +154,30 @@ function AppLayout() {
     }
     setIsSubmitting(true);
     try {
+      // 1. Submit to API to insert in pending_signups and clean auth.users
+      await fetch("/api/submit-pending-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmedName,
+          email: trimmedEmail,
+          phone: trimmedPhone,
+        }),
+      });
+
+      // 2. Submit approval request locally
       await submitApprovalRequest({
         name: trimmedName,
         email: trimmedEmail,
         phone: trimmedPhone,
       });
-      // Re-verify immediately to transition view without delay
-      await checkUserApprovalStatus(trimmedEmail);
+
+      // 3. Sign out from Supabase Auth session so user is NOT kept in Supabase Auth
+      try {
+        const { supabase } = await import("@/lib/supabase");
+        await supabase.auth.signOut();
+      } catch {}
+
       toast.success("Request submitted to Admin for approval!");
     } catch (err: any) {
       toast.error(err?.message || "Submission failed. Please try again.");
@@ -115,11 +215,8 @@ function AppLayout() {
     );
   }
 
-  // If user is not logged in after auth resolves, redirect to login page
+  // If user is not logged in after auth resolves, return null while redirecting
   if (!user) {
-    if (typeof window !== "undefined") {
-      navigate({ to: "/" });
-    }
     return null;
   }
 
@@ -287,8 +384,9 @@ function AppLayout() {
 
   // ── NORMAL APPROVED WORKSPACE ──────────────────────────────────────────────
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background">
+    <LiveChatAlertProvider>
+      <SidebarProvider>
+        <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <SidebarInset className="min-w-0 bg-transparent">
           <Topbar />
@@ -296,7 +394,66 @@ function AppLayout() {
             <Outlet />
           </main>
         </SidebarInset>
-      </div>
-    </SidebarProvider>
+
+        {/* Working Agent 5-Minute Lead Assignment Popup Alert */}
+        {assignmentPopup && (
+          <div className="fixed bottom-6 right-6 z-50 max-w-md animate-in fade-in slide-in-from-bottom-5 duration-300">
+            <div className="flex flex-col gap-2.5 rounded-2xl border border-violet-500/40 bg-[#0f141c]/95 p-4 shadow-2xl backdrop-blur-md">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-violet-500/20 text-violet-400">
+                    <Sparkles className="size-4 animate-pulse" />
+                  </span>
+                  <div>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                      New Leads Assigned!
+                    </h4>
+                    <p className="text-[11px] text-slate-400">5-minute active notification</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => dismissAssignmentPopup()}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+                  title="Close notification"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-200">
+                <p className="font-medium leading-relaxed">{assignmentPopup.subject}</p>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <span className="text-[10px] text-slate-500">
+                  Auto-closes in 5 mins
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-slate-400 hover:text-white"
+                    onClick={() => dismissAssignmentPopup()}
+                  >
+                    Dismiss
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-7 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs"
+                    onClick={() => {
+                      dismissAssignmentPopup();
+                      navigate({ to: "/leads" });
+                    }}
+                  >
+                    View Leads
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        </div>
+      </SidebarProvider>
+    </LiveChatAlertProvider>
   );
 }

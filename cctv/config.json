@@ -1,0 +1,20 @@
+﻿{
+  "camera": {
+    "source": "0",
+    "description": "Set to '0' for Webcam, or video file path like 'sample.mp4', or RTSP URL like 'rtsp://admin:pass@192.168.1.50:554/ch1'",
+    "frame_width": 1280,
+    "frame_height": 720
+  },
+  "ai_settings": {
+    "model_name": "yolov8n.pt",
+    "confidence_threshold": 0.40,
+    "iou_threshold": 0.50,
+    "track_history_length": 60
+  },
+  "display": {
+    "show_bounding_box": true,
+    "show_timer": true,
+    "show_movement_trails": true,
+    "show_stats_header": true
+  }
+}

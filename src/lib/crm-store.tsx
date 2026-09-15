@@ -13,6 +13,8 @@ import {
   agents,
   seedFollowUps,
   seedLeads,
+  ADMIN_EMAILS,
+  isAdminEmail,
   type FollowUp,
   type Lead,
   type LeadStatus,
@@ -88,8 +90,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const syncProfileToSupabase = useCallback(async (u: SessionUser) => {
     if (!u.email) return;
     try {
-      const isMainAdmin = u.email === ADMIN_EMAIL;
-      const name = u.name || u.email.split("@")[0];
+      const isMainAdmin = isAdminEmail(u.email);
+      const adminNames: Record<string, string> = {
+        "garryamelia6265@gmail.com": "Garry Amelia",
+        "tzafar04@gmail.com": "T Zafar",
+        "annusraees@gmail.com": "Annus Raees",
+      };
+      const name = u.name || adminNames[u.email.toLowerCase()] || u.email.split("@")[0];
 
       const { data: existingProf } = await supabase
         .from("profiles")
@@ -107,14 +114,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             .eq("email", u.email);
         } else {
           const { data: authData } = await supabase.auth.getUser();
-          const userId = authData?.user?.id || "usr-" + Date.now();
-          await supabase.from("profiles").insert({
-            id: userId,
-            email: u.email,
-            full_name: name,
-            avatar_url: meta,
-            role: "admin",
-          });
+          if (authData?.user?.id) {
+            await supabase.from("profiles").upsert({
+              id: authData.user.id,
+              email: u.email,
+              full_name: name,
+              avatar_url: meta,
+              role: "admin",
+            });
+          }
         }
       } else if (existingProf) {
         // Read values from DB profile if existing
@@ -176,7 +184,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   // ── Poll for admin approval ─────────────────────────────────────────────────
   const checkUserApprovalStatus = useCallback(async (email: string): Promise<boolean> => {
-    if (email === ADMIN_EMAIL) return true;
+    if (isAdminEmail(email)) return true;
     try {
       // 1. Check if profile exists in profiles table (created ONLY when admin approves)
       const { data: prof } = await supabase
@@ -216,67 +224,39 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // 2. Check pending signups table / queue
+      // 2. Check pending signups table (only if status is actively pending)
       const pendingReq = await getPendingSignupByEmail(email);
 
-      if (pendingReq) {
-        if (pendingReq.status === "approved") {
-          // Admin approved! Create profile row now!
-          const { data: authData } = await supabase.auth.getUser();
-          const userId = authData?.user?.id || "usr-" + Date.now();
-          const meta = JSON.stringify({ phone: pendingReq.phone, approved: true, status: "approved" });
-
-          await supabase.from("profiles").upsert({
-            id: userId,
-            email,
-            full_name: pendingReq.name,
-            avatar_url: meta,
-            role: "agent",
-          });
-
-          setUser((prev) => {
-            if (!prev || prev.email !== email) return prev;
-            const next: SessionUser = {
-              ...prev,
-              name: pendingReq.name,
-              phone: pendingReq.phone,
-              approved: true,
-              status: "approved",
-            };
-            saveSession(next);
-            return next;
-          });
-          return true;
-        } else if (pendingReq.status === "rejected") {
-          setUser((prev) => {
-            if (!prev || prev.email !== email) return prev;
-            const next: SessionUser = {
-              ...prev,
-              approved: false,
-              status: "rejected",
-            };
-            saveSession(next);
-            return next;
-          });
-          return false;
-        } else {
-          // pendingReq.status === "pending"
-          setUser((prev) => {
-            if (!prev || prev.email !== email) return prev;
-            const next: SessionUser = {
-              ...prev,
-              name: pendingReq.name || prev.name,
-              phone: pendingReq.phone || prev.phone,
-              approved: false,
-              status: "pending",
-            };
-            saveSession(next);
-            return next;
-          });
-          return false;
-        }
+      if (pendingReq && pendingReq.status === "pending") {
+        setUser((prev) => {
+          if (!prev || prev.email !== email) return prev;
+          const next: SessionUser = {
+            ...prev,
+            name: pendingReq.name || prev.name,
+            phone: pendingReq.phone || prev.phone,
+            approved: false,
+            status: "pending",
+          };
+          saveSession(next);
+          return next;
+        });
+        return false;
       }
 
+      // 3. No approved profile and no pending request in DB (e.g. user was removed/rejected by admin)
+      setUser((prev) => {
+        if (!prev || prev.email !== email) return prev;
+        const resetUser: SessionUser = {
+          name: "",
+          email,
+          phone: "",
+          role: "agent",
+          approved: false,
+          status: "unsubmitted",
+        };
+        saveSession(resetUser);
+        return resetUser;
+      });
       return false;
     } catch {
       return false;
@@ -289,11 +269,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return;
     document.documentElement.classList.add("dark");
 
-    // Step 1: Restore from session/localStorage immediately (fast render)
+    // Step 1: Restore from session/localStorage immediately
     const stored = loadSession();
     if (stored) {
+      // Non-admin user MUST NOT be treated as approved until live DB verification!
+      if (!isAdminEmail(stored.email)) {
+        stored.approved = false;
+      }
       setUser(stored);
       setIsAuthLoading(false);
+      if (stored.email && !isAdminEmail(stored.email)) {
+        checkUserApprovalStatus(stored.email);
+      }
     }
 
     // Step 2: Check Supabase session to complete OAuth callback processing
@@ -311,11 +298,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session?.user) {
           const email = session.user.email ?? "";
-          const isMainAdmin = email === ADMIN_EMAIL;
+          const isMainAdmin = isAdminEmail(email);
           const name =
             session.user.user_metadata?.full_name ||
             session.user.user_metadata?.name ||
-            email.split("@")[0] ||
+            (email === "tzafar04@gmail.com" ? "T Zafar" : email === ADMIN_EMAIL ? "Garry Amelia" : email.split("@")[0]) ||
             "Working Agent";
 
           // Preserve existing session status — don't reset "pending" to "unsubmitted" on refresh
@@ -346,7 +333,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           if (isMainAdmin) {
             syncProfileToSupabase(googleUser);
           } else {
-            checkUserApprovalStatus(email);
+            checkUserApprovalStatus(email).then((approved) => {
+              if (!approved) {
+                // Instantly remove unapproved Google OAuth user from Supabase auth.users & sign out
+                fetch("/api/clean-unapproved-auth", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ email, id: session.user.id }),
+                }).catch(() => {});
+
+                supabase.auth.signOut().catch(() => {});
+              }
+            });
           }
         }
         setIsAuthLoading(false);
@@ -363,9 +361,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   // ── signIn (kept for fallback, not exposed on login page anymore) ──────────
   const signIn = useCallback((email: string, role: "admin" | "agent") => {
-    const isMainAdmin = email === ADMIN_EMAIL;
+    const isMainAdmin = isAdminEmail(email);
     const next: SessionUser = {
-      name: isMainAdmin ? "Garry Amelia" : email.split("@")[0] || "Sales Agent",
+      name: isMainAdmin ? (email === "tzafar04@gmail.com" ? "T Zafar" : "Garry Amelia") : email.split("@")[0] || "Sales Agent",
       email,
       role: isMainAdmin ? "admin" : role,
       approved: isMainAdmin ? true : false,
@@ -428,10 +426,11 @@ export function useCrm() {
 }
 
 export const statusTone: Record<LeadStatus, string> = {
-  new: "bg-info/12 text-info border-info/25",
-  contacted: "bg-primary/12 text-primary border-primary/25",
-  qualified: "bg-chart-5/12 text-chart-5 border-chart-5/25",
-  meeting: "bg-warning/15 text-warning border-warning/30",
-  won: "bg-success/12 text-success border-success/25",
-  lost: "bg-destructive/10 text-destructive border-destructive/25",
+  new: "bg-blue-500/12 text-blue-400 border-blue-500/25",
+  no_answer: "bg-slate-500/12 text-slate-400 border-slate-500/25",
+  contacted: "bg-purple-500/12 text-purple-400 border-purple-500/25",
+  replied: "bg-teal-500/15 text-teal-400 border-teal-500/30",
+  booked: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  booking_cancelled: "bg-rose-500/15 text-rose-400 border-rose-500/30",
+  won: "bg-emerald-500/12 text-emerald-400 border-emerald-500/25",
 };

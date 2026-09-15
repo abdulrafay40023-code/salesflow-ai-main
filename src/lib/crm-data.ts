@@ -1,10 +1,11 @@
 export type LeadStatus =
   | "new"
+  | "no_answer"
   | "contacted"
-  | "qualified"
-  | "meeting"
-  | "won"
-  | "lost";
+  | "replied"
+  | "booked"
+  | "booking_cancelled"
+  | "won";
 
 export type Lead = {
   id: string;
@@ -18,18 +19,43 @@ export type Lead = {
   nextFollowUp: string;
   notes: string[];
   value: number;
+  source_date?: string; // Original lead date from spreadsheet
+  country?: string;
+  country_code?: string;
+  country_flag?: string;
+  ip_address?: string;
+  location?: string;
+  updated_at?: string; // Status update timestamp
+  booked_at?: string;
+  contacted_at?: string;
+};
+
+export const ADMIN_EMAILS = [
+  "garryamelia6265@gmail.com",
+  "tzafar04@gmail.com",
+  "annusraees@gmail.com",
+];
+
+export const isAdminEmail = (email?: string | null): boolean => {
+  if (!email) return false;
+  return ADMIN_EMAILS.map((e) => e.toLowerCase()).includes(email.trim().toLowerCase());
 };
 
 export const agents = ["Garry Amelia"];
 
+// Labels for all statuses
 export const statusLabels: Record<LeadStatus, string> = {
   new: "New",
+  no_answer: "No Answer",
   contacted: "Contacted",
-  qualified: "Qualified",
-  meeting: "Meeting Set",
+  replied: "Replied",
+  booked: "Booked",
+  booking_cancelled: "Booking Cancelled",
   won: "Won",
-  lost: "Lost",
 };
+
+// All 7 statuses available across the CRM
+export const ALL_STATUSES: LeadStatus[] = ["new", "no_answer", "contacted", "replied", "booked", "booking_cancelled", "won"];
 
 export const seedLeads: Lead[] = [];
 

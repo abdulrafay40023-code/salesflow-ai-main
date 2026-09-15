@@ -200,62 +200,78 @@ export async function getPendingSignupByEmail(email: string): Promise<PendingSig
   return null;
 }
 
-/**
- * Approves a pending signup:
- * 1. Creates profile entry in `profiles` table (role: agent, status: approved).
- * 2. Removes record from `pending_signups`.
- */
-export async function approvePendingSignup(signup: PendingSignup): Promise<void> {
-  // 1. Create profile in real profiles table
-  const meta = JSON.stringify({ phone: signup.phone, approved: true, status: "approved" });
-  await supabase.from("profiles").upsert({
-    id: "agent-" + Date.now(),
-    email: signup.email,
-    full_name: signup.name,
-    avatar_url: meta,
-    role: "agent",
+function generateUUID(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0,
+      v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
   });
-
-  // 2. Remove row from pending_signups table
-  try {
-    await supabase.from("pending_signups").delete().eq("email", signup.email);
-  } catch {}
-
-  // 3. Mark row in fallback queue
-  try {
-    await supabase
-      .from("emails_sent")
-      .update({ status: "approved" })
-      .eq("lead_email", signup.email)
-      .eq("sequence_type", "agent_approval_request");
-  } catch {}
 }
 
 /**
+ * Approves a pending signup via server-side API:
+ * 1. API creates auth.users entry (so profiles FK is satisfied)
+ * 2. API creates profile with real auth UUID
+ * 3. Removes from pending_signups & marks fallback queue
+ */
+export async function approvePendingSignup(signup: PendingSignup): Promise<void> {
+  const cleanEmail = signup.email.toLowerCase().trim();
+
+  // Call server-side API which uses Service Role key to create auth user + profile
+  const res = await fetch("/api/approve-pending-signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: signup.name,
+      email: cleanEmail,
+      phone: signup.phone || "",
+    }),
+  });
+
+  if (!res.ok) {
+    let msg = "Approval failed";
+    try {
+      const data = await res.json();
+      if (data?.error) msg = data.error;
+    } catch {}
+    throw new Error(msg);
+  }
+}
+
+
+/**
  * Removes/rejects a pending signup or approved member:
- * 1. Removes row from `pending_signups`.
- * 2. Removes row from `profiles` table (if approved).
+ * Calls server-side API which uses Service Role key to completely delete user from:
+ * 1. `pending_signups`
+ * 2. `profiles`
+ * 3. `auth.users`
  */
 export async function removePendingOrApprovedSignup(email: string): Promise<void> {
   const cleanEmail = email.toLowerCase().trim();
-  if (cleanEmail === "garryamelia6265@gmail.com") return;
+  if (!cleanEmail || cleanEmail === "garryamelia6265@gmail.com") return;
 
-  // 1. Delete from pending_signups
+  // Call server-side API to remove from database and auth.users
+  try {
+    await fetch("/api/reject-pending-signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: cleanEmail }),
+    });
+  } catch (e) {
+    console.error("Reject signup API call failed:", e);
+  }
+
+  // Client-side fallback cleanup
   try {
     await supabase.from("pending_signups").delete().eq("email", cleanEmail);
   } catch {}
-
-  // 2. Delete from profiles
   try {
     await supabase.from("profiles").delete().eq("email", cleanEmail);
   } catch {}
-
-  // 3. Update queue fallback
   try {
-    await supabase
-      .from("emails_sent")
-      .update({ status: "rejected" })
-      .eq("lead_email", cleanEmail)
-      .eq("sequence_type", "agent_approval_request");
+    await supabase.from("emails_sent").delete().eq("lead_email", cleanEmail);
   } catch {}
 }

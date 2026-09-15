@@ -1,3 +1,137 @@
+
+// ── TIMEZONE & MEETING SCHEDULE HELPER ─────────────────────────────
+export function normalizeClientTimezone(tzStr?: string): string {
+  if (!tzStr) return "America/New_York"; // Default to EST
+  const s = tzStr.toLowerCase().trim();
+  if (s.includes("pdt") || s.includes("pst") || s.includes("pacific") || s.includes("california") || s.includes("los angeles") || s.includes("seattle") || s.includes("vancouver")) return "America/Los_Angeles";
+  if (s.includes("mdt") || s.includes("mst") || s.includes("mountain") || s.includes("denver") || s.includes("arizona") || s.includes("phoenix") || s.includes("calgary")) return "America/Denver";
+  if (s.includes("cdt") || s.includes("cst") || s.includes("central") || s.includes("chicago") || s.includes("texas") || s.includes("dallas") || s.includes("houston")) return "America/Chicago";
+  if (s.includes("edt") || s.includes("est") || s.includes("eastern") || s.includes("new york") || s.includes("florida") || s.includes("miami") || s.includes("toronto")) return "America/New_York";
+  if (s.includes("gmt") || s.includes("bst") || s.includes("uk") || s.includes("london") || s.includes("britain") || s.includes("england")) return "Europe/London";
+  if (s.includes("cet") || s.includes("cest") || s.includes("paris") || s.includes("berlin") || s.includes("germany") || s.includes("france") || s.includes("spain") || s.includes("italy")) return "Europe/Paris";
+  if (s.includes("pkt") || s.includes("pakistan") || s.includes("karachi") || s.includes("lahore") || s.includes("islamabad")) return "Asia/Karachi";
+  if (s.includes("ist") || s.includes("india") || s.includes("mumbai") || s.includes("delhi")) return "Asia/Kolkata";
+  if (s.includes("aest") || s.includes("aedt") || s.includes("sydney") || s.includes("melbourne") || s.includes("australia")) return "Australia/Sydney";
+  return "America/New_York";
+}
+
+export function getTimezoneAbbreviation(ianaTz: string, dateObj: Date): string {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", { timeZone: ianaTz, timeZoneName: "short" });
+    const parts = formatter.formatToParts(dateObj);
+    const tzPart = parts.find(p => p.type === "timeZoneName");
+    return tzPart ? tzPart.value : "EST";
+  } catch {
+    return "EST";
+  }
+}
+
+export function calculateMeetingSchedule(rawDateStr?: string, rawTimeStr?: string, rawTzStr?: string) {
+  const now = new Date();
+  const ianaTz = normalizeClientTimezone(rawTzStr);
+  
+  let timeStr = (rawTimeStr || "11:00 AM").trim();
+  if (!/am|pm/i.test(timeStr)) {
+    const num = parseInt(timeStr, 10);
+    if (!isNaN(num)) {
+      timeStr = num >= 9 && num <= 11 ? `${num}:00 AM` : `${num}:00 PM`;
+    }
+  }
+
+  let dateStr = (rawDateStr || "").trim();
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  
+  if (!dateStr || dateStr.toLowerCase().includes("tomorrow") || isNaN(new Date(dateStr).getTime())) {
+    if (dateStr.toLowerCase().includes("today")) {
+      dateStr = now.toISOString().split("T")[0];
+    } else {
+      dateStr = tomorrow.toISOString().split("T")[0];
+    }
+  }
+
+  let hours = 11, minutes = 0;
+  const timeMatch = timeStr.match(/(\d+)(?::(\d+))?\s*(am|pm)?/i);
+  if (timeMatch) {
+    hours = parseInt(timeMatch[1], 10);
+    minutes = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+    const isPm = timeMatch[3] && timeMatch[3].toLowerCase() === "pm";
+    const isAm = timeMatch[3] && timeMatch[3].toLowerCase() === "am";
+    if (isPm && hours < 12) hours += 12;
+    if (isAm && hours === 12) hours = 0;
+  }
+
+  const [y, m, d] = dateStr.split(/[-/]/).map(n => parseInt(n, 10));
+
+  // Converge candidate UTC time to exact local time in ianaTz
+  let candidate = new Date(Date.UTC(y, m - 1, d, hours, minutes, 0));
+  for (let iter = 0; iter < 3; iter++) {
+    const formattedInTz = new Intl.DateTimeFormat("en-US", {
+      timeZone: ianaTz,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hour12: false,
+    }).format(candidate);
+    
+    const [dPart, tPart] = formattedInTz.split(", ");
+    const [fM, fD, fY] = dPart.split("/").map(Number);
+    const [fH, fMin, fS] = tPart.split(":").map(Number);
+    const inTzAsUtc = Date.UTC(fY, fM - 1, fD, fH === 24 ? 0 : fH, fMin, fS);
+    const desiredAsUtc = Date.UTC(y, m - 1, d, hours, minutes, 0);
+    const offsetDiff = desiredAsUtc - inTzAsUtc;
+    if (offsetDiff === 0) break;
+    candidate = new Date(candidate.getTime() + offsetDiff);
+  }
+
+  // If the scheduled time is already in the past, roll forward by 24 hours
+  if (candidate.getTime() <= now.getTime()) {
+    candidate = new Date(candidate.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  const targetIso = candidate.toISOString();
+  const meetingDateObj = new Date(targetIso);
+  const tzAbbr = getTimezoneAbbreviation(ianaTz, meetingDateObj);
+
+  const clientFormattedTime = meetingDateObj.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: ianaTz
+  }) + ` ${tzAbbr}`;
+
+  const clientFormattedDate = meetingDateObj.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: ianaTz
+  });
+
+  const agentFormattedTime = meetingDateObj.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Karachi"
+  }) + " PKT";
+
+  const agentFormattedDate = meetingDateObj.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "Asia/Karachi"
+  });
+
+  return {
+    scheduledIso: targetIso,
+    ianaTz,
+    tzAbbr,
+    clientFormattedDate,
+    clientFormattedTime,
+    agentFormattedDate,
+    agentFormattedTime,
+  };
+}
+
 import { createServerFn } from "@tanstack/react-start";
 import {
   send1DayMeetingReminderEmail,
@@ -8,9 +142,36 @@ import {
   sendMeetingStartedNowEmail,
   sendReminderEmail,
   sendWelcomeEmail,
+  sendMeetingCancellationEmail,
 } from "./email-service";
 import { supabase } from "./supabase";
 import { createZoomMeeting } from "./zoom-service";
+import {
+  VAPI_PRIVATE_KEY,
+  VAPI_ASSISTANT_ID,
+  VAPI_PHONE_NUMBER_ID,
+  formatE164Phone,
+} from "./vapi-client";
+
+const PRIMARY_ADMIN_EMAIL = "garryamelia6265@gmail.com";
+
+// Robust Spoken Email Normalizer (handles "at", "dot", spaces, and spoken punctuation)
+function normalizeSpokenEmail(raw: string): string | null {
+  if (!raw) return null;
+  let s = raw.toLowerCase().trim();
+  s = s
+    .replace(/\bat\s+the\s+rate\s+(?:of\s+)?/gi, "@")
+    .replace(/\bat\b/gi, "@")
+    .replace(/\bdot\b/gi, ".")
+    .replace(/\bunderscore\b/gi, "_")
+    .replace(/\b(?:dash|hyphen)\b/gi, "-");
+  s = s.replace(/\s*@\s*/g, "@").replace(/\s*\.\s*/g, ".");
+  s = s.replace(/\s+/g, "");
+  s = s.replace(/\.+@/g, "@").replace(/@\.+/g, "@").replace(/\.+$/, "").replace(/^\.+/, "");
+  const match = s.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  if (match) return match[1].toLowerCase().trim();
+  return s.includes("@") && s.includes(".") ? s : null;
+}
 
 /**
  * 1. Trigger Welcome Email
@@ -459,6 +620,616 @@ export const triggerNextFollowUpFn = createServerFn({ method: "POST" })
       return { success: true };
     } catch (err: any) {
       console.error("Trigger next follow-up error:", err);
+      return { success: false, error: err?.message };
+    }
+  });
+
+
+/**
+ * 10. Start Live Outbound Vapi AI Phone Call to Lead
+ */
+export const startVapiPhoneCallFn = createServerFn({ method: "POST" })
+  .validator(
+    (data: {
+      leadId?: string;
+      leadName?: string;
+      phoneNumber: string;
+      leadEmail?: string;
+      agentEmail?: string;
+    }) => data
+  )
+  .handler(async ({ data }) => {
+    try {
+      const e164Phone = formatE164Phone(data.phoneNumber);
+      if (!e164Phone || e164Phone.length < 7) {
+        throw new Error(`Invalid phone number: ${data.phoneNumber}. Must be a valid phone number with country code.`);
+      }
+
+      const cleanLeadEmail = (data.leadEmail || "").trim().toLowerCase();
+      const hasKnownEmail = Boolean(cleanLeadEmail && cleanLeadEmail.includes("@") && cleanLeadEmail.includes("."));
+      const customerName = data.leadName || "Valued Prospect";
+      const agentEmail = data.agentEmail || PRIMARY_ADMIN_EMAIL;
+      const nowFormatted = new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+      const currentTimeFormatted = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+
+            // Dynamic System Prompt customized for whether lead has email or needs email collection
+      let customSystemPrompt = "";
+      if (hasKnownEmail) {
+        customSystemPrompt = `You are Alex, a top-tier Senior Sales Executive at Teals CRM.
+The prospect's name is ${customerName}.
+The prospect's email is ALREADY verified and on file: ${cleanLeadEmail}.
+Current Live Time Context: Today is ${nowFormatted} at ${currentTimeFormatted} PKT.
+
+YOUR MISSION & CONVERSATION FLOW:
+1. GREETING & PITCH:
+   Greet warmly and ask how they currently manage their sales leads and follow-ups.
+   Briefly pitch how Teals CRM automates lead capture, follow-ups, and pipeline tracking.
+   Offer a quick 15-minute demo: "Would you be open to a quick 15-minute demo to see how it works?"
+
+2. DATE, TIME & TIMEZONE NEGOTIATION RULES (CRITICAL):
+   - When they agree, ask: "Awesome! Which day works best for you — tomorrow, or another day this week?"
+   - When they mention a day, negotiate a convenient time.
+   - If the prospect gives only a time (e.g. "at 2 PM") without mentioning the day, ASK: "Which day works best for you — tomorrow, or another day this week?"
+   - If the prospect mentions a time earlier today that has already passed, POLITELY SAY: "Since [time] today has already passed, did you mean tomorrow at [time] or a different upcoming day?"
+   - TIMEZONE INQUIRY (MANDATORY): Always ask or verify their timezone: "And just so our calendar invite matches your exact clock, what timezone are you in?" (e.g. Eastern/EST, Pacific/PST, Central/CST, UK/GMT, etc.)
+
+3. NO NEED TO ASK FOR EMAIL:
+   DO NOT ask for their email address since we already have ${cleanLeadEmail} on file!
+
+4. CLOSING & DISCONNECT FLOW (MANDATORY EXACT WORDS & 2-SECOND PAUSE):
+   Once day, time, and timezone are agreed, say EXACTLY:
+   "Thank you! Your demo is confirmed for [Day] at [Time] [Timezone]. I have sent your calendar invite and Zoom meeting link to your email on file (${cleanLeadEmail}). When it's time for the meeting, simply click the Zoom link to connect with our team. Have a wonderful day, goodbye!"
+   After saying this, allow 2 seconds for the prospect to say "Thank you / Okay / Goodbye", and then trigger the endCall tool to disconnect.
+
+5. IF PROSPECT DECLINES OR RESCHEDULES:
+   Politely say: "No problem at all! We will follow up with you later. Have a wonderful day, goodbye!" and trigger endCall tool.`;
+      } else {
+        customSystemPrompt = `You are Alex, a top-tier Senior Sales Executive at Teals CRM.
+The prospect's name is ${customerName}.
+The prospect does NOT have an email on file yet.
+Current Live Time Context: Today is ${nowFormatted} at ${currentTimeFormatted} PKT.
+
+YOUR MISSION & CONVERSATION FLOW:
+1. GREETING & PITCH:
+   Greet warmly and ask how they currently manage their sales leads and follow-ups.
+   Briefly pitch how Teals CRM automates lead capture, follow-ups, and pipeline tracking.
+   Offer a quick 15-minute demo: "Would you be open to a quick 15-minute demo to see how it works?"
+
+2. DATE, TIME & TIMEZONE NEGOTIATION RULES (CRITICAL):
+   - When they agree, ask: "Awesome! Which day works best for you — tomorrow, or another day this week?"
+   - When they mention a day, negotiate a convenient time.
+   - If the prospect gives only a time (e.g. "at 2 PM") without mentioning the day, ASK: "Which day works best for you — tomorrow, or another day this week?"
+   - If the prospect mentions a time earlier today that has already passed, POLITELY SAY: "Since [time] today has already passed, did you mean tomorrow at [time] or a different upcoming day?"
+   - TIMEZONE INQUIRY (MANDATORY): Always ask or verify their timezone: "And just so our calendar invite matches your exact clock, what timezone are you in?" (e.g. Eastern/EST, Pacific/PST, Central/CST, UK/GMT, etc.)
+
+3. STEP TO GET & SPELL-VERIFY EMAIL (CRITICAL ACCURACY):
+   - Step 3a: Ask: "And what is the best email address to send your calendar invite and Zoom meeting link to?"
+   - Step 3b: When the prospect says their email, ask them to spell it:
+     "Could you please spell that out letter by letter so I make sure I have it 100% accurate?"
+   - Step 3c: When the prospect spells it out, REPEAT AND SPELL IT BACK TO CONFIRM:
+     "Let me confirm: [spell it out clearly, e.g. j-o-h-n at gmail dot com]. Is that correct?"
+   - Wait for the prospect to say "Yes", "Correct", "That is right", or "Haan".
+   - If they correct any part, acknowledge smoothly, adjust it, and confirm once more.
+
+4. CLOSING & DISCONNECT FLOW (MANDATORY EXACT WORDS & 2-SECOND PAUSE):
+   Once day, time, timezone, and email are verified, say EXACTLY:
+   "Thank you! Your demo is confirmed for [Day] at [Time] [Timezone]. I have sent your calendar invite and Zoom meeting link to [spelled email address]. When it's time for the meeting, simply click the Zoom link to connect with our team. Have a wonderful day, goodbye!"
+   After saying this, allow 2 seconds for the prospect to say "Thank you / Okay / Goodbye", and then trigger the endCall tool to disconnect.
+
+5. IF PROSPECT DECLINES OR CANNOT PROVIDE EMAIL:
+   Politely say: "No problem at all! We will follow up with you later. Have a wonderful day, goodbye!" and trigger endCall tool.`;
+      }
+
+      console.log(`Initiating Vapi Outbound Call to ${e164Phone} via Assistant ${VAPI_ASSISTANT_ID} (hasKnownEmail: ${hasKnownEmail})`);
+
+      const vapiResponse = await fetch("https://api.vapi.ai/call/phone", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${VAPI_PRIVATE_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          assistantId: VAPI_ASSISTANT_ID,
+          phoneNumberId: VAPI_PHONE_NUMBER_ID,
+          customer: {
+            number: e164Phone,
+            name: customerName,
+          },
+          assistantOverrides: {
+            variableValues: {
+              customerName: customerName,
+              customerEmail: cleanLeadEmail,
+              agentEmail: agentEmail,
+            },
+            model: {
+              provider: "openai",
+              model: "gpt-4.1",
+              messages: [
+                {
+                  role: "system",
+                  content: customSystemPrompt,
+                },
+              ],
+              tools: [
+                {
+                  type: "endCall",
+                },
+              ],
+            },
+          },
+        }),
+      });
+
+      const responseData = await vapiResponse.json();
+
+      if (!vapiResponse.ok) {
+        console.error("Vapi call error response:", responseData);
+        throw new Error(responseData.message || responseData.error || "Failed to initiate AI call through Vapi");
+      }
+
+      console.log("Vapi Call Initiated successfully:", responseData);
+
+      const nowIso = new Date().toISOString();
+
+      // Update lead status to contacted
+      if (data.leadId) {
+        await supabase
+          .from("leads")
+          .update({
+            status: "contacted",
+            contacted_at: nowIso,
+          })
+          .eq("id", data.leadId);
+      } else if (cleanLeadEmail) {
+        await supabase
+          .from("leads")
+          .update({
+            status: "contacted",
+            contacted_at: nowIso,
+          })
+          .ilike("email", cleanLeadEmail);
+      }
+
+      // Log call into emails_sent / activity table
+      await supabase.from("emails_sent").insert({
+        lead_id: data.leadId || null,
+        lead_email: cleanLeadEmail || e164Phone,
+        subject: `📞 AI Outbound Call Initiated to ${e164Phone} (${customerName})`,
+        sequence_type: "ai_call",
+        status: "sent",
+        sent_at: nowIso,
+      });
+
+      return {
+        success: true,
+        callId: responseData.id,
+        phone: e164Phone,
+        message: "Call initiated successfully! Phone is ringing.",
+      };
+    } catch (err: any) {
+      console.error("Start AI phone call error:", err);
+      return { success: false, error: err?.message || "Failed to start call" };
+    }
+  });
+
+/**
+ * 11. Fetch Call Logs, Audio Recordings & Transcripts from Vapi
+ */
+export const getVapiCallLogsFn = createServerFn({ method: "POST" })
+  .validator((data: { limit?: number; phoneNumber?: string } = {}) => data)
+  .handler(async ({ data }) => {
+    try {
+      const limit = data?.limit || 20;
+      const res = await fetch(
+        `https://api.vapi.ai/call?limit=${limit}&assistantId=${VAPI_ASSISTANT_ID}`,
+        {
+          headers: {
+            Authorization: `Bearer ${VAPI_PRIVATE_KEY}`,
+          },
+        }
+      );
+
+      if (!res.ok) {
+        return { success: false, calls: [] };
+      }
+
+      const calls = await res.json();
+      if (!Array.isArray(calls)) {
+        return { success: true, calls: [] };
+      }
+
+      const enrichedCalls = await Promise.all(
+        calls.slice(0, 15).map(async (c: any) => {
+          try {
+            if (!c?.id) return c;
+            const singleRes = await fetch(`https://api.vapi.ai/call/${c.id}`, {
+              headers: {
+                Authorization: `Bearer ${VAPI_PRIVATE_KEY}`,
+              },
+            });
+            if (!singleRes.ok) return c;
+            const single = await singleRes.json();
+
+            const presignedAudio =
+              single.artifact?.presignedMonoUrl ||
+              single.artifact?.presignedStereoUrl ||
+              single.artifact?.presignedCustomerUrl ||
+              single.artifact?.presignedAssistantUrl ||
+              single.recordingUrl ||
+              c.recordingUrl;
+
+            return {
+              ...c,
+              ...single,
+              duration: single.duration || c.duration,
+              transcript: single.transcript || c.transcript || single.artifact?.transcript,
+              summary: single.summary || c.summary || single.analysis?.summary,
+              recordingUrl: presignedAudio,
+              stereoRecordingUrl: presignedAudio,
+            };
+          } catch {
+            return c;
+          }
+        })
+      );
+
+      return { success: true, calls: enrichedCalls };
+    } catch (err: any) {
+      console.error("Fetch Vapi calls error:", err);
+      return { success: false, error: err?.message, calls: [] };
+    }
+  });
+
+/**
+ * 12. Get Specific Call Status, Duration, Recording, Live Messages & Transcript by Call ID
+ */
+export const getVapiCallStatusFn = createServerFn({ method: "POST" })
+  .validator((data: { callId: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      if (!data?.callId) return { success: false, status: "ended" };
+      const res = await fetch(`https://api.vapi.ai/call/${data.callId}`, {
+        headers: {
+          Authorization: `Bearer ${VAPI_PRIVATE_KEY}`,
+        },
+      });
+
+      if (!res.ok) {
+        return { success: false, status: "ended" };
+      }
+
+      const call = await res.json();
+      const presignedAudio =
+        call.artifact?.presignedMonoUrl ||
+        call.artifact?.presignedStereoUrl ||
+        call.recordingUrl ||
+        call.stereoRecordingUrl ||
+        "";
+
+      return {
+        success: true,
+        status: call.status,
+        endedReason: call.endedReason,
+        duration: call.duration,
+        recordingUrl: presignedAudio,
+        transcript: call.transcript || call.artifact?.transcript || "",
+        summary: call.summary || call.analysis?.summary || "",
+        messages: call.messages || [],
+        listenUrl: call.monitor?.listenUrl || "",
+        controlUrl: call.monitor?.controlUrl || "",
+      };
+    } catch (err: any) {
+      return { success: false, status: "ended" };
+    }
+  });
+
+/**
+ * 12B. Manually Stop/Hangup a Vapi Phone Call
+ */
+export const stopVapiCallFn = createServerFn({ method: "POST" })
+  .validator((data: { callId: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      if (!data?.callId) return { success: false };
+      const res = await fetch(`https://api.vapi.ai/call/${data.callId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${VAPI_PRIVATE_KEY}`,
+        },
+      });
+      return { success: res.ok };
+    } catch {
+      return { success: false };
+    }
+  });
+
+/**
+ * 13. Process Post-Call Meeting Booking from Vapi Transcript & Send Confirmation Email
+ */
+export const processVapiCallBookingFn = createServerFn({ method: "POST" })
+  .validator(
+    (data: { callId: string; leadId?: string; leadEmail?: string }) => data
+  )
+  .handler(async ({ data }) => {
+    try {
+      if (!data?.callId) return { success: false, booked: false };
+
+      // Poll / retry up to 3 times to allow Vapi post-call analysis to finish generating
+      let call: any = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const res = await fetch(`https://api.vapi.ai/call/${data.callId}`, {
+          headers: {
+            Authorization: `Bearer ${VAPI_PRIVATE_KEY}`,
+          },
+        });
+        if (res.ok) {
+          call = await res.json();
+          if (call?.analysis?.structuredData && Object.keys(call.analysis.structuredData).length > 0) {
+            break;
+          }
+        }
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+
+      if (!call) return { success: false, booked: false };
+
+      const transcript = call.transcript || call.artifact?.transcript || "";
+      const analysis = call.analysis || {};
+      const structuredData = analysis.structuredData || {};
+
+      const emailMatches = transcript.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g);
+      const extractedDirect = emailMatches && emailMatches.length > 0 ? emailMatches[emailMatches.length - 1] : null;
+
+      // Extract client email from structuredData, transcript regex, lead data or customer data
+      let clientEmail =
+        normalizeSpokenEmail(structuredData.clientEmail) ||
+        normalizeSpokenEmail(structuredData.email) ||
+        normalizeSpokenEmail(extractedDirect || "") ||
+        normalizeSpokenEmail(transcript) ||
+        (data.leadEmail ? normalizeSpokenEmail(data.leadEmail) : null) ||
+        (call.customer?.email ? normalizeSpokenEmail(call.customer.email) : null);
+
+      if (!clientEmail && data.leadId) {
+        const { data: leadDb } = await supabase
+          .from("leads")
+          .select("email")
+          .eq("id", data.leadId)
+          .maybeSingle();
+        if (leadDb?.email) clientEmail = normalizeSpokenEmail(leadDb.email);
+      }
+
+      // Check if slot was booked or scheduling was agreed to
+      const isBooked =
+        structuredData.booked === true ||
+        structuredData.isBooked === true ||
+        Boolean(structuredData.clientEmail) ||
+        Boolean(structuredData.bookingTime) ||
+        transcript.toLowerCase().includes("send you a calendar invite") ||
+        transcript.toLowerCase().includes("meeting link") ||
+        transcript.toLowerCase().includes("calendar link") ||
+        transcript.toLowerCase().includes("send over the invite") ||
+        transcript.toLowerCase().includes("confirmed for") ||
+        transcript.toLowerCase().includes("demo is confirmed") ||
+        transcript.toLowerCase().includes("looking forward to speaking") ||
+        transcript.toLowerCase().includes("works great for us");
+
+      if (clientEmail && data.leadId) {
+        // Always save the spoken / provided email into Supabase lead record
+        await supabase
+          .from("leads")
+          .update({ email: clientEmail })
+          .eq("id", data.leadId);
+      }
+
+      if (!isBooked && !clientEmail) {
+        return {
+          success: true,
+          booked: false,
+          message: "Call finished without booking.",
+        };
+      }
+
+      if (!clientEmail) {
+        return {
+          success: true,
+          booked: false,
+          error: "No email address found to send invite to.",
+        };
+      }
+
+      const now = new Date();
+      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      let rawDate = (structuredData.bookingDate || "").trim();
+      let bookingTimeStr = (structuredData.bookingTime || "11:00 AM").trim();
+      let bookingDateStr: string;
+
+      if (
+        !rawDate ||
+        rawDate.toLowerCase().includes("tomorrow") ||
+        isNaN(new Date(rawDate).getTime())
+      ) {
+        if (rawDate.toLowerCase().includes("today") || transcript.toLowerCase().includes("next hour")) {
+          bookingDateStr = now.toISOString().split("T")[0];
+          const nextHour = new Date(now.getTime() + 60 * 60 * 1000);
+          if (!structuredData.bookingTime) {
+            bookingTimeStr = nextHour.toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            });
+          }
+        } else {
+          bookingDateStr = tomorrow.toISOString().split("T")[0];
+        }
+      } else {
+        bookingDateStr = rawDate;
+      }
+
+      // Smart Future Time & Timezone Calculation:
+      const tzExtracted = structuredData.timezone || transcript.match(/\b(est|edt|pst|pdt|cst|cdt|mst|mdt|gmt|bst|pkt|ist|aest|aedt|eastern|pacific|central|mountain|london|pakistan)\b/i)?.[0] || "EST";
+      const scheduleInfo = calculateMeetingSchedule(rawDate || structuredData.bookingDate, structuredData.bookingTime, tzExtracted);
+      const scheduledIso = scheduleInfo.scheduledIso;
+      const nowIso = new Date().toISOString();
+
+      // Find assigned agent
+      let assignedAgent = PRIMARY_ADMIN_EMAIL;
+      let clientName = "Valued Client";
+      if (data.leadId) {
+        const { data: leadDb } = await supabase
+          .from("leads")
+          .select("assigned_agent_name, agent, name")
+          .eq("id", data.leadId)
+          .maybeSingle();
+        if (leadDb?.assigned_agent_name || leadDb?.agent) {
+          assignedAgent = leadDb.assigned_agent_name || leadDb.agent;
+        }
+        if (leadDb?.name) clientName = leadDb.name;
+      }
+
+      // 1. Update lead status in Supabase
+      if (data.leadId) {
+        await supabase
+          .from("leads")
+          .update({
+            status: "booked",
+            booked_at: nowIso,
+            contacted_at: nowIso,
+            email: clientEmail,
+          })
+          .eq("id", data.leadId);
+      } else {
+        await supabase
+          .from("leads")
+          .update({
+            status: "booked",
+            booked_at: nowIso,
+            contacted_at: nowIso,
+          })
+          .ilike("email", clientEmail);
+      }
+
+      // ── SINGLE EMAIL IDEMPOTENCY GUARD ───────────────────────────────
+      // Prevent duplicate emails if both webhook and client poll finish around the same time
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      const { data: existingMeeting } = await supabase
+        .from("meetings")
+        .select("id, scheduled_time, created_at")
+        .eq("lead_email", clientEmail)
+        .gte("created_at", tenMinutesAgo)
+        .maybeSingle();
+
+      if (existingMeeting) {
+        console.log(`Meeting for ${clientEmail} already booked recently (${existingMeeting.id}). Skipping duplicate confirmation email.`);
+        return {
+          success: true,
+          booked: true,
+          clientEmail,
+          bookingDate: bookingDateStr,
+          bookingTime: bookingTimeStr,
+          scheduledIso,
+        };
+      }
+
+      // 2. Insert Meeting into Supabase (checked by check-reminders cron for automated 24h, 1h, 5m Zoom link reminders)
+      await supabase.from("meetings").insert({
+        title: `AI Sales Demo with ${clientName} (${scheduleInfo.clientFormattedTime} / PKT ${scheduleInfo.agentFormattedTime})`,
+        scheduled_time: scheduledIso,
+        lead_email: clientEmail,
+        agent_email: assignedAgent,
+        status: "confirmed",
+        completed: false,
+        created_at: nowIso,
+      });
+
+      // 3. Send Personalized Timezone Confirmation Emails
+      try {
+        await sendMeetingConfirmationEmail({
+          leadEmail: clientEmail,
+          agentEmail: assignedAgent,
+          meetingDate: scheduleInfo.clientFormattedDate,
+          meetingTime: scheduleInfo.clientFormattedTime,
+          clientDate: scheduleInfo.clientFormattedDate,
+          clientTime: scheduleInfo.clientFormattedTime,
+          agentDate: scheduleInfo.agentFormattedDate,
+          agentTime: scheduleInfo.agentFormattedTime,
+        });
+      } catch (e) {
+        console.error("Confirmation email error:", e);
+      }
+
+      // 4. Log in emails_sent
+      await supabase.from("emails_sent").insert({
+        lead_id: data.leadId || null,
+        lead_email: clientEmail,
+        subject: `Meeting Confirmed via AI Voice Call: ${bookingDateStr} at ${bookingTimeStr}`,
+        sequence_type: "ai_voice_booking",
+        status: "sent",
+        sent_at: nowIso,
+      });
+
+      return {
+        success: true,
+        booked: true,
+        clientEmail,
+        bookingDate: bookingDateStr,
+        bookingTime: bookingTimeStr,
+        message: `Meeting successfully booked! Confirmation email sent to ${clientEmail}`,
+      };
+    } catch (err: any) {
+      console.error("Process Vapi booking error:", err);
+      return { success: false, booked: false, error: err?.message };
+    }
+  });
+
+/**
+ * 15. Get Agent Booked Slots
+ */
+export const getAgentBookedSlotsFn = createServerFn({ method: "POST" })
+  .validator((data: { agentEmail?: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      const agent = data.agentEmail || PRIMARY_ADMIN_EMAIL;
+      const { data: meetings, error } = await supabase
+        .from("meetings")
+        .select("scheduled_time, completed")
+        .eq("agent_email", agent)
+        .eq("completed", false);
+
+      if (error) throw error;
+
+      return {
+        success: true,
+        bookedSlots: (meetings || []).map((m: any) => m.scheduled_time),
+      };
+    } catch (err: any) {
+      return { success: false, error: err?.message, bookedSlots: [] };
+    }
+  });
+
+
+/**
+ * 16. Notify Admin when Working Agent clears leads
+ */
+export const notifyAdminLeadsClearedFn = createServerFn({ method: "POST" })
+  .validator((data: {
+    agentName: string;
+    agentEmail: string;
+    scopeTitle: string;
+    deletedCount: number;
+  }) => data)
+  .handler(async ({ data }) => {
+    try {
+      await sendLeadClearAuditEmail({
+        agentName: data.agentName,
+        agentEmail: data.agentEmail,
+        scopeTitle: data.scopeTitle,
+        deletedCount: data.deletedCount,
+      });
+      return { success: true };
+    } catch (err: any) {
+      console.error("notifyAdminLeadsClearedFn error:", err);
       return { success: false, error: err?.message };
     }
   });

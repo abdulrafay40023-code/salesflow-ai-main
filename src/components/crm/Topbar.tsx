@@ -1,10 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { Bell, CheckCheck, LogOut, Mail, Search, UserPlus, Zap } from "lucide-react";
+import { Bell, CheckCheck, LogOut, Mail, UserPlus, Zap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { isAdminEmail } from "@/lib/crm-data";
 import { useCrm } from "@/lib/crm-store";
 import { supabase } from "@/lib/supabase";
 
@@ -167,7 +168,7 @@ function useNotifications(isAdmin = false) {
 
 export function Topbar() {
   const { user, signOut } = useCrm();
-  const isAdmin = user?.email === "garryamelia6265@gmail.com";
+  const isAdmin = isAdminEmail(user?.email);
   const { notifs, unreadCount, markAllRead } = useNotifications(isAdmin);
   const [notifOpen, setNotifOpen] = useState(false);
 
@@ -186,73 +187,22 @@ export function Topbar() {
     <header className="sticky top-0 z-30 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-xl sm:flex sm:justify-between md:px-6">
       <div className="flex min-w-0 items-center gap-3">
         <SidebarTrigger className="shrink-0" />
-        <div className="relative hidden min-w-0 sm:block sm:w-64 lg:w-80">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search leads, companies, agents…"
-            className="h-9 rounded-xl bg-surface-2 pl-9"
-          />
-        </div>
+
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5">
-
-        {/* Notification Bell */}
-        <DropdownMenu open={notifOpen} onOpenChange={handleNotifOpen}>
-          <DropdownMenuTrigger asChild>
-            <button className="relative grid size-9 place-items-center rounded-xl border border-border bg-card transition-colors hover:bg-accent/50">
-              <Bell className="size-4" />
-              {unreadCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80 p-0">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <span className="text-sm font-semibold">Notifications</span>
-              {unreadCount > 0 && (
-                <button onClick={markAllRead} className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors">
-                  <CheckCheck className="size-3.5" /> Mark all read
-                </button>
-              )}
-            </div>
-            <div className="max-h-80 overflow-y-auto divide-y divide-border">
-              {notifs.length === 0 ? (
-                <div className="px-4 py-8 text-center text-xs text-muted-foreground">No notifications yet</div>
-              ) : (
-                notifs.map((n) => (
-                  n.link ? (
-                    <Link key={n.id} to={n.link as any} onClick={() => setNotifOpen(false)} className={`flex items-start gap-3 px-4 py-3 transition-colors hover:bg-accent/50 block ${n.read ? "opacity-60" : ""}`}>
-                      <div className={`mt-0.5 grid size-7 shrink-0 place-items-center rounded-full ${n.icon === "approval" ? "bg-amber-500/15" : "bg-accent"}`}>
-                        <NotifIcon type={n.icon} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold">{n.title}</p>
-                        <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{n.body}</p>
-                        <p className="mt-1 text-[10px] text-muted-foreground/60">{n.time}</p>
-                      </div>
-                      {!n.read && <span className="mt-1 size-2 shrink-0 rounded-full bg-primary" />}
-                    </Link>
-                  ) : (
-                    <div key={n.id} className={`flex items-start gap-3 px-4 py-3 transition-colors hover:bg-accent/50 ${n.read ? "opacity-60" : ""}`}>
-                      <div className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-accent">
-                        <NotifIcon type={n.icon} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold">{n.title}</p>
-                        <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{n.body}</p>
-                        <p className="mt-1 text-[10px] text-muted-foreground/60">{n.time}</p>
-                      </div>
-                      {!n.read && <span className="mt-1 size-2 shrink-0 rounded-full bg-primary" />}
-                    </div>
-                  )
-                ))
-              )}
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div className="flex shrink-0 items-center gap-2">
+        <Button asChild variant="outline" size="sm" className="relative rounded-xl h-9 px-3 gap-1.5 border-border bg-card hover:bg-accent">
+          <Link to="/notifications">
+            <Bell className="size-4 text-primary" />
+            <span className="hidden sm:inline text-xs font-medium">Notifications</span>
+            {unreadCount > 0 && (
+              <span className="relative flex h-2 w-2 ml-0.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              </span>
+            )}
+          </Link>
+        </Button>
 
         {/* User Menu */}
         <DropdownMenu>
@@ -265,7 +215,7 @@ export function Topbar() {
               </Avatar>
               <span className="hidden text-left leading-tight md:block">
                 <span className="block text-xs font-semibold">{user?.name}</span>
-                {user?.email === "garryamelia6265@gmail.com" && (
+                {isAdminEmail(user?.email) && (
                   <span className="block text-[11px] text-violet-500 font-medium">Admin</span>
                 )}
               </span>
@@ -297,21 +247,27 @@ export function Topbar() {
 export function PageHeader({
   title,
   subtitle,
+  description,
   action,
+  actions,
 }: {
   title: string;
   subtitle?: string;
+  description?: string;
   action?: React.ReactNode;
+  actions?: React.ReactNode;
 }) {
+  const rightContent = action || actions;
+  const sub = subtitle || description;
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:flex sm:justify-between">
       <div className="min-w-0">
         <h1 className="truncate font-display text-2xl font-bold sm:text-3xl">{title}</h1>
-        {subtitle ? (
-          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+        {sub ? (
+          <p className="mt-1 text-sm text-muted-foreground">{sub}</p>
         ) : null}
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {rightContent ? <div className="shrink-0">{rightContent}</div> : null}
     </div>
   );
 }

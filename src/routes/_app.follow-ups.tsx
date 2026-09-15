@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
+import { isAdminEmail } from "@/lib/crm-data";
 import { useCrm } from "@/lib/crm-store";
 import { supabase } from "@/lib/supabase";
 import { markLeadAsRepliedFn, triggerNextFollowUpFn } from "@/lib/server-actions";
@@ -70,7 +71,7 @@ function EmptyState({ icon: Icon, text }: { icon: React.ElementType; text: strin
 
 function FollowUpsPage() {
   const { user } = useCrm();
-  const isAdmin = Boolean(user && (user.role === "admin" || user.email === "garryamelia6265@gmail.com"));
+  const isAdmin = Boolean(user && (user.role === "admin" || isAdminEmail(user.email)));
 
   const [mounted, setMounted] = useState(false);
   const [leads, setLeads] = useState<DbLead[]>([]);
@@ -186,17 +187,15 @@ function FollowUpsPage() {
     if (stageKey === "followup_24h" && hours >= 24) return true;
     if (stageKey === "followup_48h" && hours >= 48) return true;
     if (stageKey === "followup_72h" && hours >= 72) return true;
-    if (stageKey === "followup_10d" && hours >= 240) return true;
 
     return false;
   };
 
-  // Determine next unsent stage for manual trigger button
-  const getNextStage = (lead: DbLead): "24h" | "48h" | "72h" | "10d" | null => {
+  // Determine next unsent stage for manual trigger button (3 stages: 24h, 48h, 72h)
+  const getNextStage = (lead: DbLead): "24h" | "48h" | "72h" | null => {
     if (!isStageSent(lead, "followup_24h")) return "24h";
     if (!isStageSent(lead, "followup_48h")) return "48h";
     if (!isStageSent(lead, "followup_72h")) return "72h";
-    if (!isStageSent(lead, "followup_10d")) return "10d";
     return null;
   };
 
@@ -204,7 +203,7 @@ function FollowUpsPage() {
   async function handleSendNextFollowUp(lead: DbLead) {
     const nextStage = getNextStage(lead);
     if (!nextStage) {
-      toast.info("All 4 follow-up emails have already been sent to this lead!");
+      toast.info("All 3 follow-up emails have already been sent to this lead!");
       return;
     }
 
@@ -262,7 +261,7 @@ function FollowUpsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Follow-ups"
-        subtitle="Leads awaiting response — live automated sequence tracking (24h, 48h, 72h, 10d)."
+        subtitle="Leads awaiting response — live automated sequence tracking (24h, 48h, 72h)."
         action={
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -280,8 +279,8 @@ function FollowUpsPage() {
         }
       />
 
-      {/* Overview Stat Cards (5 Cards) */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      {/* Overview Stat Cards (4 Cards: Awaiting, 24h, 48h, 72h) */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="panel p-5">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground font-medium">Awaiting Response</p>
@@ -323,17 +322,6 @@ function FollowUpsPage() {
           </p>
           <p className="mt-1 text-xs text-muted-foreground">Demo invitation sent</p>
         </div>
-
-        <div className="panel p-5">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground font-medium">10 Days Follow-up</p>
-            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-          </div>
-          <p className="mt-2 font-display text-3xl font-bold text-emerald-400">
-            {leads.filter((l) => isStageSent(l, "followup_10d")).length}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">Final check-in sent</p>
-        </div>
       </div>
 
       {/* Live Un-booked & Un-replied Leads List */}
@@ -361,7 +349,6 @@ function FollowUpsPage() {
               const sent24h = isStageSent(lead, "followup_24h");
               const sent48h = isStageSent(lead, "followup_48h");
               const sent72h = isStageSent(lead, "followup_72h");
-              const sent10d = isStageSent(lead, "followup_10d");
               const nextStage = getNextStage(lead);
 
               return (
@@ -385,7 +372,7 @@ function FollowUpsPage() {
                     </div>
                   </div>
 
-                  {/* 4 Follow-up Sequence Badges */}
+                  {/* 3 Follow-up Sequence Badges */}
                   <div className="space-y-1.5">
                     <p className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase">
                       Follow-up Email Sequence Status
@@ -429,45 +416,11 @@ function FollowUpsPage() {
                         {sent72h ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> : <Clock className="mr-1.5 h-3.5 w-3.5 opacity-60" />}
                         72 Hours
                       </Badge>
-
-                      {/* 10 Days */}
-                      <Badge
-                        variant="outline"
-                        className={`rounded-xl px-3 py-1 text-xs transition-all ${
-                          sent10d
-                            ? "bg-emerald-600 text-white font-semibold border-emerald-500 shadow-sm"
-                            : "bg-muted/30 text-muted-foreground border-border/40 opacity-70"
-                        }`}
-                      >
-                        {sent10d ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> : <Clock className="mr-1.5 h-3.5 w-3.5 opacity-60" />}
-                        10 Days
-                      </Badge>
                     </div>
                   </div>
 
                   {/* Actions */}
                   <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                    {nextStage ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={sendingNextId === lead.id}
-                        onClick={() => handleSendNextFollowUp(lead)}
-                        className="rounded-xl h-8 text-xs font-semibold text-primary hover:bg-primary/10 border-primary/30"
-                      >
-                        {sendingNextId === lead.id ? (
-                          <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Send className="mr-1.5 h-3.5 w-3.5 text-primary" />
-                        )}
-                        Send {nextStage.toUpperCase()} Now
-                      </Button>
-                    ) : (
-                      <Badge variant="secondary" className="rounded-lg text-xs">
-                        All 4 Sent
-                      </Badge>
-                    )}
-
                     <Button
                       size="sm"
                       variant="outline"

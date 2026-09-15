@@ -34,6 +34,16 @@ export default async function handler(req: any, res: any) {
   } catch (e: any) { results.push(`emails_sent catch: ${e.message}`); }
 
   try {
+    await supabase.from("meetings").delete().not("id", "is", null);
+    results.push("meetings: cleared");
+  } catch (e: any) { results.push(`meetings catch: ${e.message}`); }
+
+  try {
+    await supabase.from("pending_signups").delete().not("id", "is", null);
+    results.push("pending_signups: cleared");
+  } catch (e: any) { results.push(`pending_signups catch: ${e.message}`); }
+
+  try {
     const { data: usersData } = await supabase.auth.admin.listUsers();
     const toDelete = (usersData?.users || []).filter((u: any) => u.email !== ADMIN_EMAIL);
     for (const u of toDelete) {
