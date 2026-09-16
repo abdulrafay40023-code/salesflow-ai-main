@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MessageSquare, ExternalLink } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { MessageSquare } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
 
 export const Route = createFileRoute("/_app/livechat")({
@@ -36,16 +35,6 @@ function LiveChatPage() {
             Real-time customer conversations across 5 connected websites with dedicated inboxes.
           </p>
         </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => window.open(iframeSrc, "_blank")}
-          className="gap-1.5 text-xs self-start sm:self-auto cursor-pointer"
-        >
-          <span>Open Fullscreen</span>
-          <ExternalLink className="size-3.5" />
-        </Button>
       </div>
 
       {/* Embedded LiveChat Console */}
