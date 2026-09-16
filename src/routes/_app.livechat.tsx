@@ -18,8 +18,22 @@ export const Route = createFileRoute("/_app/livechat")({
 function LiveChatPage() {
   const { user } = useCrm();
 
-  const iframeSrc = user?.email
-    ? `https://teals-livechat-saas.vercel.app/dashboard/chats?sso_email=${encodeURIComponent(user.email)}&sso_name=${encodeURIComponent(user.name || '')}&sso_role=${encodeURIComponent(user.role || 'admin')}`
+  const sessionUser = user || (() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = window.sessionStorage.getItem("teals-crm-session") || window.localStorage.getItem("teals-crm-session");
+        if (raw) return JSON.parse(raw);
+      } catch {}
+    }
+    return null;
+  })();
+
+  const email = sessionUser?.email;
+  const name = sessionUser?.name || "";
+  const role = sessionUser?.role || "agent";
+
+  const iframeSrc = email
+    ? `https://teals-livechat-saas.vercel.app/dashboard/chats?sso_email=${encodeURIComponent(email)}&sso_name=${encodeURIComponent(name)}&sso_role=${encodeURIComponent(role)}`
     : "https://teals-livechat-saas.vercel.app/dashboard/chats";
 
   return (
