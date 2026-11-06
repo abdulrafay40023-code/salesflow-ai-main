@@ -263,7 +263,7 @@ function FollowUpsPage() {
         title="Follow-ups"
         subtitle="Leads awaiting response — live automated sequence tracking (24h, 48h, 72h)."
         action={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -280,53 +280,53 @@ function FollowUpsPage() {
       />
 
       {/* Overview Stat Cards (4 Cards: Awaiting, 24h, 48h, 72h) */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="panel p-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <div className="panel p-3.5 sm:p-5">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground font-medium">Awaiting Response</p>
-            <Users className="h-4 w-4 text-blue-400" />
+            <p className="text-xs sm:text-sm text-muted-foreground font-medium">Awaiting Response</p>
+            <Users className="h-4 w-4 text-blue-400 shrink-0" />
           </div>
-          <p className="mt-2 font-display text-3xl font-bold text-foreground">{leads.length}</p>
-          <p className="mt-1 text-xs text-muted-foreground">No booking or reply yet</p>
+          <p className="mt-2 font-display text-2xl sm:text-3xl font-bold text-foreground">{leads.length}</p>
+          <p className="mt-1 text-[11px] sm:text-xs text-muted-foreground">No booking or reply yet</p>
         </div>
 
-        <div className="panel p-5">
+        <div className="panel p-3.5 sm:p-5">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground font-medium">24h Follow-up</p>
-            <Clock className="h-4 w-4 text-amber-400" />
+            <p className="text-xs sm:text-sm text-muted-foreground font-medium">24h Follow-up</p>
+            <Clock className="h-4 w-4 text-amber-400 shrink-0" />
           </div>
-          <p className="mt-2 font-display text-3xl font-bold text-amber-400">
+          <p className="mt-2 font-display text-2xl sm:text-3xl font-bold text-amber-400">
             {leads.filter((l) => isStageSent(l, "followup_24h")).length}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">First check-in sent</p>
+          <p className="mt-1 text-[11px] sm:text-xs text-muted-foreground">First check-in sent</p>
         </div>
 
-        <div className="panel p-5">
+        <div className="panel p-3.5 sm:p-5">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground font-medium">48h Follow-up</p>
-            <Mail className="h-4 w-4 text-purple-400" />
+            <p className="text-xs sm:text-sm text-muted-foreground font-medium">48h Follow-up</p>
+            <Mail className="h-4 w-4 text-purple-400 shrink-0" />
           </div>
-          <p className="mt-2 font-display text-3xl font-bold text-purple-400">
+          <p className="mt-2 font-display text-2xl sm:text-3xl font-bold text-purple-400">
             {leads.filter((l) => isStageSent(l, "followup_48h")).length}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">Value email sent</p>
+          <p className="mt-1 text-[11px] sm:text-xs text-muted-foreground">Value email sent</p>
         </div>
 
-        <div className="panel p-5">
+        <div className="panel p-3.5 sm:p-5">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground font-medium">72h Follow-up</p>
-            <Sparkles className="h-4 w-4 text-cyan-400" />
+            <p className="text-xs sm:text-sm text-muted-foreground font-medium">72h Follow-up</p>
+            <Sparkles className="h-4 w-4 text-cyan-400 shrink-0" />
           </div>
-          <p className="mt-2 font-display text-3xl font-bold text-cyan-400">
+          <p className="mt-2 font-display text-2xl sm:text-3xl font-bold text-cyan-400">
             {leads.filter((l) => isStageSent(l, "followup_72h")).length}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">Demo invitation sent</p>
+          <p className="mt-1 text-[11px] sm:text-xs text-muted-foreground">Demo invitation sent</p>
         </div>
       </div>
 
       {/* Live Un-booked & Un-replied Leads List */}
-      <div className="panel p-5">
-        <div className="flex items-center justify-between gap-3 pb-4 border-b border-border/60">
+      <div className="panel p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-border/60">
           <div>
             <h2 className="font-display text-lg font-bold">Follow-up Sequence Pipeline</h2>
             <p className="text-sm text-muted-foreground">

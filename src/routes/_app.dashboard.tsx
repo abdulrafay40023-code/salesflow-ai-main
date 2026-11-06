@@ -14,6 +14,9 @@ import {
   Clock,
   AlertCircle,
   PhoneCall,
+  Laptop,
+  Download,
+  Lock,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -39,8 +42,9 @@ import {
   removePendingOrApprovedSignup,
   type PendingSignup,
 } from "@/lib/pending-signups";
-import { cancelMeetingBookingFn } from "@/lib/server-actions";
+import { cancelMeetingBookingFn, claimMeetingBookingFn } from "@/lib/server-actions";
 import { AiCallDialog } from "@/components/crm/AiCallDialog";
+import { triggerDirectAppInstall } from "@/lib/install-helper";
 
 function formatRequestedDate(d?: string) {
   if (!d) return "Recently";
@@ -131,11 +135,13 @@ function MeetingNotifications({
   leads,
   dismissedNotifs,
   dismissNotif,
+  onClaimMeeting,
 }: {
   meetings: DbMeeting[];
   leads: DbLead[];
   dismissedNotifs: Set<string>;
   dismissNotif: (id: string, type: "today" | "future") => void;
+  onClaimMeeting?: (meetingId: string, leadId?: string) => void;
 }) {
   // Live ticker updates every 2 seconds for real-time state changes and auto-dismissal
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -177,8 +183,8 @@ function MeetingNotifications({
     // Elapsed time since meeting start (in ms)
     const elapsedPostStart = nowMs - meetingStartMs;
 
-    // Auto-disappear 10 minutes AFTER scheduled start time
-    if (elapsedPostStart > 10 * 60 * 1000) continue;
+    // Auto-disappear 20 minutes AFTER scheduled start time
+    if (elapsedPostStart > 20 * 60 * 1000) continue;
 
     // Extract time label (e.g., "10:30 AM")
     let timeLabel = "";
@@ -222,12 +228,12 @@ function MeetingNotifications({
     }
 
     if (!clientName && cleanTitle) {
-      // Clean title format: "Sales Meeting with [Name] ([Email]) on YYYY-MM-DD @ HH:MM AM/PM"
-      const withMatch = cleanTitle.match(/Sales Meeting with ([^(]+?)(?:\s*\([^)]*\))?\s+on\s+/i);
+      // Clean title format: "Sales Meeting with [Name]..." or "1-on-1 Strategy Session with [Name]..."
+      const withMatch = cleanTitle.match(/(?:Sales Meeting with|1-on-1 Strategy Session with|Strategy Session with)\s+([^(]+?)(?:\s*\([^)]*\))?(?:\s+on\s+|\s+-\s+|$)/i);
       if (withMatch && withMatch[1]) {
         clientName = withMatch[1].trim();
-      } else if (cleanTitle.includes("Sales Meeting with ")) {
-        const afterWith = cleanTitle.split("Sales Meeting with ")[1]?.split(" on ")[0]?.trim() || "";
+      } else if (cleanTitle.toLowerCase().includes("with ")) {
+        const afterWith = cleanTitle.split(/with /i)[1]?.split(" on ")[0]?.split(" - ")[0]?.trim() || "";
         clientName = afterWith.replace(/\([^)]*\)/g, "").trim();
       } else if (clientEmail) {
         clientName = clientEmail.split("@")[0];
@@ -284,6 +290,14 @@ function MeetingNotifications({
       zoomLink = rawTitleWithoutNow.split("|| ZOOM:")[1]?.trim() || zoomLink;
     }
 
+    const cleanAgent = ((m as any).agent_email || "").trim().toLowerCase();
+    const isClaimed = Boolean(
+      cleanAgent &&
+      cleanAgent !== "agent@teals.co" &&
+      cleanAgent !== "unassigned" &&
+      !cleanAgent.includes("unclaimed")
+    );
+
     cards.push({
       id,
       isLive,
@@ -297,6 +311,8 @@ function MeetingNotifications({
       clientName,
       clientEmail,
       zoomLink,
+      isClaimed,
+      agentEmail: (m as any).agent_email || "",
     });
   }
 
@@ -344,44 +360,79 @@ function MeetingNotifications({
         return (
           <div
             key={n.id}
-            className={`flex flex-wrap items-center gap-3 rounded-2xl border p-4 ${borderColor} transition-all duration-500 shadow-xl backdrop-blur-md animate-fade-in`}
+            className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 rounded-2xl border p-3.5 sm:p-4 ${borderColor} transition-all duration-500 shadow-xl backdrop-blur-md animate-fade-in`}
           >
-            <span className={`grid size-10 place-items-center rounded-xl shrink-0 ${iconBg} border border-current/20`}>
-              <Icon className={`size-5 ${n.isLive ? "animate-pulse" : ""}`} />
-            </span>
+            {/* Top / Left Section: Icon & Info */}
+            <div className="flex items-start gap-3 min-w-0 flex-1">
+              <span className={`grid size-9 sm:size-10 place-items-center rounded-xl shrink-0 ${iconBg} border border-current/20 mt-0.5 sm:mt-0`}>
+                <Icon className={`size-4.5 sm:size-5 ${n.isLive ? "animate-pulse" : ""}`} />
+              </span>
 
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-bold tracking-tight">{title}</p>
-                {n.isLive && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-300 border border-red-500/40 animate-pulse">
-                    LIVE NOW
-                  </span>
-                )}
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs sm:text-sm font-bold tracking-tight">{title}</p>
+                  {n.isLive && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 px-2 py-0.5 text-[9px] sm:text-[10px] font-bold text-red-300 border border-red-500/40 animate-pulse">
+                      LIVE NOW
+                    </span>
+                  )}
+                </div>
+                
+                <p className="text-[11px] sm:text-xs opacity-90 leading-relaxed">{subtitle}</p>
+
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  {(n.clientName || n.clientEmail) && (
+                    <span className="inline-flex items-center gap-1 font-semibold text-[10px] sm:text-xs text-amber-300 bg-amber-500/15 px-2 py-0.5 rounded-lg border border-amber-500/30 truncate max-w-full">
+                      👤 {n.clientName || "Lead"} {n.clientEmail && n.clientEmail !== n.clientName ? `(${n.clientEmail})` : ""}
+                    </span>
+                  )}
+                  {n.isClaimed ? (
+                    <span className="inline-flex items-center gap-1 font-semibold text-[10px] sm:text-xs text-emerald-300 bg-emerald-500/15 px-2 py-0.5 rounded-lg border border-emerald-500/30">
+                      <CheckCircle2 className="size-3" /> Claimed: {n.agentEmail}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 font-semibold text-[10px] sm:text-xs text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-lg border border-amber-500/40 animate-pulse">
+                      <Lock className="size-3" /> Locked (Available to Claim)
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2 mt-1 text-xs opacity-90">
-                <span>{subtitle}</span>
-                {(n.clientName || n.clientEmail) && (
-                  <span className="inline-flex items-center gap-1 font-semibold text-amber-300 bg-amber-500/15 px-2.5 py-0.5 rounded-lg border border-amber-500/30">
-                    👤 Client: {n.clientName || "Lead"} {n.clientEmail && n.clientEmail !== n.clientName ? `(${n.clientEmail})` : ""}
-                  </span>
-                )}
-              </div>
+
+              {/* Close Button on mobile in top-right */}
+              <button
+                onClick={() => dismissNotif(n.id, n.isToday || n.isLive ? "today" : "future")}
+                className="sm:hidden shrink-0 flex items-center justify-center size-7 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all active:scale-95 border border-white/10 -mt-0.5 -mr-0.5"
+                title="Dismiss notification"
+              >
+                <X className="size-3.5" />
+              </button>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Bottom / Right Section: Action Buttons */}
+            <div className="flex items-center gap-2 w-full sm:w-auto pt-2.5 sm:pt-0 border-t sm:border-0 border-white/10">
+              {!n.isClaimed && onClaimMeeting && (
+                <button
+                  onClick={() => onClaimMeeting(n.meeting.id, n.meeting.lead_id)}
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold shadow-md transition-all active:scale-95 bg-amber-500 hover:bg-amber-400 text-slate-950 h-9"
+                >
+                  <Lock className="size-3.5" />
+                  <span>Claim Booking</span>
+                </button>
+              )}
+
               <a
                 href={n.zoomLink}
                 target="_blank"
                 rel="noreferrer"
-                className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold shadow-md transition-all active:scale-95 ${btnColor}`}
+                className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold shadow-md transition-all active:scale-95 h-9 ${btnColor}`}
               >
                 📹 Join Zoom
               </a>
 
+              {/* Dismiss button on desktop */}
               <button
                 onClick={() => dismissNotif(n.id, n.isToday || n.isLive ? "today" : "future")}
-                className="shrink-0 flex items-center justify-center size-8 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all active:scale-95 border border-white/10"
+                className="hidden sm:flex shrink-0 items-center justify-center size-9 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all active:scale-95 border border-white/10"
                 title="Dismiss notification"
               >
                 <X className="size-4" />
@@ -395,7 +446,7 @@ function MeetingNotifications({
 }
 
 function DashboardPage() {
-  const { user } = useCrm();
+  const { user, updateUserProfile } = useCrm();
   const isAdmin = Boolean(user && (user.role === "admin" || isAdminEmail(user.email)));
 
   const [dbLeads, setDbLeads] = useState<DbLead[]>([]);
@@ -406,6 +457,30 @@ function DashboardPage() {
   const [lastSync, setLastSync] = useState<Date>(new Date());
   const [callingLead, setCallingLead] = useState<any>(null);
   const [isCallOpen, setIsCallOpen] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isStandalone, setIsStandalone] = useState(false);
+
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone) {
+      setIsStandalone(true);
+    }
+    const handleBeforeInstall = (e: Event) => {
+      (window as any).__tealsDeferredPrompt = e;
+      setDeferredPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", handleBeforeInstall);
+    return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+  }, []);
+
+  const handleInstallApp = async () => {
+    await triggerDirectAppInstall(deferredPrompt, () => {
+      setIsStandalone(true);
+      setDeferredPrompt(null);
+    });
+  };
+
   const [dismissedNotifs, setDismissedNotifs] = useState<Set<string>>(() => {
     try {
       const stored = localStorage.getItem("crm_dismissed_notifs");
@@ -529,16 +604,63 @@ function DashboardPage() {
         let meetings = meetingsRes.value.data as DbMeeting[];
         if (!isAdmin) {
           const agentEmail = (user?.email || "").trim().toLowerCase();
+          const userDept = (user?.department_id || (user as any)?.department || "").toLowerCase().trim();
+          const isSalesDept = userDept === "sales-department" || userDept === "sales" || userDept.includes("sales");
+          const userRole = (user?.role || "").toLowerCase().trim();
+          const userRoleTitle = ((user as any)?.role_title || (user as any)?.designation || "").toLowerCase().trim();
+          const isSalesLeader = 
+            userRole === "manager" || 
+            userRole === "team_lead" || 
+            userRole === "team_leader" || 
+            Boolean((user as any)?.is_department_manager) ||
+            userRoleTitle.includes("manager") ||
+            userRoleTitle.includes("lead") ||
+            userRoleTitle.includes("head");
+
+          const myAssignedWebsites = (user?.assigned_websites || []).map((w: string) => w.toLowerCase().trim());
           const leadIds = new Set(fetchedLeads.map((l) => l?.id).filter(Boolean));
           const leadEmails = new Set(fetchedLeads.map((l) => (l?.email || "").toLowerCase()).filter(Boolean));
+
           meetings = meetings.filter((m) => {
             if (!m) return false;
+            const mAgent = ((m as any).agent_email || "").trim().toLowerCase();
+
+            // 1. Direct Assignment: If meeting is directly assigned to this working agent
+            if (mAgent && mAgent === agentEmail) return true;
             if (m.lead_id && leadIds.has(m.lead_id)) return true;
-            if ((m as any).agent_email && (m as any).agent_email.toLowerCase() === agentEmail) return true;
             if (m.title) {
               const emailMatch = m.title.match(/[\w.-]+@[\w.-]+\.\w+/);
               if (emailMatch && leadEmails.has(emailMatch[0].toLowerCase())) return true;
             }
+
+            // Non-sales staff CANNOT view unclaimed sales booking alerts
+            if (!isSalesDept) return false;
+
+            // Sales Managers & Team Leaders can view ALL bookings in the sales department
+            if (isSalesLeader) return true;
+
+            // 2. Exclusivity: If meeting is claimed by ANOTHER working agent, hide it from everyone else!
+            const isClaimedByOther = Boolean(
+              mAgent &&
+              mAgent !== agentEmail &&
+              mAgent !== "garryamelia6265@gmail.com" &&
+              mAgent !== "unassigned"
+            );
+            if (isClaimedByOther) return false;
+
+            // 3. Unclaimed / Website Permission Rule:
+            // If working agent has no website restrictions, or meeting belongs to their assigned website:
+            if (myAssignedWebsites.length === 0) return true;
+            if (m.title) {
+              const titleLower = m.title.toLowerCase();
+              const isAllowedSite = myAssignedWebsites.some((siteSlug: string) => {
+                const cleanSlug = siteSlug.replace(/[^a-z0-9]/g, "");
+                const cleanTitle = titleLower.replace(/[^a-z0-9]/g, "");
+                return cleanTitle.includes(cleanSlug);
+              });
+              if (isAllowedSite) return true;
+            }
+
             return false;
           });
         }
@@ -721,6 +843,32 @@ function DashboardPage() {
     }
   }
 
+  async function handleClaimMeeting(meetingId: string, leadId?: string) {
+    const claimingEmail = (user?.email || "").trim().toLowerCase() || "garryamelia6265@gmail.com";
+    const claimingName = user?.name || user?.full_name || claimingEmail.split("@")[0];
+
+    try {
+      await claimMeetingBookingFn({
+        data: {
+          meetingId,
+          claimingEmail,
+          claimingName,
+        }
+      });
+
+      toast.success(`🎉 Meeting claimed successfully by ${claimingName}! Confirmation emails sent.`);
+      fetchLive();
+
+      if (typeof BroadcastChannel !== "undefined") {
+        const bc = new BroadcastChannel("teals-crm-bookings-sync");
+        bc.postMessage({ type: "meeting_claimed", meetingId, agentEmail: claimingEmail });
+        bc.close();
+      }
+    } catch (e: any) {
+      toast.error(`Failed to claim meeting: ${e.message || "Unknown error"}`);
+    }
+  }
+
   // Stats from Supabase (live)
   const safeLeads = (dbLeads || []).filter(Boolean);
   // Exclude completed/cancelled meetings from active booked count
@@ -798,7 +946,7 @@ function DashboardPage() {
             : "Here is how your team's pipeline is performing today."
         }
         action={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* Live indicator */}
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="relative flex h-2 w-2">
@@ -811,7 +959,16 @@ function DashboardPage() {
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
-            <Button asChild className="rounded-xl">
+            <Button
+              onClick={handleInstallApp}
+              variant="outline"
+              size="sm"
+              className="rounded-xl gap-1.5 border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold cursor-pointer"
+              title="Download Teals CRM App for PC or Mobile"
+            >
+              <Download className="size-4" /> Download
+            </Button>
+            <Button asChild className="rounded-xl" size="sm">
               <Link to="/leads">
                 <UserPlus className="size-4" /> Import Leads
               </Link>
@@ -821,7 +978,7 @@ function DashboardPage() {
       />
 
       {/* Primary Metrics Grid (6 Clean Cards) — FIRST directly below Header */}
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Total Leads" value={total} icon={Users} hint="in workspace" />
         <StatCard label="Contacted" value={contacted} icon={Mail} tone="info" hint="calls & outreach" />
         <StatCard label="Meetings Booked" value={meetingsBooked} icon={CalendarCheck} tone="warning" hint="total booked" />
@@ -830,20 +987,20 @@ function DashboardPage() {
         <StatCard label="Won Deals" value={wonLeads} icon={CheckCircle2} tone="success" hint="closed won" />
       </div>
 
-      {/* ── Notification Sections (Stacked BELOW the 5 Primary Metric Cards) ── */}
-      {!isAdmin && (
-        <MeetingNotifications
-          meetings={dbMeetings}
-          leads={safeLeads}
-          dismissedNotifs={dismissedNotifs}
-          dismissNotif={dismissNotif}
-        />
-      )}
+
+      {/* ── Meeting Claim Notification Banner (Shown for Admins & Working Agents on Dashboard) ── */}
+      <MeetingNotifications
+        meetings={dbMeetings}
+        leads={safeLeads}
+        dismissedNotifs={dismissedNotifs}
+        dismissNotif={dismissNotif}
+        onClaimMeeting={handleClaimMeeting}
+      />
 
       {/* Pending Agent Approval Notifications Banner (Admin Only) */}
       {isAdmin && pendingProfiles.length > 0 && (
-        <div className="rounded-2xl border border-amber-500/40 bg-amber-950/30 p-5 shadow-xl backdrop-blur-md animate-fade-in space-y-3">
-          <div className="flex items-center justify-between">
+        <div className="rounded-2xl border border-amber-500/40 bg-amber-950/30 p-4 sm:p-5 shadow-xl backdrop-blur-md animate-fade-in space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
               <span className="relative flex size-3">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span>
@@ -1064,11 +1221,11 @@ function DashboardPage() {
               text="No leads in database yet. Click 'Import Leads' to add your first lead."
             />
           ) : (
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 space-y-2.5">
               {latestLeads.map((l) => (
                 <div
                   key={l.id}
-                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-border/70 p-3 transition-colors hover:bg-accent/30"
+                  className="flex flex-col sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center gap-2.5 sm:gap-3 rounded-xl border border-border/70 p-3 transition-colors hover:bg-accent/30"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <Avatar className="h-8 w-8 shrink-0">
@@ -1083,7 +1240,7 @@ function DashboardPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap pt-2 sm:pt-0 border-t sm:border-t-0 border-border/40">
                     {l.phone && l.phone.trim().length > 3 && l.phone !== "—" ? (
                       <Button
                         size="sm"

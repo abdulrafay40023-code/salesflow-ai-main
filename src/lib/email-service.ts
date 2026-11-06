@@ -2,7 +2,7 @@ import nodemailer from "nodemailer";
 
 // Main Gmail credentials provided by user (supports Vercel env variables with fallback)
 export const GMAIL_USER = process.env["GMAIL_USER"] || "garryamelia6265@gmail.com";
-export const GMAIL_APP_PASS = process.env["GMAIL_APP_PASS"] || "vlnzgybqvbmapxnn";
+export const GMAIL_APP_PASS = process.env["GMAIL_APP_PASS"] || "ogdixmwirfmoadbs";
 
 // SMTP Transporter using official Gmail SMTP
 export const transporter = nodemailer.createTransport({
@@ -193,6 +193,13 @@ export async function sendMeetingConfirmationEmail({
   agentDate,
   clientTime,
   clientDate,
+  clientTz,
+  leadName,
+  agentName,
+  zoomLink,
+  timeUntilMeeting,
+  isTransfer = false,
+  transferredByName,
 }: {
   leadEmail: string;
   agentEmail: string;
@@ -202,31 +209,83 @@ export async function sendMeetingConfirmationEmail({
   agentDate?: string;
   clientTime?: string;
   clientDate?: string;
+  clientTz?: string;
+  leadName?: string;
+  agentName?: string;
+  zoomLink?: string;
+  timeUntilMeeting?: string;
+  isTransfer?: boolean;
+  transferredByName?: string;
 }) {
   const displayClientDate = clientDate || meetingDate;
   const displayClientTime = clientTime || meetingTime;
   const displayAgentDate = agentDate || meetingDate;
   const displayAgentTime = agentTime || meetingTime;
+  const displayTz = clientTz ? clientTz.replace("_", " ") : "Your Local Time";
+  const zoomUrl = zoomLink || "https://zoom.us/j/5539578967";
+  const displayAgentName = agentName || (agentEmail ? agentEmail.split("@")[0] : "Senior E-Commerce Specialist");
+  const displayClientName = leadName || (leadEmail ? leadEmail.split("@")[0] : "Valued Client");
+  const countdownText = timeUntilMeeting || "at scheduled time";
 
   // Send personalized email to Client in their local time
   if (leadEmail && leadEmail.includes("@")) {
+    const clientSubject = isTransfer
+      ? `✅ Meeting Host Updated (${countdownText}): 1-on-1 Consultation with ${displayAgentName}`
+      : `✅ Meeting Confirmed (${countdownText}): 1-on-1 Consultation with ${displayAgentName} (${displayClientDate} at ${displayClientTime})`;
+
     const clientMailOptions = {
-      from: `"Teals CRM Meetings" <${GMAIL_USER}>`,
+      from: `"AMZ Solutions Hub" <${GMAIL_USER}>`,
       to: leadEmail,
-      subject: `✅ Meeting Confirmed: ${displayClientDate} at ${displayClientTime}`,
+      subject: clientSubject,
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; background-color: #ffffff;">
-          <div style="background-color: #4f46e5; padding: 20px; text-align: center; color: white; border-radius: 8px 8px 0 0;">
-            <h2 style="margin: 0;">Meeting Confirmed</h2>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; background-color: #ffffff; border-radius: 12px;">
+          <div style="background: linear-gradient(135deg, #4f46e5, #7c3aed); padding: 24px; text-align: center; color: white; border-radius: 8px 8px 0 0;">
+            <h1 style="margin: 0; font-size: 22px; font-weight: bold;">AMZ Solutions Hub</h1>
+            <p style="margin: 4px 0 0 0; font-size: 14px; opacity: 0.9;">eCommerce Automation &amp; Store Management Services</p>
           </div>
           <div style="padding: 24px; color: #334155; line-height: 1.6;">
-            <p>Your sales demo meeting has been successfully booked!</p>
-            <div style="background-color: #f1f5f9; padding: 16px; border-radius: 8px; margin: 20px 0;">
-              <p style="margin: 4px 0;"><strong>Date:</strong> ${displayClientDate}</p>
-              <p style="margin: 4px 0;"><strong>Time:</strong> ${displayClientTime}</p>
-              <p style="margin: 4px 0;"><strong>Attendees:</strong> ${leadEmail} & Sales Agent (${agentEmail})</p>
+            <div style="margin-bottom: 12px;">
+              <span style="background: #dcfce7; color: #15803d; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; border: 1px solid #bbf7d0; text-transform: uppercase;">
+                ${isTransfer ? "Meeting Reassigned &amp; Host Updated" : "Meeting Confirmed &amp; Host Assigned"}
+              </span>
             </div>
-            <p>Reminders will be sent 1 day and 1 hour before the scheduled meeting. Your Zoom meeting join link will be delivered at the exact start time.
+
+            <!-- Prominent Countdown Box -->
+            <div style="background: #eef2ff; border: 2px solid #6366f1; border-radius: 10px; padding: 14px 18px; margin: 16px 0 20px 0; text-align: center;">
+              <span style="display: block; font-size: 12px; color: #4338ca; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Scheduled Time Countdown</span>
+              <strong style="display: block; font-size: 18px; color: #312e81; margin-top: 4px;">
+                ⏰ Your meeting starts ${countdownText}!
+              </strong>
+              <span style="display: block; font-size: 13px; color: #4f46e5; margin-top: 2px;">
+                ${displayClientDate} at ${displayClientTime} (${displayTz})
+              </span>
+            </div>
+
+            <h2 style="color: #1e293b; margin-top: 8px;">Hello ${displayClientName},</h2>
+            <p>
+              ${isTransfer 
+                ? `Your 1-on-1 Zoom consultation has been reassigned to your dedicated Senior E-Commerce Specialist, <strong>${displayAgentName}</strong>.`
+                : `Your 1-on-1 Zoom consultation has been successfully confirmed and claimed by your dedicated Senior E-Commerce Specialist, <strong>${displayAgentName}</strong>.`}
+            </p>
+            
+            <div style="background-color: #f8fafc; padding: 18px; border-radius: 8px; border: 1px solid #e2e8f0; margin: 20px 0;">
+              <p style="margin: 6px 0;">📅 <strong>Date:</strong> ${displayClientDate}</p>
+              <p style="margin: 6px 0;">⏰ <strong>Time:</strong> ${displayClientTime} <span style="color: #4f46e5; font-weight: 600;">(${displayTz})</span></p>
+              <p style="margin: 6px 0;">👤 <strong>Host Specialist:</strong> ${displayAgentName} (${agentEmail})</p>
+              <p style="margin: 6px 0;">💻 <strong>Meeting Link:</strong> <a href="${zoomUrl}" style="color: #4f46e5; font-weight: bold; text-decoration: underline;">Join Zoom Meeting</a></p>
+            </div>
+
+            <div style="margin: 25px 0; text-align: center;">
+              <a href="${zoomUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 15px; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.4);">
+                🚀 Join Zoom Meeting at Scheduled Time
+              </a>
+            </div>
+
+            <p style="font-size: 13px; color: #64748b; margin-top: 20px;">
+              During this 1-on-1 session, our specialist will present a customized roadmap for building and scaling automated stores across Amazon FBA, Shopify, and Walmart.
+            </p>
+            <p style="font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 12px; margin-top: 20px;">
+              Need to reschedule? Reply directly to this email or visit <a href="https://www.amzsolutionshub.com" style="color: #4f46e5;">amzsolutionshub.com</a>.
             </p>
           </div>
           ${getTrackingPixel(undefined, leadEmail)}
@@ -238,24 +297,52 @@ export async function sendMeetingConfirmationEmail({
 
   // Send personalized email to Agent with Pakistan Time (PKT) and client local time
   if (agentEmail && agentEmail.includes("@") && agentEmail.toLowerCase() !== leadEmail.toLowerCase()) {
+    const agentSubject = isTransfer
+      ? `🔄 Meeting Transferred to You (${countdownText}): ${displayAgentDate} at ${displayAgentTime} [PKT] (${displayClientName})`
+      : `📅 Booking Claim Confirmed (${countdownText}): ${displayAgentDate} at ${displayAgentTime} [PKT] (${displayClientName})`;
+
     const agentMailOptions = {
-      from: `"Teals CRM Meetings" <${GMAIL_USER}>`,
+      from: `"AMZ Solutions Hub Appointments" <${GMAIL_USER}>`,
       to: agentEmail,
-      subject: `✅ New Meeting Booked: ${displayAgentDate} at ${displayAgentTime} [PKT]`,
+      subject: agentSubject,
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; background-color: #ffffff;">
-          <div style="background-color: #4f46e5; padding: 20px; text-align: center; color: white; border-radius: 8px 8px 0 0;">
-            <h2 style="margin: 0;">New Sales Meeting Booked</h2>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; background-color: #ffffff; border-radius: 12px;">
+          <div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 20px; text-align: center; color: white; border-radius: 8px 8px 0 0;">
+            <span style="background: rgba(34, 197, 94, 0.2); color: #4ade80; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; border: 1px solid rgba(34, 197, 94, 0.4); text-transform: uppercase;">
+              ${isTransfer ? "Meeting Reassigned to You" : "Claim Confirmed"}
+            </span>
+            <h2 style="margin: 10px 0 0 0; font-size: 20px;">Consultation Appointment Alert</h2>
           </div>
           <div style="padding: 24px; color: #334155; line-height: 1.6;">
-            <p>A new AI sales demo meeting has been scheduled with a client!</p>
-            <div style="background-color: #f1f5f9; padding: 16px; border-radius: 8px; margin: 20px 0;">
-              <p style="margin: 4px 0; color: #1e1b4b;"><strong>🇵🇰 Pakistan Time [PKT]:</strong> ${displayAgentDate} at ${displayAgentTime}</p>
-              <p style="margin: 4px 0; color: #4338ca;"><strong>🌐 Client Local Time:</strong> ${displayClientDate} at ${displayClientTime}</p>
-              <p style="margin: 4px 0;"><strong>Client Email:</strong> ${leadEmail}</p>
-              <p style="margin: 4px 0;"><strong>Assigned Agent:</strong> ${agentEmail}</p>
+            <!-- Prominent Countdown Box for Agent -->
+            <div style="background: #ecfdf5; border: 2px solid #10b981; border-radius: 10px; padding: 14px 18px; margin: 0 0 20px 0; text-align: center;">
+              <span style="display: block; font-size: 12px; color: #047857; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Upcoming Meeting Countdown</span>
+              <strong style="display: block; font-size: 18px; color: #064e3b; margin-top: 4px;">
+                ⏰ Starts ${countdownText}!
+              </strong>
+              <span style="display: block; font-size: 13px; color: #059669; margin-top: 2px;">
+                🇵🇰 ${displayAgentDate} at ${displayAgentTime} [PKT]
+              </span>
             </div>
-            <p>Reminders will be automatically delivered 24h and 1h prior. Zoom join link will be delivered at the exact meeting time.</p>
+
+            <p>
+              ${isTransfer 
+                ? `<strong>${transferredByName || "Team Leader / Manager"}</strong> has transferred and assigned this consultation session with <strong>${displayClientName}</strong> to you:`
+                : `You have successfully claimed this consultation session with <strong>${displayClientName}</strong>:`}
+            </p>
+            <div style="background-color: #f1f5f9; padding: 16px; border-radius: 8px; margin: 16px 0;">
+              <p style="margin: 4px 0; color: #1e1b4b;"><strong>🇵🇰 Pakistan Time [PKT]:</strong> ${displayAgentDate} at ${displayAgentTime}</p>
+              <p style="margin: 4px 0; color: #4338ca;"><strong>🌐 Client Local Time:</strong> ${displayClientDate} at ${displayClientTime} (${displayTz})</p>
+              <p style="margin: 4px 0;"><strong>Client Name:</strong> ${displayClientName}</p>
+              <p style="margin: 4px 0;"><strong>Client Email:</strong> <a href="mailto:${leadEmail}">${leadEmail}</a></p>
+              <p style="margin: 4px 0;"><strong>Assigned Host:</strong> ${displayAgentName} (${agentEmail})</p>
+              <p style="margin: 4px 0;"><strong>Zoom Meeting Link:</strong> <a href="${zoomUrl}" style="color: #4f46e5; font-weight: bold;">${zoomUrl}</a></p>
+            </div>
+            <div style="margin: 20px 0; text-align: center;">
+              <a href="${zoomUrl}" style="background-color: #10b981; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.4);">
+                🎥 Start / Join Zoom Meeting
+              </a>
+            </div>
           </div>
         </div>
       `,

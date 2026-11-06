@@ -25,15 +25,15 @@ export function StatCard({
   };
 
   return (
-    <div className="panel group p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[var(--shadow-float)]">
-      <div className="flex items-start justify-between gap-3">
-        <p className="min-w-0 truncate text-sm font-medium text-muted-foreground">{label}</p>
-        <span className={cn("grid size-9 shrink-0 place-items-center rounded-xl", tones[tone])}>
-          <Icon className="size-4.5" />
+    <div className="panel group p-3.5 sm:p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[var(--shadow-float)]">
+      <div className="flex items-start justify-between gap-2 sm:gap-3">
+        <p className="min-w-0 truncate text-xs sm:text-sm font-medium text-muted-foreground">{label}</p>
+        <span className={cn("grid size-8 sm:size-9 shrink-0 place-items-center rounded-xl", tones[tone])}>
+          <Icon className="size-4 sm:size-4.5" />
         </span>
       </div>
-      <p className="mt-3 font-display text-3xl font-bold tabular-nums">{value}</p>
-      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+      <p className="mt-2 sm:mt-3 font-display text-2xl sm:text-3xl font-bold tabular-nums">{value}</p>
+      <div className="mt-1 flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs">
         {trend ? (
           <span className="rounded-full bg-success/12 px-2 py-0.5 font-semibold text-success">
             {trend}

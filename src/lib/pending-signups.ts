@@ -5,9 +5,20 @@ export type PendingSignup = {
   name: string;
   email: string;
   phone: string;
+  pseudo_name?: string;
+  role_title?: string;
+  designation?: string;
+  department_id?: string;
+  department_name?: string;
   avatar_initials?: string;
   status: "pending" | "approved" | "rejected";
   created_at: string;
+};
+
+const DEPT_NAME_MAP: Record<string, string> = {
+  "production-house": "Production House",
+  "ecommerce-department": "E-commerce Department",
+  "sales-department": "Sales Department",
 };
 
 /**
@@ -17,8 +28,20 @@ export async function createPendingSignup(payload: {
   name: string;
   email: string;
   phone: string;
+  pseudo_name?: string;
+  role_title?: string;
+  designation?: string;
+  department_id?: string;
 }): Promise<void> {
-  const initials = payload.name
+  const cleanEmail = payload.email.toLowerCase().trim();
+  const trimmedName = payload.name.trim();
+  const trimmedPhone = payload.phone.trim();
+  const trimmedPseudoName = (payload.pseudo_name || "").trim();
+  const trimmedRoleTitle = (payload.role_title || payload.designation || "").trim();
+  const trimmedDesignation = (payload.designation || "").trim();
+  const deptId = payload.department_id || "production-house";
+
+  const initials = (trimmedPseudoName || trimmedName)
     .split(" ")
     .map((p) => p[0])
     .join("")
@@ -26,9 +49,13 @@ export async function createPendingSignup(payload: {
     .toUpperCase();
 
   const record = {
-    name: payload.name,
-    email: payload.email,
-    phone: payload.phone,
+    name: trimmedName,
+    email: cleanEmail,
+    phone: trimmedPhone,
+    pseudo_name: trimmedPseudoName,
+    role_title: trimmedRoleTitle,
+    designation: trimmedDesignation,
+    department_id: deptId,
     avatar_initials: initials,
     status: "pending",
     created_at: new Date().toISOString(),
@@ -43,17 +70,10 @@ export async function createPendingSignup(payload: {
 
   // 2. Insert/update fallback in emails_sent queue
   try {
-    const queuePayload = JSON.stringify({
-      name: payload.name,
-      email: payload.email,
-      phone: payload.phone,
-      avatar_initials: initials,
-      status: "pending",
-      created_at: record.created_at,
-    });
+    const queuePayload = JSON.stringify(record);
 
     await supabase.from("emails_sent").insert({
-      lead_email: payload.email,
+      lead_email: cleanEmail,
       sequence_type: "agent_approval_request",
       subject: queuePayload,
       status: "pending",
@@ -75,7 +95,7 @@ export async function fetchPendingSignups(): Promise<PendingSignup[]> {
   try {
     const { data } = await supabase
       .from("pending_signups")
-      .select("id, name, email, phone, avatar_initials, status, created_at")
+      .select("*")
       .eq("status", "pending")
       .order("created_at", { ascending: false });
 
@@ -83,11 +103,17 @@ export async function fetchPendingSignups(): Promise<PendingSignup[]> {
       data.forEach((row: any) => {
         if (row.email && !seenEmails.has(row.email.toLowerCase())) {
           seenEmails.add(row.email.toLowerCase());
+          const deptId = row.department_id || "production-house";
           list.push({
             id: row.id,
             name: row.name || row.email.split("@")[0],
             email: row.email,
             phone: row.phone || "",
+            pseudo_name: row.pseudo_name || "",
+            role_title: row.role_title || row.designation || "",
+            designation: row.designation || "",
+            department_id: deptId,
+            department_name: DEPT_NAME_MAP[deptId] || "Production House",
             avatar_initials: row.avatar_initials || row.name?.slice(0, 2).toUpperCase() || "AG",
             status: row.status || "pending",
             created_at: row.created_at,
@@ -112,18 +138,31 @@ export async function fetchPendingSignups(): Promise<PendingSignup[]> {
           seenEmails.add(row.lead_email.toLowerCase());
           let name = row.lead_email.split("@")[0];
           let phone = "";
+          let designation = "";
+          let pseudo_name = "";
+          let role_title = "";
           let avatar_initials = name.slice(0, 2).toUpperCase();
+          let deptId = "production-house";
           try {
             const p = JSON.parse(row.subject);
             if (p.name) name = p.name;
             if (p.phone) phone = p.phone;
+            if (p.pseudo_name) pseudo_name = p.pseudo_name;
+            if (p.role_title) role_title = p.role_title;
+            if (p.designation) designation = p.designation;
             if (p.avatar_initials) avatar_initials = p.avatar_initials;
+            if (p.department_id) deptId = p.department_id;
           } catch {}
           list.push({
             id: row.id,
             name,
             email: row.lead_email,
             phone,
+            pseudo_name,
+            role_title,
+            designation,
+            department_id: deptId,
+            department_name: DEPT_NAME_MAP[deptId] || "Production House",
             avatar_initials,
             status: row.status || "pending",
             created_at: row.sent_at,
@@ -152,11 +191,17 @@ export async function getPendingSignupByEmail(email: string): Promise<PendingSig
       .maybeSingle();
 
     if (data) {
+      const deptId = (data as any).department_id || "production-house";
       return {
         id: data.id,
         name: data.name,
         email: data.email,
         phone: data.phone || "",
+        pseudo_name: (data as any).pseudo_name || "",
+        role_title: (data as any).role_title || (data as any).designation || "",
+        designation: (data as any).designation || "",
+        department_id: deptId,
+        department_name: DEPT_NAME_MAP[deptId] || "Production House",
         avatar_initials: data.avatar_initials || data.name?.slice(0, 2).toUpperCase() || "AG",
         status: data.status,
         created_at: data.created_at,
@@ -178,18 +223,31 @@ export async function getPendingSignupByEmail(email: string): Promise<PendingSig
     if (data) {
       let name = cleanEmail.split("@")[0];
       let phone = "";
+      let designation = "";
+      let pseudo_name = "";
+      let role_title = "";
       let avatar_initials = name.slice(0, 2).toUpperCase();
+      let deptId = "production-house";
       try {
         const p = JSON.parse(data.subject);
         if (p.name) name = p.name;
         if (p.phone) phone = p.phone;
+        if (p.pseudo_name) pseudo_name = p.pseudo_name;
+        if (p.role_title) role_title = p.role_title;
+        if (p.designation) designation = p.designation;
         if (p.avatar_initials) avatar_initials = p.avatar_initials;
+        if (p.department_id) deptId = p.department_id;
       } catch {}
       return {
         id: data.id,
         name,
         email: cleanEmail,
         phone,
+        pseudo_name,
+        role_title,
+        designation,
+        department_id: deptId,
+        department_name: DEPT_NAME_MAP[deptId] || "Production House",
         avatar_initials,
         status: data.status as any,
         created_at: data.sent_at,
@@ -215,12 +273,14 @@ function generateUUID(): string {
  * Approves a pending signup via server-side API:
  * 1. API creates auth.users entry (so profiles FK is satisfied)
  * 2. API creates profile with real auth UUID
- * 3. Removes from pending_signups & marks fallback queue
+ * 3. Assigns agent to their chosen department
+ * 4. Removes from pending_signups & marks fallback queue
  */
-export async function approvePendingSignup(signup: PendingSignup): Promise<void> {
+export async function approvePendingSignup(signup: PendingSignup, departmentId?: string): Promise<void> {
   const cleanEmail = signup.email.toLowerCase().trim();
+  const targetDeptId = departmentId || signup.department_id || "production-house";
 
-  // Call server-side API which uses Service Role key to create auth user + profile
+  // Call server-side API which uses Service Role key to create auth user + profile + assign department
   const res = await fetch("/api/approve-pending-signup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -228,6 +288,10 @@ export async function approvePendingSignup(signup: PendingSignup): Promise<void>
       name: signup.name,
       email: cleanEmail,
       phone: signup.phone || "",
+      pseudo_name: signup.pseudo_name || "",
+      role_title: signup.role_title || signup.designation || "",
+      designation: signup.designation || "",
+      department_id: targetDeptId,
     }),
   });
 

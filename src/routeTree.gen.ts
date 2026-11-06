@@ -21,6 +21,7 @@ import { Route as AppLeadsRouteImport } from './routes/_app.leads'
 import { Route as AppLivechatRouteImport } from './routes/_app.livechat'
 import { Route as AppMetaLeadsRouteImport } from './routes/_app.meta-leads'
 import { Route as AppNotificationsRouteImport } from './routes/_app.notifications'
+import { Route as AppProjectsRouteImport } from './routes/_app.projects'
 import { Route as AppReportsRouteImport } from './routes/_app.reports'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 
@@ -83,6 +84,11 @@ const AppNotificationsRoute = AppNotificationsRouteImport.update({
   path: '/notifications',
   getParentRoute: () => AppRoute,
 } as any)
+const AppProjectsRoute = AppProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppReportsRoute = AppReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/livechat': typeof AppLivechatRoute
   '/meta-leads': typeof AppMetaLeadsRoute
   '/notifications': typeof AppNotificationsRoute
+  '/projects': typeof AppProjectsRoute
   '/reports': typeof AppReportsRoute
   '/settings': typeof AppSettingsRoute
 }
@@ -121,6 +128,7 @@ export interface FileRoutesByTo {
   '/livechat': typeof AppLivechatRoute
   '/meta-leads': typeof AppMetaLeadsRoute
   '/notifications': typeof AppNotificationsRoute
+  '/projects': typeof AppProjectsRoute
   '/reports': typeof AppReportsRoute
   '/settings': typeof AppSettingsRoute
 }
@@ -138,6 +146,7 @@ export interface FileRoutesById {
   '/_app/livechat': typeof AppLivechatRoute
   '/_app/meta-leads': typeof AppMetaLeadsRoute
   '/_app/notifications': typeof AppNotificationsRoute
+  '/_app/projects': typeof AppProjectsRoute
   '/_app/reports': typeof AppReportsRoute
   '/_app/settings': typeof AppSettingsRoute
 }
@@ -155,6 +164,7 @@ export interface FileRouteTypes {
     | '/livechat'
     | '/meta-leads'
     | '/notifications'
+    | '/projects'
     | '/reports'
     | '/settings'
   fileRoutesByTo: FileRoutesByTo
@@ -170,6 +180,7 @@ export interface FileRouteTypes {
     | '/livechat'
     | '/meta-leads'
     | '/notifications'
+    | '/projects'
     | '/reports'
     | '/settings'
   id:
@@ -186,6 +197,7 @@ export interface FileRouteTypes {
     | '/_app/livechat'
     | '/_app/meta-leads'
     | '/_app/notifications'
+    | '/_app/projects'
     | '/_app/reports'
     | '/_app/settings'
   fileRoutesById: FileRoutesById
@@ -283,6 +295,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppNotificationsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/projects': {
+      id: '/_app/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof AppProjectsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/reports': {
       id: '/_app/reports'
       path: '/reports'
@@ -309,6 +328,7 @@ interface AppRouteChildren {
   AppLivechatRoute: typeof AppLivechatRoute
   AppMetaLeadsRoute: typeof AppMetaLeadsRoute
   AppNotificationsRoute: typeof AppNotificationsRoute
+  AppProjectsRoute: typeof AppProjectsRoute
   AppReportsRoute: typeof AppReportsRoute
   AppSettingsRoute: typeof AppSettingsRoute
 }
@@ -322,6 +342,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppLivechatRoute: AppLivechatRoute,
   AppMetaLeadsRoute: AppMetaLeadsRoute,
   AppNotificationsRoute: AppNotificationsRoute,
+  AppProjectsRoute: AppProjectsRoute,
   AppReportsRoute: AppReportsRoute,
   AppSettingsRoute: AppSettingsRoute,
 }

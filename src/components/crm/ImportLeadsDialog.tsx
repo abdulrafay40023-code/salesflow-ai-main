@@ -591,7 +591,7 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
           if (!isAdminEmail(agentEmail)) {
             await supabase.from("emails_sent").insert({
               lead_email: agentEmail,
-              subject: `Admin ne aapko ${count} new lead(s) assign ki hain — ${timeStr} bajay`,
+              subject: `Admin assigned ${count} new lead(s) to you — at ${timeStr}`,
               status: "unread",
               sequence_type: "lead_assignment",
               type: "lead_assignment",
@@ -601,21 +601,34 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
         }
       }
 
-      // Send Welcome emails via API route (server-side nodemailer)
+      // Send Welcome emails via API route (server-side nodemailer) & log to emails_sent
       if (inserted && inserted.length) {
         const emailAgentMap = new Map<string, string>();
         created.forEach((l) => {
           if (l.email) emailAgentMap.set(l.email.trim().toLowerCase(), l.agent || PRIMARY_ADMIN_EMAIL);
         });
 
-        const leadsPayload = inserted
-          .filter((item) => item.email && item.email.includes("@"))
-          .map((item) => {
+        const validLeads = inserted.filter((item) => item.email && item.email.includes("@"));
+
+        if (validLeads.length > 0) {
+          // 1. Instantly log welcome entries in Supabase emails_sent table
+          const welcomeLogs = validLeads.map((item) => ({
+            lead_id: item.id,
+            lead_email: item.email.toLowerCase().trim(),
+            subject: "Welcome to Teals CRM",
+            sequence_type: "welcome",
+            status: "sent",
+            sent_at: new Date().toISOString(),
+          }));
+
+          await supabase.from("emails_sent").insert(welcomeLogs);
+
+          // 2. Dispatch real emails via server-side Gmail SMTP
+          const leadsPayload = validLeads.map((item) => {
             const agentForLead = emailAgentMap.get((item.email || "").trim().toLowerCase()) || PRIMARY_ADMIN_EMAIL;
             return { email: item.email, leadId: item.id, agentEmail: agentForLead };
           });
 
-        if (leadsPayload.length > 0) {
           fetch("/api/send-welcome-email", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -623,7 +636,7 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
           })
             .then((r) => r.json())
             .then((result) => {
-              if (result.sent > 0) {
+              if (result?.sent > 0) {
                 console.log(`Welcome emails sent: ${result.sent}/${leadsPayload.length}`);
               }
             })
@@ -729,13 +742,13 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
             </div>
 
             {/* Default Phone Country Setting for entire sheet */}
-            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-violet-950/20 border border-violet-500/30 text-xs">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 p-3 rounded-xl bg-violet-950/20 border border-violet-500/30 text-xs">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="p-2 rounded-lg bg-violet-600/20 text-violet-300 shrink-0">
                   <Globe className="size-4" />
                 </div>
                 <div>
-                  <div className="font-semibold text-foreground flex items-center gap-1.5">
+                  <div className="font-semibold text-foreground flex flex-wrap items-center gap-1.5">
                     <span>Default Sheet Phone Country:</span>
                     <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-violet-500/40 text-violet-300">
                       {defaultPhoneCountry === "AUTO" ? "Smart Auto-Detect" : defaultPhoneCountry}
@@ -750,18 +763,18 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
                 value={defaultPhoneCountry}
                 onValueChange={setDefaultPhoneCountry}
                 includeAuto
-                className="h-8 w-52 rounded-xl text-xs bg-surface-2 border-border/80 shrink-0"
+                className="h-8 w-full sm:w-52 rounded-xl text-xs bg-surface-2 border-border/80 shrink-0"
               />
             </div>
 
             {/* Admin Lead Assignment Control Suite */}
             {isAdmin && (
-              <div className="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2">
+              <div className="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3.5 sm:p-4 space-y-2">
                 {/* 1. Default Agent Dropdown */}
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
                     <label className="flex items-center gap-1.5 text-xs font-bold text-primary">
-                      <UserCheck className="size-3.5" /> 1. Set Default Agent (or distribute across team):
+                      <UserCheck className="size-3.5 shrink-0" /> 1. Set Default Agent (or distribute across team):
                     </label>
                     {approvedAgents.length > 0 && (
                       <span className="text-[11px] text-violet-300 font-semibold">
@@ -932,9 +945,9 @@ export function ImportLeadsDialog({ onImportDone }: { onImportDone?: () => void 
                   <span className="text-xs text-slate-300 font-medium">Assign selected to:</span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   <Select value={bulkTargetAgent} onValueChange={setBulkTargetAgent}>
-                    <SelectTrigger className="w-52 h-8 rounded-lg bg-slate-900 text-xs font-semibold border-slate-700 text-white">
+                    <SelectTrigger className="w-full sm:w-52 h-8 rounded-lg bg-slate-900 text-xs font-semibold border-slate-700 text-white">
                       <SelectValue placeholder="Choose agent..." />
                     </SelectTrigger>
                     <SelectContent>

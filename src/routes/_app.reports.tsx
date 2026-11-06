@@ -12,12 +12,17 @@ import {
   CalendarDays,
   Trophy,
   ArrowDownToLine,
+  Sparkles,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useCrm } from "@/lib/crm-store";
 import { isAdminEmail } from "@/lib/crm-data";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  loadProjectDepartments,
+  type ProjectDepartment,
+} from "@/lib/project-management-store";
 
 export const Route = createFileRoute("/_app/reports")({
   head: () => ({
@@ -50,6 +55,8 @@ type ReportLead = {
 type AgentProfile = {
   email: string;
   name: string;
+  role?: string;
+  departmentName?: string;
 };
 
 type DayRow = {
@@ -66,6 +73,8 @@ type DayRow = {
 type AgentSummary = {
   email: string;
   name: string;
+  role?: string;
+  departmentName?: string;
   assigned: number;
   imported: number;
   contacted: number;
@@ -148,14 +157,14 @@ function MetricCard({
 }) {
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br ${color} p-5 shadow-lg`}
+      className={`relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br ${color} p-3.5 sm:p-5 shadow-lg`}
     >
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-white/60">{label}</p>
-          <p className="mt-1 text-4xl font-extrabold text-white">{value}</p>
+          <p className="mt-1 text-2xl sm:text-4xl font-extrabold text-white">{value}</p>
         </div>
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 text-white shadow-inner">
+        <div className="flex h-9 w-9 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white shadow-inner">
           {icon}
         </div>
       </div>
@@ -194,9 +203,10 @@ function ReportsPage() {
   async function fetchData() {
     setLoading(true);
     try {
-      const [{ data: leadsData }, { data: profileData }] = await Promise.all([
+      const [{ data: leadsData }, { data: profileData }, deptsList] = await Promise.all([
         supabase.from("leads").select("*"),
         supabase.from("profiles").select("*"),
+        loadProjectDepartments().catch(() => [] as ProjectDepartment[]),
       ]);
 
       if (leadsData) setLeads(leadsData as ReportLead[]);
@@ -206,11 +216,35 @@ function ReportsPage() {
         profileData.forEach((p: any) => {
           if (isAdminEmail(p.email)) return;
           let isApproved = false;
+          let metaRole = p.role;
+          let metaDeptName = "";
+          let metaDeptId = "";
           if (p.avatar_url) {
-            try { isApproved = Boolean(JSON.parse(p.avatar_url).approved); } catch {}
+            try {
+              const parsed = JSON.parse(p.avatar_url);
+              isApproved = Boolean(parsed.approved);
+              if (parsed.role) metaRole = parsed.role;
+              if (parsed.department_name) metaDeptName = parsed.department_name;
+              if (parsed.department_id) metaDeptId = parsed.department_id;
+            } catch {}
           }
           if (isApproved) {
-            approved.push({ email: p.email, name: p.full_name || p.email.split("@")[0] });
+            const cleanEmail = p.email?.toLowerCase().trim();
+            const matchedDept = (deptsList || []).find(
+              (d) =>
+                (d.manager_email && d.manager_email.toLowerCase().trim() === cleanEmail) ||
+                (p.id && d.manager_id === p.id) ||
+                (metaDeptId && d.id === metaDeptId)
+            );
+            const isManager = Boolean(matchedDept || metaRole === "manager");
+            const deptName = matchedDept?.name || metaDeptName || "";
+
+            approved.push({
+              email: p.email,
+              name: p.full_name || p.email.split("@")[0],
+              role: isManager ? "manager" : "agent",
+              departmentName: deptName,
+            });
           }
         });
         setAgents(approved);
@@ -296,7 +330,18 @@ function ReportsPage() {
       const booked = agLeads.filter((l) => isInMonth(getBookedDate(l), year, month)).length;
       const won = agLeads.filter((l) => isInMonth(getWonDate(l), year, month)).length;
 
-      return { email: ag.email, name: ag.name, assigned, imported, contacted, replied, booked, won };
+      return {
+        email: ag.email,
+        name: ag.name,
+        role: ag.role,
+        departmentName: ag.departmentName,
+        assigned,
+        imported,
+        contacted,
+        replied,
+        booked,
+        won,
+      };
     });
   }, [leads, agents, year, month]);
 
@@ -391,7 +436,7 @@ function ReportsPage() {
       </div>
 
       {/* Month Selector */}
-      <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 px-6 py-4 backdrop-blur">
+      <div className="flex items-center gap-3 sm:gap-4 rounded-2xl border border-white/10 bg-white/5 px-3.5 py-3 sm:px-6 sm:py-4 backdrop-blur">
         <button
           onClick={prevMonth}
           className="flex items-center justify-center size-9 rounded-xl bg-white/10 text-white hover:bg-violet-600/40 transition-colors"
@@ -400,7 +445,7 @@ function ReportsPage() {
           <ChevronLeft className="h-5 w-5" />
         </button>
         <div className="flex-1 text-center">
-          <p className="text-2xl font-extrabold text-white">{monthLabel(year, month)}</p>
+          <p className="text-lg sm:text-2xl font-extrabold text-white">{monthLabel(year, month)}</p>
           <p className="text-xs text-white/40 mt-0.5">
             {activeDays > 0
               ? `${activeDays} day${activeDays !== 1 ? "s" : ""} with activity`
@@ -524,18 +569,25 @@ function ReportsPage() {
                           <p className="font-bold text-white truncate group-hover:text-violet-300 transition-colors">
                             {ag.name}
                           </p>
-                          {isSelected && (
+                          {ag.role === "manager" ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold bg-purple-500/20 text-purple-200 ring-1 ring-purple-400/40 shrink-0">
+                              <Sparkles className="size-2.5 text-purple-300 shrink-0" />
+                              <span className="truncate max-w-[120px]">
+                                {ag.departmentName ? `${ag.departmentName} Manager` : "Manager"}
+                              </span>
+                            </span>
+                          ) : isSelected ? (
                             <span className="shrink-0 rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] font-semibold text-violet-300 ring-1 ring-violet-500/30">
                               Viewing
                             </span>
-                          )}
+                          ) : null}
                         </div>
                         <p className="text-xs text-white/40 truncate">{ag.email}</p>
                       </div>
                     </div>
 
                     {/* 6 metrics */}
-                    <div className="grid grid-cols-6 gap-1 text-center mb-3">
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-1 text-center mb-3">
                       <div className="rounded-lg bg-white/5 p-1.5">
                         <p className="text-[8px] text-white/40 leading-tight">Assigned</p>
                         <p className="text-sm font-bold text-white">{ag.assigned}</p>

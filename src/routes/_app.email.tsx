@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { useCrm } from "@/lib/crm-store";
+import { isAdminEmail } from "@/lib/crm-data";
 import {
   triggerBookingFormEmailFn,
   triggerReminderEmailFn,
@@ -58,7 +59,7 @@ type DbLead = { id: string; name: string; company: string; email: string; status
 
 function EmailPage() {
   const { user } = useCrm();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = Boolean(user && (user.role === "admin" || isAdminEmail(user.email)));
   const [mounted, setMounted] = useState(false);
   const [emails, setEmails]   = useState<DbEmailLog[]>([]);
   const [leads, setLeads]     = useState<DbLead[]>([]);
@@ -240,7 +241,7 @@ function EmailPage() {
         title="AI Email Automation"
         subtitle="Live automated outreach — sequences, delivery and replies."
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -291,14 +292,14 @@ function EmailPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Email History - LIVE */}
         <div className="panel overflow-hidden lg:col-span-2">
-          <div className="border-b border-border p-5">
+          <div className="border-b border-border p-4 sm:p-5">
             <h2 className="font-display text-lg font-bold">Email History & Actions</h2>
             <p className="text-sm text-muted-foreground">Every automated message and outcome — live from Supabase</p>
           </div>
-          <Tabs defaultValue="all" className="p-5">
-            <TabsList className="rounded-xl">
+          <Tabs defaultValue="all" className="p-3.5 sm:p-5">
+            <TabsList className="rounded-xl w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
               {(["all", "booked", "replied"] as const).map((t) => (
-                <TabsTrigger key={t} value={t} className="rounded-lg capitalize">
+                <TabsTrigger key={t} value={t} className="rounded-lg capitalize text-xs sm:text-sm">
                   {t === "all" ? "Welcome Sent" : t === "booked" ? "Booked" : "Replied"}
                 </TabsTrigger>
               ))}

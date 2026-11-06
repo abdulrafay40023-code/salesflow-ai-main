@@ -9,6 +9,7 @@ import {
 } from "react";
 import { supabase } from "@/lib/supabase";
 import { createPendingSignup, getPendingSignupByEmail } from "@/lib/pending-signups";
+import { fetchDynamicAdmins, isDynamicOrStaticAdmin } from "@/lib/dynamic-admins";
 import {
   agents,
   seedFollowUps,
@@ -24,17 +25,23 @@ export type SessionUser = {
   name: string;
   email: string;
   phone?: string;
-  role: "admin" | "agent";
+  designation?: string;
+  pseudo_name?: string;
+  role_title?: string;
+  role: "admin" | "agent" | "manager";
   approved?: boolean;
   status?: "unsubmitted" | "pending" | "approved" | "rejected";
+  assigned_websites?: string[];
+  department_id?: string;
 };
 
 type CrmContextValue = {
   user: SessionUser | null;
-  signIn: (email: string, role: "admin" | "agent") => void;
+  signIn: (email: string, role?: "admin" | "agent" | "manager") => void;
   signOut: () => void;
-  submitApprovalRequest: (info: { name: string; email: string; phone: string }) => Promise<void>;
+  submitApprovalRequest: (info: { name: string; email: string; phone: string; pseudo_name?: string; role_title?: string; department_id?: string; designation?: string }) => Promise<void>;
   checkUserApprovalStatus: (email: string) => Promise<boolean>;
+  updateUserProfile: (data: { name?: string; pseudo_name?: string; role_title?: string; phone?: string; designation?: string }) => Promise<void>;
   leads: Lead[];
   visibleLeads: Lead[];
   addLeads: (leads: Lead[]) => void;
@@ -93,7 +100,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const isMainAdmin = isAdminEmail(u.email);
       const adminNames: Record<string, string> = {
         "garryamelia6265@gmail.com": "Garry Amelia",
-        "tzafar04@gmail.com": "T Zafar",
+        "jennifer.cisternino2027@gmail.com": "Jennifer Cisternino",
+        "tzafar04@gmail.com": "Talha Zafar",
         "annusraees@gmail.com": "Annus Raees",
       };
       const name = u.name || adminNames[u.email.toLowerCase()] || u.email.split("@")[0];
@@ -106,7 +114,24 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
       // Only admin or already-approved users get profile updates/inserts
       if (isMainAdmin) {
-        const meta = JSON.stringify({ phone: u.phone || "", approved: true, status: "approved" });
+        let adminPhone = u.phone || "";
+        let adminPseudoName = u.pseudo_name || "";
+        let adminRoleTitle = u.role_title || "";
+        if (existingProf?.avatar_url) {
+          try {
+            const parsed = JSON.parse(existingProf.avatar_url);
+            if (parsed.phone && !adminPhone) adminPhone = parsed.phone;
+            if (parsed.pseudo_name && !adminPseudoName) adminPseudoName = parsed.pseudo_name;
+            if (parsed.role_title && !adminRoleTitle) adminRoleTitle = parsed.role_title;
+          } catch {}
+        }
+        const meta = JSON.stringify({
+          phone: adminPhone,
+          pseudo_name: adminPseudoName,
+          role_title: adminRoleTitle,
+          approved: true,
+          status: "approved",
+        });
         if (existingProf) {
           await supabase
             .from("profiles")
@@ -124,18 +149,52 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             });
           }
         }
+
+        setUser((prev) => {
+          if (!prev || prev.email !== u.email) return prev;
+          const merged: SessionUser = {
+            ...prev,
+            name,
+            phone: adminPhone || prev.phone,
+            pseudo_name: adminPseudoName || prev.pseudo_name,
+            role_title: adminRoleTitle || prev.role_title,
+            role: "admin",
+            approved: true,
+            status: "approved",
+          };
+          saveSession(merged);
+          return merged;
+        });
       } else if (existingProf) {
         // Read values from DB profile if existing
         let phone = u.phone || "";
+        let designation = u.designation || "";
+        let pseudo_name = u.pseudo_name || "";
+        let role_title = u.role_title || "";
         let approved = false;
         let status: SessionUser["status"] = "unsubmitted";
+        let assigned_websites: string[] | undefined = undefined;
+        let role: SessionUser["role"] = isMainAdmin ? "admin" : ((existingProf.role as any) || "agent");
+        let department_id: string | undefined = undefined;
 
         if (existingProf.avatar_url) {
           try {
             const parsed = JSON.parse(existingProf.avatar_url);
             if (parsed.phone) phone = parsed.phone;
+            if (parsed.designation) designation = parsed.designation;
+            if (parsed.pseudo_name) pseudo_name = parsed.pseudo_name;
+            if (parsed.role_title) role_title = parsed.role_title;
             approved = Boolean(parsed.approved);
             status = parsed.status || (approved ? "approved" : "unsubmitted");
+            if (Array.isArray(parsed.assigned_websites)) {
+              assigned_websites = parsed.assigned_websites;
+            }
+            if (!isMainAdmin && parsed.role) {
+              role = parsed.role;
+            }
+            if (parsed.department_id) {
+              department_id = parsed.department_id;
+            }
           } catch {}
         }
 
@@ -145,8 +204,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             ...prev,
             name: existingProf.full_name || prev.name,
             phone: phone || prev.phone,
+            designation: designation || prev.designation,
+            pseudo_name: pseudo_name || prev.pseudo_name,
+            role_title: role_title || prev.role_title,
+            role,
             approved,
             status,
+            assigned_websites,
+            department_id,
           };
           saveSession(merged);
           return merged;
@@ -160,12 +225,32 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   // ── Submit approval request (agent form) ───────────────────────────────────
   // Creates record ONLY in pending_signups table, NOT in profiles table!
   const submitApprovalRequest = useCallback(
-    async ({ name, email, phone }: { name: string; email: string; phone: string }) => {
+    async ({
+      name,
+      email,
+      phone,
+      pseudo_name,
+      role_title,
+      department_id,
+      designation
+    }: {
+      name: string;
+      email: string;
+      phone: string;
+      pseudo_name?: string;
+      role_title?: string;
+      department_id?: string;
+      designation?: string;
+    }) => {
       // First update UI immediately so agent sees the lock screen right away
       const pendingUser: SessionUser = {
         name,
         email,
         phone,
+        pseudo_name: pseudo_name || "",
+        role_title: role_title || designation || "",
+        designation: designation || "",
+        department_id: department_id || "production-house",
         role: "agent",
         approved: false,
         status: "pending",
@@ -174,7 +259,28 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       saveSession(pendingUser);
 
       try {
-        await createPendingSignup({ name, email, phone });
+        await createPendingSignup({ name, email, phone, pseudo_name, role_title, department_id, designation });
+
+        // Broadcast to admins in realtime
+        try {
+          if (typeof BroadcastChannel !== "undefined") {
+            const bc = new BroadcastChannel("teals-crm-approvals-sync");
+            bc.postMessage({ type: "NEW_APPROVAL_REQUEST", email, name });
+            bc.close();
+          }
+        } catch {}
+
+        try {
+          const ch = supabase.channel("teals-approvals-live-sync", {
+            config: { broadcast: { self: true } },
+          });
+          await ch.subscribe();
+          await ch.send({
+            type: "broadcast",
+            event: "crm_approval_request_created",
+            payload: { email, name },
+          });
+        } catch {}
       } catch (err) {
         console.log("Approval submission notice:", err);
       }
@@ -184,38 +290,79 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   // ── Poll for admin approval ─────────────────────────────────────────────────
   const checkUserApprovalStatus = useCallback(async (email: string): Promise<boolean> => {
+    if (!email) return false;
     if (isAdminEmail(email)) return true;
+    const cleanEmail = email.toLowerCase().trim();
+
     try {
       // 1. Check if profile exists in profiles table (created ONLY when admin approves)
       const { data: prof } = await supabase
         .from("profiles")
         .select("id, email, full_name, avatar_url, role")
-        .eq("email", email)
+        .eq("email", cleanEmail)
         .maybeSingle();
 
       if (prof) {
         let phone = "";
         let approved = false;
         let status: SessionUser["status"] = "unsubmitted";
+        let assigned_websites: string[] | undefined = undefined;
+        let role: SessionUser["role"] = isAdminEmail(cleanEmail) ? "admin" : ((prof.role as any) || "agent");
+        let department_id: string | undefined = undefined;
 
+        let pseudo_name = "";
+        let role_title = "";
         if (prof.avatar_url) {
           try {
             const parsed = JSON.parse(prof.avatar_url);
             phone = parsed.phone || "";
+            pseudo_name = parsed.pseudo_name || "";
+            role_title = parsed.role_title || "";
             approved = Boolean(parsed.approved);
             status = parsed.status || (approved ? "approved" : "unsubmitted");
+            if (Array.isArray(parsed.assigned_websites)) {
+              assigned_websites = parsed.assigned_websites;
+            }
+            if (!isAdminEmail(cleanEmail) && parsed.role) {
+              role = parsed.role;
+            }
+            if (parsed.department_id) {
+              department_id = parsed.department_id;
+            }
           } catch {}
         }
 
-        if (approved) {
+        if (approved || prof.role === "agent" || prof.role === "admin" || prof.role === "manager" || role === "manager") {
           setUser((prev) => {
-            if (!prev || prev.email !== email) return prev;
+            if (!prev || prev.email.toLowerCase().trim() !== cleanEmail) return prev;
+            const newName = prof.full_name || prev.name;
+            const newPhone = phone || prev.phone;
+            const effectiveAssigned = assigned_websites ?? prev.assigned_websites;
+            const assignedChanged = JSON.stringify(prev.assigned_websites || []) !== JSON.stringify(effectiveAssigned || []);
+            if (
+              !assignedChanged &&
+              prev.approved === true &&
+              prev.status === "approved" &&
+              prev.name === newName &&
+              prev.phone === newPhone &&
+              prev.pseudo_name === pseudo_name &&
+              prev.role_title === role_title &&
+              prev.role === role &&
+              prev.department_id === department_id
+            ) {
+              return prev;
+            }
             const next: SessionUser = {
               ...prev,
-              name: prof.full_name || prev.name,
-              phone: phone || prev.phone,
+              name: newName,
+              phone: newPhone,
+              pseudo_name: pseudo_name || prev.pseudo_name,
+              role_title: role_title || prev.role_title,
+              role,
               approved: true,
               status: "approved",
+              assigned_websites: effectiveAssigned,
+              department_id,
             };
             saveSession(next);
             return next;
@@ -225,15 +372,28 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
 
       // 2. Check pending signups table (only if status is actively pending)
-      const pendingReq = await getPendingSignupByEmail(email);
+      const pendingReq = await getPendingSignupByEmail(cleanEmail);
 
       if (pendingReq && pendingReq.status === "pending") {
         setUser((prev) => {
-          if (!prev || prev.email !== email) return prev;
+          if (!prev || prev.email.toLowerCase().trim() !== cleanEmail) return prev;
+          const newName = pendingReq.name || prev.name;
+          const newPhone = pendingReq.phone || prev.phone;
+          if (
+            prev.approved === false &&
+            prev.status === "pending" &&
+            prev.name === newName &&
+            prev.phone === newPhone &&
+            prev.pseudo_name === pendingReq.pseudo_name
+          ) {
+            return prev;
+          }
           const next: SessionUser = {
             ...prev,
-            name: pendingReq.name || prev.name,
-            phone: pendingReq.phone || prev.phone,
+            name: newName,
+            phone: newPhone,
+            pseudo_name: pendingReq.pseudo_name || prev.pseudo_name,
+            role_title: pendingReq.role_title || prev.role_title,
             approved: false,
             status: "pending",
           };
@@ -243,12 +403,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      // 3. No approved profile and no pending request in DB (e.g. user was removed/rejected by admin)
+      // 3. Keep existing pending status if user has already submitted the profile form
       setUser((prev) => {
-        if (!prev || prev.email !== email) return prev;
+        if (!prev || prev.email.toLowerCase().trim() !== cleanEmail) return prev;
+        if (prev.status === "pending" && prev.phone) {
+          // Already submitted, retain the pending approval lock screen
+          return prev;
+        }
         const resetUser: SessionUser = {
           name: "",
-          email,
+          email: cleanEmail,
           phone: "",
           role: "agent",
           approved: false,
@@ -268,6 +432,59 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     document.documentElement.classList.add("dark");
+
+    // Fetch dynamic admins whitelist on startup
+    fetchDynamicAdmins().catch(() => {});
+
+    // Listen to admin additions/removals across tabs and realtime WebSocket
+    let adminBc: any = null;
+    let projBc: any = null;
+    try {
+      if (typeof BroadcastChannel !== "undefined") {
+        adminBc = new BroadcastChannel("teals-crm-admins-sync");
+        adminBc.onmessage = () => {
+          fetchDynamicAdmins().catch(() => {});
+        };
+
+        projBc = new BroadcastChannel("teals-crm-projects-sync");
+        projBc.onmessage = (e: any) => {
+          if (e?.data?.event === "profiles_updated" || e?.data?.event === "departments_updated") {
+            const cur = loadSession();
+            if (cur?.email && !isAdminEmail(cur.email)) {
+              checkUserApprovalStatus(cur.email);
+            }
+          }
+        };
+      }
+    } catch {}
+
+    const subId = Math.random().toString(36).substring(2, 9);
+    const adminLiveChannel = supabase.channel(`admins-live-${subId}`, {
+      config: { broadcast: { self: true } },
+    });
+    adminLiveChannel
+      .on("broadcast", { event: "crm_admin_list_updated" }, () => {
+        fetchDynamicAdmins().catch(() => {});
+      })
+      .subscribe();
+
+    const projLiveChannel = supabase.channel(`crm-projects-live-${subId}`, {
+      config: { broadcast: { self: true } },
+    });
+    projLiveChannel
+      .on("broadcast", { event: "crm_profiles_updated" }, () => {
+        const cur = loadSession();
+        if (cur?.email && !isAdminEmail(cur.email)) {
+          checkUserApprovalStatus(cur.email);
+        }
+      })
+      .on("broadcast", { event: "crm_departments_updated" }, () => {
+        const cur = loadSession();
+        if (cur?.email && !isAdminEmail(cur.email)) {
+          checkUserApprovalStatus(cur.email);
+        }
+      })
+      .subscribe();
 
     // Step 1: Restore from session/localStorage immediately
     const stored = loadSession();
@@ -302,7 +519,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           const name =
             session.user.user_metadata?.full_name ||
             session.user.user_metadata?.name ||
-            (email === "tzafar04@gmail.com" ? "T Zafar" : email === ADMIN_EMAIL ? "Garry Amelia" : email.split("@")[0]) ||
+            (email.toLowerCase() === "jennifer.cisternino2027@gmail.com"
+              ? "Jennifer Cisternino"
+              : email.toLowerCase() === "ashal.raza@teals.co"
+              ? "Ashal Raza"
+              : email === "tzafar04@gmail.com"
+              ? "T Zafar"
+              : email === ADMIN_EMAIL
+              ? "Garry Amelia"
+              : email.split("@")[0]) ||
             "Working Agent";
 
           // Preserve existing session status — don't reset "pending" to "unsubmitted" on refresh
@@ -310,8 +535,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           let preservedStatus: SessionUser["status"] = "unsubmitted";
           let preservedPhone: string | undefined = undefined;
           let preservedName: string = name;
+          let preservedRole: SessionUser["role"] = isMainAdmin ? "admin" : (existing?.role || "agent");
+          let preservedDept: string | undefined = existing?.department_id;
 
-          if (existing && existing.email === email) {
+          if (existing && existing.email.toLowerCase().trim() === email.toLowerCase().trim()) {
             preservedStatus = existing.status ?? "unsubmitted";
             preservedPhone = existing.phone;
             if (existing.name) preservedName = existing.name;
@@ -320,10 +547,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           const googleUser: SessionUser = {
             name: preservedName,
             email,
-            role: isMainAdmin ? "admin" : "agent",
+            role: preservedRole,
             approved: isMainAdmin ? true : false,
             status: isMainAdmin ? "approved" : preservedStatus,
             phone: preservedPhone,
+            department_id: preservedDept,
           };
 
           setUser(googleUser);
@@ -355,23 +583,111 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       setIsAuthLoading(false);
     }
 
-
-    return () => { subscription?.unsubscribe(); };
-  }, [syncProfileToSupabase]);
-
-  // ── signIn (kept for fallback, not exposed on login page anymore) ──────────
-  const signIn = useCallback((email: string, role: "admin" | "agent") => {
-    const isMainAdmin = isAdminEmail(email);
-    const next: SessionUser = {
-      name: isMainAdmin ? (email === "tzafar04@gmail.com" ? "T Zafar" : "Garry Amelia") : email.split("@")[0] || "Sales Agent",
-      email,
-      role: isMainAdmin ? "admin" : role,
-      approved: isMainAdmin ? true : false,
-      status: isMainAdmin ? "approved" : "unsubmitted",
+    return () => {
+      subscription?.unsubscribe();
+      if (adminBc) adminBc.close();
+      if (projBc) projBc.close();
+      supabase.removeChannel(adminLiveChannel);
+      supabase.removeChannel(projLiveChannel);
     };
-    setUser(next);
-    saveSession(next);
-    syncProfileToSupabase(next);
+  }, [syncProfileToSupabase, checkUserApprovalStatus]);
+
+  // ── signIn (Supports direct email login for both Google & custom domain users) ──
+  const signIn = useCallback(async (email: string, roleOverride?: "admin" | "agent" | "manager") => {
+    const cleanEmail = email.toLowerCase().trim();
+    const isMainAdmin = isAdminEmail(cleanEmail);
+    const adminNames: Record<string, string> = {
+      "garryamelia6265@gmail.com": "Garry Amelia",
+      "jennifer.cisternino2027@gmail.com": "Jennifer Cisternino",
+      "ashal.raza@teals.co": "Ashal Raza",
+      "tzafar04@gmail.com": "T Zafar",
+      "annusraees@gmail.com": "Annus Raees",
+    };
+
+    if (isMainAdmin) {
+      const adminUser: SessionUser = {
+        name: adminNames[cleanEmail] || cleanEmail.split("@")[0] || "Super Admin",
+        email: cleanEmail,
+        role: "admin",
+        approved: true,
+        status: "approved",
+      };
+      setUser(adminUser);
+      saveSession(adminUser);
+      syncProfileToSupabase(adminUser);
+      return adminUser;
+    }
+
+    // Check profiles table for approved agents
+    try {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("full_name, avatar_url, role")
+        .eq("email", cleanEmail)
+        .maybeSingle();
+
+      if (prof) {
+        let phone = "";
+        let approved = prof.role === "agent" || prof.role === "admin" || prof.role === "manager";
+        let status: SessionUser["status"] = approved ? "approved" : "unsubmitted";
+        let assigned_websites: string[] | undefined = undefined;
+        let role: SessionUser["role"] = (prof.role as any) || roleOverride || "agent";
+        let department_id: string | undefined = undefined;
+
+        if (prof.avatar_url) {
+          try {
+            const parsed = JSON.parse(prof.avatar_url);
+            if (parsed.phone) phone = parsed.phone;
+            if (typeof parsed.approved === "boolean") approved = parsed.approved;
+            if (parsed.status) status = parsed.status;
+            if (Array.isArray(parsed.assigned_websites)) assigned_websites = parsed.assigned_websites;
+            if (parsed.role) role = parsed.role;
+            if (parsed.department_id) department_id = parsed.department_id;
+          } catch {}
+        }
+
+        const agentUser: SessionUser = {
+          name: prof.full_name || cleanEmail.split("@")[0] || "Sales Agent",
+          email: cleanEmail,
+          phone,
+          role,
+          approved,
+          status,
+          assigned_websites,
+          department_id,
+        };
+        setUser(agentUser);
+        saveSession(agentUser);
+        return agentUser;
+      }
+
+      // Check pending signups
+      const pending = await getPendingSignupByEmail(cleanEmail);
+      if (pending && pending.status === "pending") {
+        const pendingUser: SessionUser = {
+          name: pending.name || cleanEmail.split("@")[0],
+          email: cleanEmail,
+          phone: pending.phone || "",
+          role: "agent",
+          approved: false,
+          status: "pending",
+        };
+        setUser(pendingUser);
+        saveSession(pendingUser);
+        return pendingUser;
+      }
+    } catch {}
+
+    const defaultUser: SessionUser = {
+      name: cleanEmail.split("@")[0] || "Sales Agent",
+      email: cleanEmail,
+      role: roleOverride || "agent",
+      approved: false,
+      status: "unsubmitted",
+    };
+    setUser(defaultUser);
+    saveSession(defaultUser);
+    return defaultUser;
   }, [syncProfileToSupabase]);
 
   // ── signOut ────────────────────────────────────────────────────────────────
@@ -380,6 +696,114 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     clearSession();
     supabase.auth.signOut().catch(() => {});
   }, []);
+
+  // ── updateUserProfile ───────────────────────────────────────────────────
+  const updateUserProfile = useCallback(
+    async (data: {
+      name?: string;
+      pseudo_name?: string;
+      role_title?: string;
+      phone?: string;
+      designation?: string;
+    }) => {
+      if (!user?.email) return;
+      const cleanEmail = user.email.toLowerCase().trim();
+
+      try {
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("email", cleanEmail)
+          .maybeSingle();
+
+        let meta: any = { approved: true, status: "approved" };
+        if (prof?.avatar_url) {
+          try {
+            meta = JSON.parse(prof.avatar_url);
+          } catch {}
+        }
+
+        if (data.phone !== undefined) meta.phone = data.phone;
+        if (data.pseudo_name !== undefined) meta.pseudo_name = data.pseudo_name;
+        if (data.role_title !== undefined) meta.role_title = data.role_title;
+        if (data.designation !== undefined) meta.designation = data.designation;
+
+        const updatedName = data.name !== undefined ? data.name : (prof?.full_name || user.name);
+
+        if (prof) {
+          await supabase
+            .from("profiles")
+            .update({
+              full_name: updatedName,
+              avatar_url: JSON.stringify(meta),
+            })
+            .eq("email", cleanEmail);
+        } else {
+          await supabase.from("profiles").upsert(
+            {
+              email: cleanEmail,
+              full_name: updatedName,
+              role: user.role,
+              avatar_url: JSON.stringify(meta),
+            },
+            { onConflict: "email" }
+          );
+        }
+
+        // Update local session state
+        setUser((prev) => {
+          if (!prev) return prev;
+          const updated: SessionUser = {
+            ...prev,
+            name: updatedName,
+            phone: data.phone !== undefined ? data.phone : prev.phone,
+            pseudo_name: data.pseudo_name !== undefined ? data.pseudo_name : prev.pseudo_name,
+            role_title: data.role_title !== undefined ? data.role_title : prev.role_title,
+            designation: data.designation !== undefined ? data.designation : prev.designation,
+          };
+          saveSession(updated);
+          return updated;
+        });
+
+        // Sync with LiveChat SaaS agent session in localStorage
+        try {
+          const rawAgentSession = localStorage.getItem("teals_agent_session");
+          const ag = rawAgentSession ? JSON.parse(rawAgentSession) : {};
+          if (data.pseudo_name !== undefined) ag.pseudo_name = data.pseudo_name;
+          if (data.role_title !== undefined) ag.role_title = data.role_title;
+          if (data.name !== undefined) ag.full_name = data.name;
+          localStorage.setItem("teals_agent_session", JSON.stringify(ag));
+          sessionStorage.setItem("teals_agent_session", JSON.stringify(ag));
+        } catch {}
+
+        // Broadcast update across tabs
+        try {
+          if (typeof BroadcastChannel !== "undefined") {
+            const bc = new BroadcastChannel("teals-crm-profiles-sync");
+            bc.postMessage({ type: "PROFILE_UPDATED", email: cleanEmail, ...data });
+            bc.close();
+          }
+        } catch {}
+
+        try {
+          const ch = supabase.channel(`profile-broadcast-${Date.now()}`, {
+            config: { broadcast: { self: true } },
+          });
+          await ch.subscribe();
+          await ch.send({
+            type: "broadcast",
+            event: "crm_profiles_updated",
+            payload: { email: cleanEmail, ...data },
+          });
+          supabase.removeChannel(ch);
+        } catch {}
+      } catch (err) {
+        console.error("Failed to update user profile:", err);
+        throw err;
+      }
+    },
+    [user?.email, user?.name, user?.role]
+  );
 
   // ── Context value ──────────────────────────────────────────────────────────
   const value = useMemo<CrmContextValue>(() => {
@@ -392,6 +816,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       signOut,
       submitApprovalRequest,
       checkUserApprovalStatus,
+      updateUserProfile,
       leads,
       visibleLeads: scoped(leads),
       addLeads: (incoming) => setLeads((prev) => [...incoming, ...prev]),
@@ -413,7 +838,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       toggleTheme: () => {},
       isAuthLoading,
     };
-  }, [user, isAuthLoading, leads, followUps, theme, signIn, signOut, submitApprovalRequest, checkUserApprovalStatus]);
+  }, [user, isAuthLoading, leads, followUps, theme, signIn, signOut, submitApprovalRequest, checkUserApprovalStatus, updateUserProfile]);
 
 
   return <CrmContext.Provider value={value}>{children}</CrmContext.Provider>;

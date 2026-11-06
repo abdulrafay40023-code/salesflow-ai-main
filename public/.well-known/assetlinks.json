@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "co.teals.crm",
+        "sha256_cert_fingerprints": ["56:81:90:F4:F2:B3:FD:AD:8E:B0:88:40:89:E1:58:FA:9B:83:DF:38:4C:22:CE:11:73:5F:9A:32:CE:6A:64:3A"]
+      }
+    }]

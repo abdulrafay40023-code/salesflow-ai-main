@@ -28,17 +28,22 @@ export type Lead = {
   updated_at?: string; // Status update timestamp
   booked_at?: string;
   contacted_at?: string;
+  imported_by?: string;
+  assigned_at?: string;
 };
+
+import { isDynamicOrStaticAdmin, getAllAdminEmails } from "./dynamic-admins";
 
 export const ADMIN_EMAILS = [
   "garryamelia6265@gmail.com",
+  "jennifer.cisternino2027@gmail.com",
   "tzafar04@gmail.com",
   "annusraees@gmail.com",
 ];
 
 export const isAdminEmail = (email?: string | null): boolean => {
   if (!email) return false;
-  return ADMIN_EMAILS.map((e) => e.toLowerCase()).includes(email.trim().toLowerCase());
+  return isDynamicOrStaticAdmin(email);
 };
 
 export const agents = ["Garry Amelia"];

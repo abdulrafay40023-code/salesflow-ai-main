@@ -24,11 +24,30 @@ export default async function handler(req: any, res: any) {
   }
 
   const cleanEmail = email.toLowerCase().trim();
-  if (cleanEmail === ADMIN_EMAIL) {
+  const baseAdmins = [
+    "garryamelia6265@gmail.com",
+    "jennifer.cisternino2027@gmail.com",
+    "ashal.raza@teals.co",
+    "tzafar04@gmail.com",
+    "annusraees@gmail.com",
+  ];
+  if (baseAdmins.includes(cleanEmail)) {
     return res.status(200).json({ ok: true, notice: "Admin preserved" });
   }
 
   try {
+    // 0. Check storage file for dynamic admins
+    try {
+      const { data: adminFile } = await supabase.storage.from("teals-live-store").download("crm-admins.json");
+      if (adminFile) {
+        const text = await adminFile.text();
+        const admins = JSON.parse(text);
+        if (Array.isArray(admins) && admins.some((a) => (a?.email || "").toLowerCase().trim() === cleanEmail)) {
+          return res.status(200).json({ ok: true, notice: "Dynamic admin preserved" });
+        }
+      }
+    } catch {}
+
     // 1. Check if profile exists and is approved in profiles table
     const { data: prof } = await supabase
       .from("profiles")

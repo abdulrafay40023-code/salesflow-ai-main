@@ -1,58 +1,294 @@
-// Single crisp synthesized beep: strictly 1 tone, never replays on tab switch or focus
-let audioCtx: AudioContext | null = null;
-let keepAliveOsc: OscillatorNode | null = null;
-let lastPlayedTone = '';
-let lastPlayedAt = 0;
+'use client';
 
-function canPlay(tone: string, minIntervalMs = 2500): boolean {
-  const now = Date.now();
-  if (tone === lastPlayedTone && now - lastPlayedAt < minIntervalMs) {
+import { ARRIVAL_WAV, MESSAGE_WAV, HANDOFF_WAV } from './sound-data';
+
+let sharedAudioCtx: AudioContext | null = null;
+let cachedArrivalBuffer: AudioBuffer | null = null;
+let cachedHandoffBuffer: AudioBuffer | null = null;
+let isDecodingBuffers = false;
+
+function getOrCreateAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    if (!sharedAudioCtx) {
+      const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AC) {
+        sharedAudioCtx = new AC();
+      }
+    }
+    if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
+      sharedAudioCtx.resume().catch(() => {});
+    }
+    return sharedAudioCtx;
+  } catch {
+    return null;
+  }
+}
+
+async function decodeWavToBuffer(ctx: AudioContext, base64Wav: string): Promise<AudioBuffer | null> {
+  try {
+    const base64 = base64Wav.includes(',') ? base64Wav.split(',')[1] : base64Wav;
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return await ctx.decodeAudioData(bytes.buffer.slice(0));
+  } catch {
+    return null;
+  }
+}
+
+async function primeAudioBuffers() {
+  if (isDecodingBuffers || typeof window === 'undefined') return;
+  const ctx = getOrCreateAudioContext();
+  if (!ctx) return;
+  isDecodingBuffers = true;
+  try {
+    if (!cachedArrivalBuffer) {
+      cachedArrivalBuffer = await decodeWavToBuffer(ctx, ARRIVAL_WAV);
+    }
+    if (!cachedHandoffBuffer) {
+      cachedHandoffBuffer = await decodeWavToBuffer(ctx, HANDOFF_WAV);
+    }
+  } catch {} finally {
+    isDecodingBuffers = false;
+  }
+}
+
+export function isSoundMutedGlobally(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem('teals_sound_enabled') === 'false';
+  } catch {
     return false;
   }
-  lastPlayedTone = tone;
-  lastPlayedAt = now;
-  return true;
 }
 
-function getAudioContext(): AudioContext | null {
-  if (typeof window === 'undefined') return null;
-  if (!audioCtx) {
-    try {
-      const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      audioCtx = new AC();
-    } catch {
-      return null;
-    }
-  }
-  return audioCtx;
-}
-
-function ensureKeepAlive(ctx: AudioContext) {
-  if (keepAliveOsc) return;
+// Original Rich Bell Chime (Crisp, pleasant dual-harmonic chime matching original tone)
+function playOriginalChime(freq = 880, duration = 0.35) {
   try {
-    const gain = ctx.createGain();
-    gain.gain.value = 0.00005;
-    gain.connect(ctx.destination);
-    keepAliveOsc = ctx.createOscillator();
-    keepAliveOsc.type = 'sine';
-    keepAliveOsc.frequency.setValueAtTime(15, ctx.currentTime);
-    keepAliveOsc.connect(gain);
-    keepAliveOsc.start();
+    const ctx = getOrCreateAudioContext();
+    if (!ctx) return;
+
+    const play = () => {
+      try {
+        const now = ctx.currentTime;
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(freq, now);
+        osc1.frequency.exponentialRampToValueAtTime(freq * 1.5, now + 0.08);
+
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(freq * 2, now);
+
+        gain.gain.setValueAtTime(0.45, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + duration);
+        osc2.stop(now + duration);
+      } catch {}
+    };
+
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(play).catch(() => {});
+    } else {
+      play();
+    }
   } catch {}
 }
 
-export async function ensureAudioRunning(): Promise<boolean> {
-  const ctx = getAudioContext();
-  if (!ctx) return false;
-  if (ctx.state === 'running') {
-    ensureKeepAlive(ctx);
-    return true;
-  }
+let activeAudio: HTMLAudioElement | null = null;
+let lastChimeTimestamp = 0;
+
+export function playCleanSound(type: 'arrival' | 'message' | 'handoff' = 'arrival', force = false) {
+  if (typeof window === 'undefined') return;
+  if (!force && isSoundMutedGlobally()) return;
+  if (!force && (window.self !== window.top || window.location.search.includes('sso_email'))) return;
+
+  const now = Date.now();
+  if (!force && now - lastChimeTimestamp < 2500) return; // Strict 2.5s global anti-duplicate lock
+  lastChimeTimestamp = now;
+
+  const wav = type === 'handoff' ? HANDOFF_WAV : type === 'message' ? (MESSAGE_WAV || ARRIVAL_WAV) : ARRIVAL_WAV;
+
   try {
-    await ctx.resume();
-    if (ctx.state === 'running') {
-      ensureKeepAlive(ctx);
-      return true;
+    if (activeAudio) {
+      activeAudio.pause();
+      activeAudio.currentTime = 0;
+    }
+    activeAudio = new Audio(wav);
+    activeAudio.volume = 1.0;
+    const playPromise = activeAudio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        playOriginalChime(type === 'handoff' ? 660 : 880, 0.35);
+      });
+    }
+  } catch {
+    playOriginalChime(type === 'handoff' ? 660 : 880, 0.35);
+  }
+}
+
+let lastArrivalSoundTime = 0;
+let lastMessageSoundTime = 0;
+let lastHandoffSoundTime = 0;
+
+// 1. Visitor Arrival Sound (Guaranteed strictly 1 single clean chime per visitor arrival across all tabs)
+export const playArrivalSound = (force = false) => {
+  const now = Date.now();
+  if (!force) {
+    try {
+      const lastSound = localStorage.getItem('teals_sound_played_arrival');
+      if (lastSound && now - Number(lastSound) < 2500) {
+        return; // Already played in another tab within 2.5 seconds
+      }
+      localStorage.setItem('teals_sound_played_arrival', String(now));
+    } catch {}
+  }
+  if (!force && now - lastArrivalSoundTime < 2500) return;
+  lastArrivalSoundTime = now;
+  playCleanSound('arrival', force);
+};
+export const playArrivalChime = playArrivalSound;
+
+// 2. Incoming Message Sound (Guaranteed strictly 1 single clean chime)
+export const playMessageSound = (force = false) => {
+  const now = Date.now();
+  if (!force && now - lastMessageSoundTime < 2000) return;
+  lastMessageSoundTime = now;
+  playCleanSound('message', force);
+};
+export const playMessageChime = playMessageSound;
+
+// 3. Human Handoff Sound
+export const playHandoffSound = (force = false) => {
+  const now = Date.now();
+  if (!force && now - lastHandoffSoundTime < 2500) return;
+  lastHandoffSoundTime = now;
+  playCleanSound('handoff', force);
+};
+export const playApprovalChime = playHandoffSound;
+
+// Topbar "Test Sound" button helper (ALWAYS rings on deliberate click)
+export async function playTestSound(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  try {
+    await unlockAudioContext();
+    playCleanSound('arrival', true); // force = true
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Compatibility deduplication helper
+export function tryPlayDeduplicatedChime(_eventId: string, type: 'arrival' | 'message' | 'handoff' | 'approval') {
+  if (isSoundMutedGlobally()) return false;
+  if (type === 'arrival') playArrivalSound();
+  else if (type === 'message') playMessageSound();
+  else playHandoffSound();
+  return true;
+}
+
+// Continuous repeating ringer for "chat locked / waiting for human agent"
+let stopHandoffWorker: (() => void) | null = null;
+let activeHandoffConvId: string | null = null;
+let lastHandoffRingTimestamp = 0;
+
+export function startWaitingForHumanBeep(conversationId?: string) {
+  if (typeof window === 'undefined') return;
+  if (isSoundMutedGlobally()) {
+    stopWaitingForHumanBeep();
+    return;
+  }
+
+  const targetId = conversationId || 'global';
+  if (stopHandoffWorker && activeHandoffConvId === targetId) return;
+
+  const now = Date.now();
+  if (stopHandoffWorker) {
+    stopHandoffWorker();
+    stopHandoffWorker = null;
+  }
+  activeHandoffConvId = targetId;
+
+  // Single clean beep on start with 2.2-second debounce guard (prevents double acoustic beep)
+  if (now - lastHandoffRingTimestamp > 2200) {
+    lastHandoffRingTimestamp = now;
+    playHandoffSound();
+  }
+
+  // Repeat every 3 seconds continuously until claimed or stopped
+  stopHandoffWorker = createWorkerInterval(() => {
+    if (isSoundMutedGlobally()) {
+      stopWaitingForHumanBeep();
+      return;
+    }
+    lastHandoffRingTimestamp = Date.now();
+    playHandoffSound();
+  }, 3000);
+}
+export const startHandoffRinger = startWaitingForHumanBeep;
+
+export function stopWaitingForHumanBeep(conversationId?: string) {
+  if (conversationId && activeHandoffConvId && activeHandoffConvId !== conversationId) return;
+  if (stopHandoffWorker) {
+    stopHandoffWorker();
+    stopHandoffWorker = null;
+  }
+  activeHandoffConvId = null;
+}
+export const stopHandoffRinger = stopWaitingForHumanBeep;
+
+export function createWorkerInterval(callback: () => void, intervalMs: number): () => void {
+  if (typeof window === 'undefined') return () => {};
+  try {
+    const workerScript = `
+      var timer = null;
+      self.onmessage = function(e) {
+        if (e.data === 'start') {
+          if (timer) clearInterval(timer);
+          timer = setInterval(function() { postMessage('tick'); }, ${intervalMs});
+        } else if (e.data === 'stop') {
+          if (timer) clearInterval(timer);
+          timer = null;
+        }
+      };
+    `;
+    const blob = new Blob([workerScript], { type: 'application/javascript' });
+    const worker = new Worker(URL.createObjectURL(blob));
+    worker.onmessage = () => callback();
+    worker.postMessage('start');
+    return () => {
+      try {
+        worker.postMessage('stop');
+        worker.terminate();
+      } catch {}
+    };
+  } catch {
+    const timer = setInterval(callback, intervalMs);
+    return () => clearInterval(timer);
+  }
+}
+
+// Desktop Background Notification (Silent Windows Popup - ZERO OS Sound)
+export async function requestNotificationPermission(): Promise<boolean> {
+  if (typeof window === 'undefined' || !('Notification' in window)) return false;
+  try {
+    if (Notification.permission === 'granted') return true;
+    if (Notification.permission !== 'denied') {
+      const p = await Notification.requestPermission();
+      return p === 'granted';
     }
     return false;
   } catch {
@@ -60,214 +296,155 @@ export async function ensureAudioRunning(): Promise<boolean> {
   }
 }
 
-// Generates a rich, luxury bell chime WAV data URI (strictly 1 single crisp, loud chime)
-function createSingleBeepWav(freq: number, durationMs = 700, volume = 0.95): string {
-  const sampleRate = 44100;
-  const numSamples = Math.floor(sampleRate * (durationMs / 1000));
-  const buffer = new ArrayBuffer(44 + numSamples * 2);
-  const view = new DataView(buffer);
+let lastGlobalNotificationTimestamp = 0;
 
-  const writeString = (offset: number, str: string) => {
-    for (let i = 0; i < str.length; i++) {
-      view.setUint8(offset + i, str.charCodeAt(i));
+export function showBackgroundNotification(
+  title: string,
+  body: string,
+  icon = '/icon-192.png?v=3',
+  eventKey?: string,
+  soundAlertsEnabled?: boolean,
+  targetUrl = '/livechat'
+) {
+  if (typeof window === 'undefined' || !('Notification' in window)) return;
+  if (Notification.permission !== 'granted') {
+    requestNotificationPermission().catch(() => {});
+    return;
+  }
+
+  const now = Date.now();
+  // Absolute Rate-Limiter: No 2 Windows notifications can ever pop up within 2.5 seconds of each other
+  if (now - lastGlobalNotificationTimestamp < 2500) {
+    return;
+  }
+
+  // Cross-tab lock: ensure this exact notification only shows ONCE across all open tabs within 3 seconds
+  const lockKey = eventKey || `notif_${title}_${(body || '').slice(0, 30)}`;
+  try {
+    const storageKey = `teals_notif_fired_${lockKey}`;
+    const lastFired = localStorage.getItem(storageKey);
+    if (lastFired && now - Number(lastFired) < 3000) {
+      return; // Already notified recently in this or another tab
     }
+    localStorage.setItem(storageKey, String(now));
+  } catch {}
+
+  lastGlobalNotificationTimestamp = now;
+
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+  const shouldPlayOsSound = Boolean(soundAlertsEnabled) || (isMobile && document.hidden);
+
+  const notifOptions = {
+    body,
+    icon: icon && icon !== '/favicon.ico' ? icon : '/icon-192.png?v=3',
+    badge: '/icon-192.png?v=3',
+    silent: !shouldPlayOsSound && !isSoundMutedGlobally() ? true : false,
+    tag: eventKey || `teals_crm_notif_${now}`,
+    renotify: true,
+    vibrate: [250, 100, 250],
+    data: { url: targetUrl },
   };
 
-  writeString(0, 'RIFF');
-  view.setUint32(4, 36 + numSamples * 2, true);
-  writeString(8, 'WAVE');
-  writeString(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, 1, true); // Mono
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeString(36, 'data');
-  view.setUint32(40, numSamples * 2, true);
-
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    const attack = Math.min(1, t / 0.003); // 3ms instant crisp attack
-
-    const bodyDecay = Math.exp(-t * 4.2); // Warm 600ms sustain
-    const sparkleDecay = Math.exp(-t * 9.0); // 300ms sparkle decay
-    const chimeDecay = Math.exp(-t * 12.0); // 200ms glass strike decay
-
-    // Layer 1: Fundamental (Warm bell strike with triangle warmth)
-    const f0 = Math.sin(2 * Math.PI * freq * t);
-    const f0_tri = (2 / Math.PI) * Math.asin(Math.sin(2 * Math.PI * freq * t));
-    const layer1 = (f0 * 0.45 + f0_tri * 0.25) * bodyDecay;
-
-    // Layer 2: Sub-octave warmth (speaker resonance)
-    const f_sub = Math.sin(2 * Math.PI * (freq * 0.5) * t) * 0.20 * bodyDecay;
-
-    // Layer 3: Octave sparkle (crisp presence)
-    const f_oct = Math.sin(2 * Math.PI * (freq * 2.0) * t) * 0.25 * sparkleDecay;
-
-    // Layer 4: Crystal bell harmonic (2.756x chime resonance)
-    const f_chime = Math.sin(2 * Math.PI * (freq * 2.756) * t) * 0.15 * chimeDecay;
-
-    const sample = (layer1 + f_sub + f_oct + f_chime) * volume * attack;
-    const int16 = Math.max(-32767, Math.min(32767, Math.floor(sample * 32767)));
-    view.setInt16(44 + i * 2, int16, true);
+  if ('serviceWorker' in navigator && isMobile) {
+    navigator.serviceWorker.ready.then((reg) => {
+      reg.showNotification(title, notifOptions as any).catch(() => {});
+    }).catch(() => {});
+    return;
   }
 
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  try {
+    const notif = new Notification(title, notifOptions as any);
+
+    notif.onclick = (e) => {
+      try { e.preventDefault(); } catch {}
+      window.focus();
+      const currentPath = window.location.pathname + window.location.search;
+      if (currentPath !== targetUrl) {
+        window.location.href = targetUrl;
+      }
+      notif.close();
+    };
+
+    setTimeout(() => {
+      try { notif.close(); } catch {}
+    }, 7000);
+  } catch (err) {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then((reg) => {
+        reg.showNotification(title, notifOptions as any).catch(() => {});
+      }).catch(() => {});
+    }
   }
-  return 'data:audio/wav;base64,' + btoa(binary);
 }
 
-// Pre-synthesized single luxury chimes for HTML5 Audio fallback
-let ARRIVAL_BEEP_URI = '';
-let MESSAGE_BEEP_URI = '';
-let APPROVAL_BEEP_URI = '';
+// Tab Title Flashing
+let titleFlashTimer: ReturnType<typeof setInterval> | null = null;
+let baseTitle = typeof document !== 'undefined' ? document.title : 'Teals CRM';
 
-if (typeof window !== 'undefined') {
-  try {
-    ARRIVAL_BEEP_URI = createSingleBeepWav(1046.50, 700, 0.95); // High C luxury bell chime
-    MESSAGE_BEEP_URI = createSingleBeepWav(1174.66, 650, 0.95); // High D message chime
-    APPROVAL_BEEP_URI = createSingleBeepWav(880.00, 750, 0.95); // Concert A attention chime
-  } catch {}
+export function flashTabTitle(alertTitle: string) {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (!document.hidden) return;
+
+  if (titleFlashTimer) clearInterval(titleFlashTimer);
+  if (!baseTitle || baseTitle.includes('!') || baseTitle.includes('(')) {
+    baseTitle = 'Teals CRM — AI Sales Workspace';
+  }
+
+  let toggle = false;
+  titleFlashTimer = setInterval(() => {
+    if (!document.hidden) {
+      stopTabTitleFlash();
+      return;
+    }
+    document.title = toggle ? alertTitle : baseTitle;
+    toggle = !toggle;
+  }, 1000);
 }
 
-function doPlaySingleTone(ctx: AudioContext, freq: number, duration: number, volume: number) {
-  try {
-    const start = ctx.currentTime + 0.015;
-
-    // Layer 1: Fundamental Warm Chime (Triangle wave for rich acoustic bell resonance)
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = 'triangle';
-    osc1.frequency.setValueAtTime(freq, start);
-
-    // Layer 2: Shimmering Sparkle Harmonic (2x - crisp high punch)
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(freq * 2, start);
-
-    // Layer 3: Crystal Glass Overtones (2.756x - natural physical bell strike overtone)
-    const osc3 = ctx.createOscillator();
-    const gain3 = ctx.createGain();
-    osc3.type = 'sine';
-    osc3.frequency.setValueAtTime(freq * 2.756, start);
-
-    // Layer 4: Warm Acoustic Sub-Body (0.5x - speaker resonance)
-    const osc4 = ctx.createOscillator();
-    const gain4 = ctx.createGain();
-    osc4.type = 'sine';
-    osc4.frequency.setValueAtTime(freq * 0.5, start);
-
-    // Dynamic Limiter/Master Gain to prevent clipping while staying loud
-    const master = ctx.createGain();
-    master.gain.setValueAtTime(volume * 1.0, start);
-    master.connect(ctx.destination);
-
-    // Envelopes: 3ms ultra-crisp attack, natural rich bell decay
-    gain1.gain.setValueAtTime(0.001, start);
-    gain1.gain.linearRampToValueAtTime(0.70, start + 0.003);
-    gain1.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-
-    gain2.gain.setValueAtTime(0.001, start);
-    gain2.gain.linearRampToValueAtTime(0.30, start + 0.003);
-    gain2.gain.exponentialRampToValueAtTime(0.0001, start + duration * 0.65);
-
-    gain3.gain.setValueAtTime(0.001, start);
-    gain3.gain.linearRampToValueAtTime(0.18, start + 0.003);
-    gain3.gain.exponentialRampToValueAtTime(0.0001, start + duration * 0.45);
-
-    gain4.gain.setValueAtTime(0.001, start);
-    gain4.gain.linearRampToValueAtTime(0.22, start + 0.003);
-    gain4.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-
-    osc1.connect(gain1);
-    gain1.connect(master);
-
-    osc2.connect(gain2);
-    gain2.connect(master);
-
-    osc3.connect(gain3);
-    gain3.connect(master);
-
-    osc4.connect(gain4);
-    gain4.connect(master);
-
-    osc1.start(start);
-    osc1.stop(start + duration + 0.02);
-
-    osc2.start(start);
-    osc2.stop(start + duration + 0.02);
-
-    osc3.start(start);
-    osc3.stop(start + duration + 0.02);
-
-    osc4.start(start);
-    osc4.stop(start + duration + 0.02);
-  } catch {}
+export function stopTabTitleFlash() {
+  if (titleFlashTimer) {
+    clearInterval(titleFlashTimer);
+    titleFlashTimer = null;
+  }
+  if (typeof document !== 'undefined' && baseTitle) {
+    document.title = baseTitle;
+  }
 }
 
-function playSingleBeep(type: 'arrival' | 'message' | 'approval') {
-  // 1046.5Hz = Bright High C (Crisp Luxury Slack/iPhone bell tone)
-  const freq = type === 'arrival' ? 1046.50 : type === 'message' ? 1174.66 : 880.00;
-  const duration = 0.70;
-  const volume = 1.0;
-
-  let played = false;
-  const ctx = getAudioContext();
-  if (ctx && ctx.state === 'running') {
+// User Interaction Unlocker
+export async function unlockAudioContext(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  const ctx = getOrCreateAudioContext();
+  if (ctx && ctx.state === 'suspended') {
     try {
-      doPlaySingleTone(ctx, freq, duration, volume);
-      played = true;
+      await ctx.resume();
     } catch {}
   }
-
-  // HTML5 audio fallback: runs instantly in background tabs
-  // Crucially: never queues a delayed callback on ctx.resume, so it NEVER plays on tab switch!
-  if (!played && typeof window !== 'undefined') {
-    try {
-      if (ctx && ctx.state !== 'running') {
-        ctx.resume().catch(() => {});
-      }
-      const uri = type === 'arrival' ? ARRIVAL_BEEP_URI : type === 'message' ? MESSAGE_BEEP_URI : APPROVAL_BEEP_URI;
-      if (uri) {
-        const audio = new Audio(uri);
-        audio.volume = 1.0;
-        audio.play().catch(() => {});
-      }
-    } catch {}
-  }
+  primeAudioBuffers().catch(() => {});
+  return true;
 }
 
-// 🟢 GREEN: Visitor arrival (Single crisp chime, strictly once)
-export function playArrivalChime() {
-  if (!canPlay('arrival', 3000)) return;
-  playSingleBeep('arrival');
-}
+export const ensureAudioRunning = unlockAudioContext;
+export const unlockAudioEngine = unlockAudioContext;
 
-// 🔴 RED: New visitor chat message (Single crisp chime, strictly once)
-export function playMessageChime() {
-  if (!canPlay('message', 2000)) return;
-  playSingleBeep('message');
-}
-
-// 🟡 YELLOW: Agent handoff / approval (Single crisp chime, strictly once)
-export function playApprovalChime() {
-  if (!canPlay('approval', 3000)) return;
-  playSingleBeep('approval');
-}
-
-// Auto-unlock audio on user interaction once (never on visibilitychange or focus)
+// Global interaction listeners to unlock audio on first click or keypress
 if (typeof window !== 'undefined') {
-  const unlockEvents = ['click', 'keydown', 'pointerdown'];
-  const handleUnlock = () => {
-    ensureAudioRunning().catch(() => {});
+  const unlock = () => {
+    unlockAudioContext().catch(() => {});
   };
-  unlockEvents.forEach((evt) => {
-    window.addEventListener(evt, handleUnlock, { once: true, passive: true });
+  ['click', 'touchstart', 'keydown', 'mousedown', 'pointerdown'].forEach((ev) => {
+    window.addEventListener(ev, unlock, { passive: true, once: false });
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      stopTabTitleFlash();
+      unlockAudioContext().catch(() => {});
+    }
+  });
+  window.addEventListener('focus', () => {
+    stopTabTitleFlash();
+    unlockAudioContext().catch(() => {});
   });
 }
+
+

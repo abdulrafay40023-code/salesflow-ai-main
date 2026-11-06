@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { CrmProvider } from "@/lib/crm-store";
+import { LiveChatAlertProvider } from "@/context/LiveChatAlertContext";
 import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
@@ -78,13 +79,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover" },
       { title: "Teals CRM — AI-Powered Sales Workspace" },
       { name: "description", content: "Teals CRM is an AI-powered sales workspace for lead management, follow-ups, meetings and automated email outreach." },
       { name: "author", content: "Teals CRM" },
+      { name: "theme-color", content: "#282826" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "Teals CRM" },
       { property: "og:title", content: "Teals CRM — AI-Powered Sales Workspace" },
       { property: "og:description", content: "Manage leads, follow-ups and AI email automation in one premium CRM." },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: "/icon-512.png?v=3" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
@@ -92,7 +99,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      { rel: "icon", href: "/favicon.png?v=3", type: "image/png" },
+      { rel: "shortcut icon", href: "/favicon.ico?v=3" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png?v=3", sizes: "180x180" },
+      { rel: "manifest", href: "/manifest.json?v=3" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -112,6 +122,22 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.__tealsDeferredPrompt = window.__tealsDeferredPrompt || null;
+              window.addEventListener('beforeinstallprompt', function(e) {
+                window.__tealsDeferredPrompt = e;
+                window.dispatchEvent(new CustomEvent('teals-pwa-ready', { detail: e }));
+              });
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').catch(function(){});
+                });
+              }
+            `,
+          }}
+        />
       </head>
       <body>
         {children}
@@ -126,6 +152,9 @@ function RootComponent() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
     const runReminderCheck = () => {
       fetch("/api/check-reminders", { method: "GET" }).catch(() => {});
     };
@@ -137,9 +166,11 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <CrmProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-        <Toaster position="top-right" richColors />
+        <LiveChatAlertProvider>
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+          <Toaster position="top-right" richColors />
+        </LiveChatAlertProvider>
       </CrmProvider>
     </QueryClientProvider>
   );

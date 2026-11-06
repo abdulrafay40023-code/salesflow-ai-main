@@ -324,7 +324,7 @@ function MetaLeadsPage() {
         title="Meta Leads"
         description="Incoming leads from Facebook / Instagram Lead Ads — Assign to agents or send welcome emails."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -350,31 +350,31 @@ function MetaLeadsPage() {
       />
 
       {/* Live Stats Row */}
-      <div className="mb-6 grid grid-cols-3 gap-4">
-        <div className="rounded-xl border border-border bg-surface-1 p-4 shadow-sm">
+      <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        <div className="rounded-xl border border-border bg-surface-1 p-3.5 sm:p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Meta Leads</p>
             <span className="flex size-2 rounded-full bg-blue-400 animate-pulse" title="Live Counter" />
           </div>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">{totalCount}</p>
+          <p className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-foreground">{totalCount}</p>
           <p className="mt-1 text-[11px] text-muted-foreground">Live synced from Meta Ads</p>
         </div>
 
-        <div className="rounded-xl border border-border bg-surface-1 p-4 shadow-sm">
+        <div className="rounded-xl border border-border bg-surface-1 p-3.5 sm:p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium text-amber-400 uppercase tracking-wider">Unassigned (Admin Pool)</p>
             <Clock className="size-3.5 text-amber-400" />
           </div>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-amber-400">{unassignedCount}</p>
+          <p className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-amber-400">{unassignedCount}</p>
           <p className="mt-1 text-[11px] text-muted-foreground">Retained by Admins</p>
         </div>
 
-        <div className="rounded-xl border border-border bg-surface-1 p-4 shadow-sm">
+        <div className="rounded-xl border border-border bg-surface-1 p-3.5 sm:p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium text-green-400 uppercase tracking-wider">Assigned to Agents</p>
             <UserCheck className="size-3.5 text-green-400" />
           </div>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-green-400">{assignedCount}</p>
+          <p className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-green-400">{assignedCount}</p>
           <p className="mt-1 text-[11px] text-muted-foreground">Actively assigned to team</p>
         </div>
       </div>

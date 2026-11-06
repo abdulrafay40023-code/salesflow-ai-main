@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { type Lead } from "@/lib/crm-data";
+import { type Lead, ADMIN_EMAILS, isAdminEmail } from "@/lib/crm-data";
 import { notifyAdminLeadsClearedFn } from "@/lib/server-actions";
 import {
   Trash2,
@@ -30,6 +30,10 @@ import {
   CheckCircle2,
   ShieldAlert,
   Users,
+  UserCheck,
+  Download,
+  Info,
+  UserX,
 } from "lucide-react";
 
 export type ClearScope =
@@ -40,6 +44,14 @@ export type ClearScope =
   | "only_new"
   | "only_unresponsive"
   | "all";
+
+export type AgentLeadType = "all_leads" | "assigned_leads" | "imported_leads";
+
+const DEFAULT_ADMINS = [
+  { name: "Garry Amelia", email: "garryamelia6265@gmail.com" },
+  { name: "T Zafar", email: "tzafar04@gmail.com" },
+  { name: "Annus Raees", email: "annusraees@gmail.com" },
+];
 
 export function ClearLeadsDialog({
   open,
@@ -59,25 +71,167 @@ export function ClearLeadsDialog({
   // NOTHING is auto-selected by default. User must explicitly choose.
   const [selectedOption, setSelectedOption] = useState<ClearScope | "">("");
   const [adminTargetScope, setAdminTargetScope] = useState<string>("ALL_CRM");
+  const [agentLeadType, setAgentLeadType] = useState<AgentLeadType>("all_leads");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [registeredWorkingAgents, setRegisteredWorkingAgents] = useState<{ name: string; email: string }[]>([]);
+  const [registeredAdmins, setRegisteredAdmins] = useState<{ name: string; email: string }[]>([]);
 
-  // Reset selection every time dialog opens
+  // Fetch registered working agents and admins from profiles
   useEffect(() => {
-    if (open) {
-      setSelectedOption("");
-    }
+    if (!open) return;
+    setSelectedOption("");
+    setAdminTargetScope("ALL_CRM");
+    setAgentLeadType("all_leads");
+
+    supabase
+      .from("profiles")
+      .select("*")
+      .then(({ data }) => {
+        if (data) {
+          const agents: { name: string; email: string }[] = [];
+          const admins: { name: string; email: string }[] = [];
+          data.forEach((p: any) => {
+            const em = (p.email || "").toLowerCase().trim();
+            if (!em) return;
+            if (isAdminEmail(em) || p.role === "admin") {
+              admins.push({
+                name: p.full_name || em.split("@")[0],
+                email: p.email,
+              });
+              return;
+            }
+
+            let isApproved = false;
+            if (p.avatar_url) {
+              try {
+                const parsed = JSON.parse(p.avatar_url);
+                isApproved = Boolean(parsed.approved);
+              } catch {}
+            }
+            if (isApproved || p.role === "agent") {
+              agents.push({
+                name: p.full_name || em.split("@")[0],
+                email: p.email,
+              });
+            }
+          });
+          setRegisteredWorkingAgents(agents);
+          setRegisteredAdmins(admins);
+        }
+      });
   }, [open]);
 
-  // Extract list of distinct agents present in current leads
-  const distinctAgents = useMemo(() => {
-    const set = new Set<string>();
-    leads.forEach((l) => {
-      if (l.agent && l.agent !== "Unassigned") set.add(l.agent);
-    });
-    return Array.from(set);
-  }, [leads]);
+  // Extract distinct working agents that exist in current leads as fallback
+  const allWorkingAgents = useMemo(() => {
+    const map = new Map<string, { name: string; email: string }>();
 
-  // Filter leads based on agent permission and selected rule
+    // 1. Add approved agents from profiles
+    registeredWorkingAgents.forEach((a) => {
+      const em = a.email.toLowerCase().trim();
+      if (!isAdminEmail(em)) {
+        map.set(em, a);
+      }
+    });
+
+    // 2. Add any working agents found in leads
+    leads.forEach((l) => {
+      const ag = (l.agent || "").trim();
+      const imp = (l.imported_by || "").trim();
+      [ag, imp].forEach((val) => {
+        if (
+          val &&
+          val !== "Unassigned" &&
+          val !== "Garry Amelia" &&
+          val !== "Admin" &&
+          !isAdminEmail(val)
+        ) {
+          const clean = val.toLowerCase();
+          if (!map.has(clean)) {
+            map.set(clean, {
+              name: val.includes("@") ? val.split("@")[0] : val,
+              email: val,
+            });
+          }
+        }
+      });
+    });
+
+    return Array.from(map.values());
+  }, [registeredWorkingAgents, leads]);
+
+  // All distinct Admins
+  const allAdmins = useMemo(() => {
+    const map = new Map<string, { name: string; email: string }>();
+    DEFAULT_ADMINS.forEach((adm) => map.set(adm.email.toLowerCase().trim(), adm));
+    registeredAdmins.forEach((adm) => map.set(adm.email.toLowerCase().trim(), adm));
+    return Array.from(map.values());
+  }, [registeredAdmins]);
+
+  const isAdminMatch = (val?: string | null, targetEmail?: string): boolean => {
+    if (!val) return false;
+    const clean = val.trim().toLowerCase();
+    if (targetEmail) {
+      const targetClean = targetEmail.trim().toLowerCase();
+      if (clean === targetClean) return true;
+      if (targetClean === "garryamelia6265@gmail.com" && (clean === "garry amelia" || clean === "admin")) return true;
+      return false;
+    }
+    return isAdminEmail(clean) || clean === "garry amelia" || clean === "admin";
+  };
+
+  // Count metrics for selected scope (Admin, Working Agent, or All CRM)
+  const selectedAgentStats = useMemo(() => {
+    if (adminTargetScope === "ALL_CRM" || adminTargetScope === "NO_AGENT") {
+      return { total: 0, assigned: 0, imported: 0 };
+    }
+
+    if (adminTargetScope === "ALL_ADMINS") {
+      let assignedCount = 0;
+      let importedCount = 0;
+      let totalCount = 0;
+
+      leads.forEach((l) => {
+        const isAgent = isAdminMatch(l.agent);
+        const isImport = isAdminMatch(l.imported_by);
+
+        if (isAgent || isImport) totalCount++;
+        if (isImport) importedCount++;
+        else if (isAgent) assignedCount++;
+      });
+
+      return { total: totalCount, assigned: assignedCount, imported: importedCount };
+    }
+
+    const em = adminTargetScope.trim().toLowerCase();
+    const isTargetAdmin = isAdminEmail(em);
+
+    let assignedCount = 0;
+    let importedCount = 0;
+    let totalCount = 0;
+
+    leads.forEach((l) => {
+      const isAgent = isTargetAdmin ? isAdminMatch(l.agent, em) : (l.agent || "").trim().toLowerCase() === em;
+      const isImport = isTargetAdmin ? isAdminMatch(l.imported_by, em) : (l.imported_by || "").trim().toLowerCase() === em;
+
+      if (isAgent || isImport) {
+        totalCount++;
+      }
+
+      if (isImport) {
+        importedCount++;
+      } else if (isAgent) {
+        assignedCount++;
+      }
+    });
+
+    return {
+      total: totalCount,
+      assigned: assignedCount,
+      imported: importedCount,
+    };
+  }, [leads, adminTargetScope]);
+
+  // Filter leads based on agent permission, scope, and selected rule
   const targetLeads = useMemo(() => {
     if (!selectedOption) return [];
 
@@ -91,18 +245,37 @@ export function ClearLeadsDialog({
         (l) => (l.agent || "").trim().toLowerCase() === myEm
       );
     } else if (isAdmin) {
-      // Admin can filter by Admin Pool, specific agent, or All CRM
-      if (adminTargetScope === "ADMIN_POOL") {
-        baseLeads = baseLeads.filter(
-          (l) =>
-            (l.agent || "").toLowerCase().includes("garry") ||
-            (l.agent || "").toLowerCase().includes("admin") ||
-            l.agent === "Unassigned"
-        );
+      if (adminTargetScope === "NO_AGENT") {
+        return [];
+      } else if (adminTargetScope === "ALL_ADMINS") {
+        baseLeads = baseLeads.filter((l) => {
+          const isAgent = isAdminMatch(l.agent);
+          const isImport = isAdminMatch(l.imported_by);
+
+          if (agentLeadType === "assigned_leads") {
+            return isAgent && !isImport;
+          } else if (agentLeadType === "imported_leads") {
+            return isImport;
+          } else {
+            return isAgent || isImport;
+          }
+        });
       } else if (adminTargetScope !== "ALL_CRM") {
-        baseLeads = baseLeads.filter(
-          (l) => (l.agent || "").trim().toLowerCase() === adminTargetScope.trim().toLowerCase()
-        );
+        const em = adminTargetScope.trim().toLowerCase();
+        const isTargetAdmin = isAdminEmail(em);
+
+        baseLeads = baseLeads.filter((l) => {
+          const isAgent = isTargetAdmin ? isAdminMatch(l.agent, em) : (l.agent || "").trim().toLowerCase() === em;
+          const isImport = isTargetAdmin ? isAdminMatch(l.imported_by, em) : (l.imported_by || "").trim().toLowerCase() === em;
+
+          if (agentLeadType === "assigned_leads") {
+            return isAgent && !isImport;
+          } else if (agentLeadType === "imported_leads") {
+            return isImport;
+          } else {
+            return isAgent || isImport;
+          }
+        });
       }
     }
 
@@ -133,7 +306,7 @@ export function ClearLeadsDialog({
           return (
             l.status === "no_answer" ||
             l.status === "contacted" ||
-            l.status === "cancelled"
+            l.status === "booking_cancelled"
           );
         case "all":
           return true;
@@ -141,7 +314,15 @@ export function ClearLeadsDialog({
           return false;
       }
     });
-  }, [leads, isAdmin, userEmail, adminTargetScope, selectedOption]);
+  }, [
+    leads,
+    isAdmin,
+    userEmail,
+    adminTargetScope,
+    agentLeadType,
+    allWorkingAgents,
+    selectedOption,
+  ]);
 
   async function handleExecuteClear() {
     if (!selectedOption) {
@@ -252,7 +433,7 @@ export function ClearLeadsDialog({
     {
       id: "all",
       title: "💥 Delete ALL Leads in Selected Scope",
-      desc: "Deletes every lead matching the selected agent scope. Use with caution!",
+      desc: "Deletes every lead matching the selected scope. Use with caution!",
       icon: AlertTriangle,
     },
   ];
@@ -271,9 +452,7 @@ export function ClearLeadsDialog({
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
                 {isAdmin ? (
-                  <span>
-                    Select the target agent pool and deletion rule below.
-                  </span>
+                  <span>Select the target scope and deletion rule below.</span>
                 ) : (
                   <span className="text-amber-300 font-semibold">
                     🔒 Working Agent Mode: Only leads assigned to your dashboard will be deleted.
@@ -284,30 +463,127 @@ export function ClearLeadsDialog({
           </div>
         </DialogHeader>
 
-        {/* Admin Scope Selector: All CRM vs Admin Pool vs Specific Agent */}
+        {/* Admin Scope Selector: Entire CRM vs Working Agent (name & email) */}
         {isAdmin && (
-          <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-2/70 border border-border/80 text-xs">
-            <div className="flex items-center gap-2">
-              <Users className="size-4 text-violet-400" />
-              <div>
-                <span className="font-semibold text-foreground">Target Pipeline Scope:</span>
-                <p className="text-[10px] text-muted-foreground">Choose which pool to clear</p>
+          <div className="space-y-2.5 p-3 rounded-xl bg-surface-2/70 border border-border/80 text-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+              <div className="flex items-center gap-2">
+                <Users className="size-4 text-violet-400 shrink-0" />
+                <div>
+                  <span className="font-semibold text-foreground">Target Pipeline Scope:</span>
+                  <p className="text-[10px] text-muted-foreground">Choose which pool to clear</p>
+                </div>
               </div>
+              <Select value={adminTargetScope} onValueChange={setAdminTargetScope}>
+                <SelectTrigger className="h-8 w-full sm:min-w-[210px] sm:max-w-[260px] rounded-xl text-xs bg-surface-1 border-border font-medium truncate">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL_CRM">🌐 Entire CRM Pipeline</SelectItem>
+                  <SelectItem value="ALL_ADMINS">🛡️ All Admin Leads (Admins Pool)</SelectItem>
+                  {allAdmins.map((adm) => (
+                    <SelectItem key={adm.email} value={adm.email}>
+                      🛡️ {adm.name} ({adm.email})
+                    </SelectItem>
+                  ))}
+                  {allWorkingAgents.length === 0 ? (
+                    <SelectItem value="NO_AGENT">👤 Working Agent</SelectItem>
+                  ) : (
+                    allWorkingAgents.map((ag) => (
+                      <SelectItem key={ag.email} value={ag.email}>
+                        👤 {ag.name} ({ag.email})
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             </div>
-            <Select value={adminTargetScope} onValueChange={setAdminTargetScope}>
-              <SelectTrigger className="h-8 w-48 rounded-xl text-xs bg-surface-1 border-border">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL_CRM">🌐 Entire CRM Pipeline</SelectItem>
-                <SelectItem value="ADMIN_POOL">👑 Admin Pool Only</SelectItem>
-                {distinctAgents.map((ag) => (
-                  <SelectItem key={ag} value={ag}>
-                    👤 {ag}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+
+            {/* Empty state when NO working agent is on CRM and Working Agent is selected */}
+            {adminTargetScope === "NO_AGENT" && (
+              <div className="pt-2 border-t border-border/40">
+                <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300">
+                  <UserX className="size-4 shrink-0 mt-0.5 text-amber-400" />
+                  <div>
+                    <p className="font-semibold text-xs text-amber-200">
+                      No working agent is available on CRM.
+                    </p>
+                    <p className="text-[11px] text-amber-300/80 mt-0.5">
+                      When available, you can delete their leads.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Working Agent Specific Sub-Options (All, Assigned, Imported) */}
+            {adminTargetScope !== "ALL_CRM" && adminTargetScope !== "NO_AGENT" && (
+              <div className="pt-2 border-t border-border/40 space-y-2.5">
+                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-surface-1 border border-border/80">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={agentLeadType === "all_leads" ? "secondary" : "ghost"}
+                    onClick={() => setAgentLeadType("all_leads")}
+                    className={`flex-1 h-7 text-[11px] rounded-lg font-semibold transition-all ${
+                      agentLeadType === "all_leads"
+                        ? "bg-violet-600/20 text-violet-300 border border-violet-500/30 shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    All Leads ({selectedAgentStats.total})
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={agentLeadType === "assigned_leads" ? "secondary" : "ghost"}
+                    onClick={() => setAgentLeadType("assigned_leads")}
+                    className={`flex-1 h-7 text-[11px] rounded-lg font-semibold transition-all ${
+                      agentLeadType === "assigned_leads"
+                        ? "bg-blue-600/20 text-blue-300 border border-blue-500/30 shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <UserCheck className="size-3 mr-1" />
+                    Assigned ({selectedAgentStats.assigned})
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={agentLeadType === "imported_leads" ? "secondary" : "ghost"}
+                    onClick={() => setAgentLeadType("imported_leads")}
+                    className={`flex-1 h-7 text-[11px] rounded-lg font-semibold transition-all ${
+                      agentLeadType === "imported_leads"
+                        ? "bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Download className="size-3 mr-1" />
+                    Imported ({selectedAgentStats.imported})
+                  </Button>
+                </div>
+
+                {/* Sub-Option Empty State Notices */}
+                {agentLeadType === "assigned_leads" && selectedAgentStats.assigned === 0 && (
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[11px]">
+                    <Info className="size-3.5 shrink-0" />
+                    <span>No leads have been assigned to this agent.</span>
+                  </div>
+                )}
+                {agentLeadType === "imported_leads" && selectedAgentStats.imported === 0 && (
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px]">
+                    <Info className="size-3.5 shrink-0" />
+                    <span>This agent has not imported any leads.</span>
+                  </div>
+                )}
+                {agentLeadType === "all_leads" && selectedAgentStats.total === 0 && (
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-surface-1 border border-border text-muted-foreground text-[11px]">
+                    <Info className="size-3.5 shrink-0" />
+                    <span>This agent currently has no leads in the pipeline.</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -323,12 +599,15 @@ export function ClearLeadsDialog({
 
         <div className="py-1 space-y-2.5">
           <p className="text-xs font-semibold text-foreground">
-            Choose Deletion Rule: <span className="text-rose-400 font-normal text-[11px]">* (Click an option to select)</span>
+            Choose Deletion Rule:{" "}
+            <span className="text-rose-400 font-normal text-[11px]">
+              * (Click an option to select)
+            </span>
           </p>
           <RadioGroup
             value={selectedOption}
             onValueChange={(v) => setSelectedOption(v as ClearScope)}
-            className="space-y-2 max-h-56 overflow-y-auto pr-1"
+            className="space-y-2 max-h-52 overflow-y-auto pr-1"
           >
             {options.map((opt) => {
               const isSelected = selectedOption === opt.id;
@@ -418,3 +697,4 @@ export function ClearLeadsDialog({
     </Dialog>
   );
 }
+

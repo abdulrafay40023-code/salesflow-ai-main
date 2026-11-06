@@ -18,7 +18,7 @@ export default async function handler(req: any, res: any) {
     body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
   } catch {}
 
-  const { name, email, phone } = body;
+  const { name, email, phone, department_id, designation, pseudo_name, role_title } = body;
   if (!email || !name) {
     return res.status(400).json({ error: "Missing name or email" });
   }
@@ -28,6 +28,11 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ error: "Cannot submit pending request for admin email" });
   }
 
+  const deptId = department_id || "production-house";
+  const trimmedDesignation = (designation || "").trim();
+  const trimmedPseudoName = (pseudo_name || "").trim();
+  const trimmedRoleTitle = (role_title || designation || "").trim();
+
   const initials = name
     .split(" ")
     .map((p: string) => p[0])
@@ -36,24 +41,45 @@ export default async function handler(req: any, res: any) {
     .toUpperCase();
 
   try {
-    // 1. Insert into pending_signups table
-    await supabase.from("pending_signups").upsert(
-      {
-        name,
-        email: cleanEmail,
-        phone: phone || "",
-        avatar_initials: initials,
-        status: "pending",
-        created_at: new Date().toISOString(),
-      },
-      { onConflict: "email" }
-    );
+    // 1. Insert into pending_signups table (safely without failing if columns differ)
+    try {
+      await supabase.from("pending_signups").upsert(
+        {
+          name,
+          email: cleanEmail,
+          phone: phone || "",
+          designation: trimmedDesignation,
+          department_id: deptId,
+          avatar_initials: initials,
+          status: "pending",
+          created_at: new Date().toISOString(),
+        },
+        { onConflict: "email" }
+      );
+    } catch {
+      await supabase.from("pending_signups").upsert(
+        {
+          name,
+          email: cleanEmail,
+          phone: phone || "",
+          department_id: deptId,
+          avatar_initials: initials,
+          status: "pending",
+          created_at: new Date().toISOString(),
+        },
+        { onConflict: "email" }
+      );
+    }
 
-    // 2. Insert into emails_sent queue fallback
+    // 2. Insert into emails_sent queue fallback (always preserves full JSON including pseudo_name and role_title)
     const queuePayload = JSON.stringify({
       name,
       email: cleanEmail,
       phone: phone || "",
+      designation: trimmedDesignation,
+      pseudo_name: trimmedPseudoName,
+      role_title: trimmedRoleTitle,
+      department_id: deptId,
       avatar_initials: initials,
       status: "pending",
       created_at: new Date().toISOString(),

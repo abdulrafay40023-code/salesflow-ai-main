@@ -15,7 +15,8 @@ import {
   Bot, 
   Lock, 
   Users, 
-  Layers
+  Layers,
+  MessageSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCrm } from "@/lib/crm-store";
@@ -45,7 +46,7 @@ function HomePage() {
 
   const handleGetStarted = () => {
     if (user && user.email) {
-      navigate({ to: "/leads" });
+      navigate({ to: "/dashboard" });
     } else {
       navigate({ to: "/login" });
     }
@@ -68,9 +69,11 @@ function HomePage() {
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
             className="flex items-center gap-3 cursor-pointer group"
           >
-            <span className="grid size-10 place-items-center rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-500 shadow-lg shadow-violet-600/30 group-hover:scale-105 transition-transform">
-              <Sparkles className="size-5 text-white" />
-            </span>
+            <img
+              src="/icon-192.png?v=3"
+              alt="Teals CRM Logo"
+              className="size-10 rounded-2xl object-cover shadow-lg border border-white/15 group-hover:scale-105 transition-transform"
+            />
             <div>
               <span className="font-display text-xl font-extrabold tracking-tight text-white flex items-center gap-1.5">
                 Teals CRM
@@ -86,6 +89,7 @@ function HomePage() {
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
             <a href="#features" className="hover:text-white transition-colors">Features</a>
             <a href="#calling" className="hover:text-white transition-colors">1-Click AI Dialer</a>
+            <a href="#livechat" className="hover:text-white transition-colors">LiveChat AI</a>
             <a href="#automation" className="hover:text-white transition-colors">Automations</a>
             <a href="#security" className="hover:text-white transition-colors">Security</a>
           </nav>
@@ -203,7 +207,24 @@ function HomePage() {
               </ul>
             </div>
 
-            {/* Feature 2: Automated Email Sequences */}
+            {/* Feature 2: LiveChat AI & Multi-Website Bot Hub */}
+            <div id="livechat" className="p-7 rounded-3xl bg-white/[0.02] border border-white/[0.08] hover:border-cyan-500/40 transition-all hover:shadow-2xl hover:shadow-cyan-950/30 space-y-4 group">
+              <div className="size-12 rounded-2xl bg-cyan-600/20 text-cyan-400 border border-cyan-500/30 grid place-items-center group-hover:scale-110 transition-transform">
+                <MessageSquare className="size-6" />
+              </div>
+              <h3 className="text-xl font-bold text-white">LiveChat AI & Multi-Website Bot</h3>
+              <p className="text-sm text-slate-300 leading-relaxed">
+                Connect and manage live customer chats across 5 brand websites in real-time. Features autonomous Gemini AI conversational auto-replies, instant live agent handoff with sound alerts, and live visitor tracking.
+              </p>
+              <ul className="space-y-2 text-xs text-slate-400 pt-2">
+                <li className="flex items-center gap-2"><CheckCircle2 className="size-4 text-emerald-400 shrink-0" /> 5-Website dedicated isolated inboxes & routing</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="size-4 text-emerald-400 shrink-0" /> Autonomous Gemini AI chatbot + Human handoff</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="size-4 text-emerald-400 shrink-0" /> Live visitor monitoring, sound beeps & alerts</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="size-4 text-emerald-400 shrink-0" /> Real-time agent website assignment permissions</li>
+              </ul>
+            </div>
+
+            {/* Feature 3: Automated Email Sequences */}
             <div id="automation" className="p-7 rounded-3xl bg-white/[0.02] border border-white/[0.08] hover:border-indigo-500/40 transition-all hover:shadow-2xl hover:shadow-indigo-950/30 space-y-4 group">
               <div className="size-12 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 grid place-items-center group-hover:scale-110 transition-transform">
                 <Mail className="size-6" />

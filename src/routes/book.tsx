@@ -18,8 +18,8 @@ import { supabase } from "@/lib/supabase";
 export const Route = createFileRoute("/book")({
   head: () => ({
     meta: [
-      { title: "Schedule a Sales Meeting — Teals CRM" },
-      { name: "description", content: "Select your preferred date & time for a meeting with our sales team." },
+      { title: "Schedule a 1-on-1 Strategy Session — AMZ Solutions Hub" },
+      { name: "description", content: "Select your preferred date & time for a 1-on-1 strategy session with our senior eCommerce specialist." },
     ],
   }),
   component: BookingPage,
@@ -348,7 +348,7 @@ function BookingPage() {
             <span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground">
               <Sparkles className="size-4.5" />
             </span>
-            <span className="font-display text-xl font-bold">Teals CRM</span>
+            <span className="font-display text-xl font-bold">AMZ Solutions Hub</span>
           </div>
 
           {booked && (
@@ -382,7 +382,7 @@ function BookingPage() {
                 </div>
                 <h2 className="text-2xl font-bold text-foreground">Meeting Confirmed!</h2>
                 <p className="text-sm text-muted-foreground max-w-md">
-                  A confirmation email has been sent to <span className="font-semibold text-foreground">{email}</span> and your assigned sales representative.
+                  A confirmation email has been sent to <span className="font-semibold text-foreground">{email}</span> and our senior strategy team.
                 </p>
               </>
             )}
@@ -401,32 +401,18 @@ function BookingPage() {
               >
                 Book Another Session
               </Button>
-              <a
-                href="tel:+15615576556"
-                className="inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors w-full sm:w-auto"
-              >
-                📞 Call Us
-              </a>
-              <a
-                href="https://wa.me/923420807117"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold bg-green-600 hover:bg-green-500 text-white transition-colors w-full sm:w-auto"
-              >
-                💬 WhatsApp
-              </a>
             </div>
 
             {/* Website Link & Button */}
             <div className="mt-5 flex flex-col sm:flex-row items-center justify-center gap-2 text-xs text-muted-foreground text-center">
               <span>Need more information? Visit our Website</span>
               <a
-                href="https://tealsinternational.com/"
+                href="https://www.amzsolutionshub.com/"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold bg-violet-600/20 text-violet-300 border border-violet-500/30 hover:bg-violet-600 hover:text-white transition-all shadow-sm"
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold bg-primary/20 text-primary border border-primary/30 hover:bg-primary hover:text-white transition-all shadow-sm"
               >
-                <span>Teals International</span>
+                <span>AMZ Solutions Hub</span>
                 <ExternalLink className="size-3" />
               </a>
             </div>

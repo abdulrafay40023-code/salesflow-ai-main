@@ -41,7 +41,7 @@ async function sendEmail(to: string | string[], subject: string, html: string) {
   const recipients = Array.isArray(to) ? to.filter(Boolean) : [to].filter(Boolean);
   if (recipients.length === 0) return;
   await transporter.sendMail({
-    from: `"Teals CRM Meetings" <${GMAIL_USER}>`,
+    from: `"AMZ Solutions Hub" <${GMAIL_USER}>`,
     to: recipients.join(", "),
     subject,
     headers: {
@@ -89,6 +89,11 @@ function checkGmailRepliesForLeads(
         return;
       }
       const target = leadTargets[currentTargetIdx];
+      if (!target) {
+        clearTimeout(timeout);
+        resolve(foundEmails);
+        return;
+      }
       const t = nextTag();
       try {
         client.write(`${t} SEARCH FROM "${target.email}"\r\n`);
@@ -123,13 +128,13 @@ function checkGmailRepliesForLeads(
         const searchLine = buffer.match(/\* SEARCH\s+(.*)/);
         const rawIds = searchLine && searchLine[1] ? searchLine[1].trim().split(/\s+/).filter(Boolean) : [];
 
-        if (rawIds.length === 0) {
+        if (rawIds.length === 0 || !target) {
           buffer = "";
           currentTargetIdx++;
           processNextTarget();
         } else {
           // Fetch INTERNALDATE of the latest message for this sender
-          const lastId = rawIds[rawIds.length - 1];
+          const lastId = rawIds[rawIds.length - 1] || "";
           currentCheckingId = lastId;
           buffer = "";
           step = 4;
@@ -142,7 +147,7 @@ function checkGmailRepliesForLeads(
       } else if (step === 4 && buffer.includes(`T${tagNum - 1} OK`)) {
         const target = leadTargets[currentTargetIdx];
         const dateMatch = buffer.match(/INTERNALDATE "([^"]+)"/i);
-        if (dateMatch) {
+        if (target && dateMatch && dateMatch[1]) {
           const emailTime = new Date(dateMatch[1]).getTime();
           // STRICT CHECK: The reply MUST be received AFTER the lead was imported / outreach started
           if (!isNaN(emailTime) && emailTime >= target.minTimestampMs) {
@@ -202,7 +207,7 @@ function meetingNowHtml(meetingTime: string, zoomJoinUrl?: string) {
       ${zoomBtn}
     </div>
     <div style="background:#f8fafc;padding:16px;text-align:center;font-size:12px;color:#94a3b8;border-radius:0 0 8px 8px">
-      © ${new Date().getFullYear()} Teals CRM. All rights reserved.
+      © ${new Date().getFullYear()} AMZ Solutions Hub. All rights reserved.
     </div>
   </div>`;
 }
@@ -238,7 +243,7 @@ function reminder1hHtml(meetingTime: string, durationText: string = "1 hour", zo
       ${zoomBtn}
     </div>
     <div style="background:#f8fafc;padding:16px;text-align:center;font-size:12px;color:#94a3b8;border-radius:0 0 8px 8px">
-      © ${new Date().getFullYear()} Teals CRM. All rights reserved.
+      © ${new Date().getFullYear()} AMZ Solutions Hub. All rights reserved.
     </div>
   </div>`;
 }
@@ -271,7 +276,7 @@ function reminder24hHtml(meetingDate: string, meetingTime: string, zoomJoinUrl?:
       ${zoomBtn}
     </div>
     <div style="background:#f8fafc;padding:16px;text-align:center;font-size:12px;color:#94a3b8;border-radius:0 0 8px 8px">
-      © ${new Date().getFullYear()} Teals CRM. All rights reserved.
+      © ${new Date().getFullYear()} AMZ Solutions Hub. All rights reserved.
     </div>
   </div>`;
 }
@@ -304,7 +309,7 @@ function reminder5mHtml(meetingTime: string, zoomJoinUrl?: string) {
       ${zoomBtn}
     </div>
     <div style="background:#f8fafc;padding:16px;text-align:center;font-size:12px;color:#94a3b8;border-radius:0 0 8px 8px">
-      © ${new Date().getFullYear()} Teals CRM. All rights reserved.
+      © ${new Date().getFullYear()} AMZ Solutions Hub. All rights reserved.
     </div>
   </div>`;
 }

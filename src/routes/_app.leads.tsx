@@ -27,7 +27,7 @@ import {
 import { isAdminEmail, ADMIN_EMAILS, ALL_STATUSES, statusLabels, type Lead, type LeadStatus } from "@/lib/crm-data";
 import { detectCountryFromPhone, formatPhoneWithCountryCode, SUPPORTED_COUNTRIES, getCountryByCode, changeCountryOnPhone, parseCountryString } from "@/lib/country-helper";
 import { CountryCombobox } from "@/components/crm/CountryCombobox";
-import { startVapiPhoneCallFn, getVapiCallStatusFn, stopVapiCallFn, processVapiCallBookingFn } from "@/lib/server-actions";
+import { startVapiPhoneCallFn, getVapiCallStatusFn, stopVapiCallFn, processVapiCallBookingFn, getVapiCallLogsFn, computeCallDurationSecs } from "@/lib/server-actions";
 import { ClearLeadsDialog } from "@/components/crm/ClearLeadsDialog";
 import { AllCallRecordingsDialog } from "@/components/crm/AllCallRecordingsDialog";
 import { Globe, MapPin, Headphones } from "lucide-react";
@@ -158,11 +158,11 @@ function LeadsPage() {
       activePollersRef.current[leadId] = setInterval(async () => {
         pollCount++;
         try {
-          // ⏱️ 15-Second Max Ringing Timeout Check
+          // ⏱️ 45-Second Max Ringing Timeout Check
           const curRing = activeCallsRef.current[leadId];
           if (curRing?.status === "ringing") {
             const ringElapsed = Math.floor((Date.now() - dialStartTime) / 1000);
-            if (ringElapsed >= 15) {
+            if (ringElapsed >= 45) {
               clearInterval(activePollersRef.current[leadId]);
               delete activePollersRef.current[leadId];
 
@@ -188,7 +188,7 @@ function LeadsPage() {
               activeCallsRef.current[leadId] = endedCall;
               setActiveCalls((prev) => ({ ...prev, [leadId]: endedCall }));
 
-              toast.info(`📞 15s Ringing: No answer from ${lead.name} (Status: No Answer).`);
+              toast.info(`📞 45s Ringing: No answer from ${lead.name} (Status: No Answer).`);
 
               await supabase.from("leads").update({ status: "no_answer" }).eq("id", lead.id);
               fetchLeads();
@@ -255,20 +255,22 @@ function LeadsPage() {
             }
 
             const endedReason = statusRes.endedReason || "";
+            const hasTranscript = Boolean(statusRes.transcript && statusRes.transcript.trim().length > 10);
             const isNoAnswer =
-              finalDuration === 0 ||
-              endedReason === "customer-did-not-answer" ||
-              endedReason === "customer-busy" ||
-              endedReason === "no-answer";
+              finalDuration === 0 &&
+              !hasTranscript &&
+              (endedReason === "customer-did-not-answer" ||
+                endedReason === "customer-busy" ||
+                endedReason === "no-answer");
 
             const itemStatus: "completed" | "no_answer" = isNoAnswer ? "no_answer" : "completed";
 
-            // Add or update call in history list (deduplicated by callId)
+            // Add newest call to top of history list
             const prevHistory = callHistoryMapRef.current[leadId] || [];
             const filteredHistory = prevHistory.filter((h) => h.callId !== callId);
             const updatedHistory = [
-              ...filteredHistory,
               { callId, duration: finalDuration, status: itemStatus, timestamp: Date.now() },
+              ...filteredHistory,
             ];
             callHistoryMapRef.current[leadId] = updatedHistory;
             setCallHistoryMap((prev) => ({ ...prev, [leadId]: updatedHistory }));
@@ -703,9 +705,12 @@ function LeadsPage() {
             value: l.value || 0,
             source_date: leadDate,
             updated_at: l.updated_at || l.booked_at || l.contacted_at || l.won_at || (validStatus !== "new" ? leadDate : undefined),
+            imported_by: l.imported_by,
+            assigned_at: l.assigned_at,
           };
         });
         setDbLeads(mapped);
+        loadHistoricalCalls(mapped);
       } else {
         setDbLeads([]);
       }
@@ -713,6 +718,82 @@ function LeadsPage() {
       console.error("Leads fetch error:", e);
     }
     setLoading(false);
+  }
+
+  async function loadHistoricalCalls(currentLeads?: Lead[]) {
+    try {
+      const targetLeads = currentLeads || dbLeads;
+      if (!targetLeads || targetLeads.length === 0) return;
+
+      const res = await getVapiCallLogsFn();
+      if (res?.success && Array.isArray(res.calls)) {
+        const newHistoryMap: Record<string, CallHistoryItem[]> = { ...callHistoryMapRef.current };
+
+        // Filter out deleted calls
+        const validCalls = res.calls.filter(
+          (c: any) => c && c.endedReason !== "call-deleted" && c.status !== "deleted"
+        );
+
+        targetLeads.forEach((lead) => {
+          const leadPhoneClean = (lead.phone || "").replace(/[^\d]/g, "");
+          const leadEmailClean = (lead.email || "").trim().toLowerCase();
+
+          const matchedCalls = validCalls.filter((c: any) => {
+            const customerNum = (c?.customer?.number || "").replace(/[^\d]/g, "");
+            if (leadPhoneClean && customerNum) {
+              if (
+                customerNum.endsWith(leadPhoneClean) ||
+                leadPhoneClean.endsWith(customerNum) ||
+                customerNum.includes(leadPhoneClean) ||
+                leadPhoneClean.includes(customerNum)
+              ) {
+                return true;
+              }
+            }
+
+            if (leadEmailClean && leadEmailClean.length > 4 && leadEmailClean !== "—") {
+              const transcript = (c?.transcript || "").toLowerCase();
+              const summary = (c?.analysis?.summary || "").toLowerCase();
+              const emailExtracted = (c?.analysis?.structuredData?.clientEmail || "").toLowerCase();
+              if (
+                emailExtracted.includes(leadEmailClean) ||
+                transcript.includes(leadEmailClean) ||
+                summary.includes(leadEmailClean)
+              ) {
+                return true;
+              }
+            }
+            return false;
+          });
+
+          if (matchedCalls.length > 0) {
+            const historyItems: CallHistoryItem[] = matchedCalls.map((c: any) => {
+              let dur = computeCallDurationSecs(c);
+
+              const hasTrans = Boolean((c.transcript || c.summary) && (c.transcript?.length > 10 || c.summary?.length > 10));
+              const isNoAns = dur === 0 && !hasTrans && (c.endedReason === "customer-did-not-answer" || c.endedReason === "customer-busy" || c.endedReason === "no-answer");
+              const status: "completed" | "no_answer" = isNoAns ? "no_answer" : "completed";
+              const timestamp = new Date(c.startedAt || c.createdAt || Date.now()).getTime();
+              return {
+                callId: c.id,
+                duration: dur,
+                status,
+                timestamp,
+              };
+            });
+
+            // Sort newest call first (at the top)
+            historyItems.sort((a, b) => b.timestamp - a.timestamp);
+            newHistoryMap[lead.id] = historyItems;
+          }
+        });
+
+        callHistoryMapRef.current = newHistoryMap;
+        setCallHistoryMap(newHistoryMap);
+      }
+    } catch (e) {
+      console.error("Failed to load historical calls:", e);
+    }
   }
 
   useEffect(() => {
@@ -795,8 +876,8 @@ function LeadsPage() {
         title="Leads"
         subtitle={`${rows.length} of ${dbLeads.length} leads in your pipeline`}
         action={
-          <div className="flex items-center gap-2">
-            {dbLeads.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            {isAdmin && dbLeads.length > 0 && (
               <Button
                 onClick={() => setIsClearDialogOpen(true)}
                 variant="outline"
@@ -840,7 +921,7 @@ function LeadsPage() {
           <div className="flex flex-wrap gap-2">
             {/* Status Filter with dynamic counts */}
             <Select value={status} onValueChange={(v) => setStatus(v as LeadStatus | "all")}>
-              <SelectTrigger className="h-10 w-52 rounded-xl">
+              <SelectTrigger className="h-10 w-full sm:w-52 rounded-xl">
                 <Filter className="size-4" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -858,7 +939,7 @@ function LeadsPage() {
 
             {/* Agent Filter (for Admins) */}
             <Select value={agent} onValueChange={setAgent}>
-              <SelectTrigger className="h-10 w-44 rounded-xl">
+              <SelectTrigger className="h-10 w-full sm:w-44 rounded-xl">
                 <SlidersHorizontal className="size-4" />
                 <SelectValue placeholder="Agent" />
               </SelectTrigger>
@@ -875,7 +956,7 @@ function LeadsPage() {
             {/* Date Sorting Toggle (Newest First / Oldest First) */}
             <Button
               variant="outline"
-              className="h-10 rounded-xl gap-2 font-medium"
+              className="h-10 w-full sm:w-auto justify-center rounded-xl gap-2 font-medium"
               onClick={() => setAsc((s) => !s)}
               title="Toggle Date Sorting Order"
             >
@@ -896,9 +977,9 @@ function LeadsPage() {
             <span className="text-xs text-slate-300 font-medium">Assign selected leads to agent:</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <Select value={bulkTargetAgent} onValueChange={setBulkTargetAgent}>
-              <SelectTrigger className="w-56 rounded-xl bg-slate-900 text-xs font-semibold border-slate-700">
+              <SelectTrigger className="w-full sm:w-56 rounded-xl bg-slate-900 text-xs font-semibold border-slate-700">
                 <SelectValue placeholder="Choose target agent..." />
               </SelectTrigger>
               <SelectContent>
@@ -934,7 +1015,218 @@ function LeadsPage() {
       )}
 
       <div className="panel overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* 📱 Mobile Lead Card List (Hidden on Desktop md+) */}
+        <div className="md:hidden divide-y divide-border/60">
+          {isAdmin && rows.length > 0 && (
+            <div className="flex items-center justify-between px-4 py-2.5 bg-surface-2/60 text-xs">
+              <label className="flex items-center gap-2 font-medium text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="rounded accent-violet-600 size-4 cursor-pointer"
+                  checked={rows.length > 0 && selectedLeadIds.length === rows.length}
+                  onChange={() => {
+                    if (selectedLeadIds.length === rows.length) {
+                      setSelectedLeadIds([]);
+                    } else {
+                      setSelectedLeadIds(rows.map((r) => r.id));
+                    }
+                  }}
+                />
+                Select all ({rows.length})
+              </label>
+              <span className="text-[11px] text-muted-foreground">Tap any card for details</span>
+            </div>
+          )}
+
+          {loading && !dbLeads.length ? (
+            <div className="py-16 text-center text-muted-foreground px-4">
+              <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 opacity-40" />
+              Loading live leads from Supabase database...
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="py-16 text-center text-muted-foreground px-4">
+              <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              No leads found matching your filter criteria.
+            </div>
+          ) : (
+            rows.map((l) => {
+              const call = activeCalls[l.id];
+              const hasHistory = (callHistoryMap[l.id] || []).length > 0;
+              const d = l.source_date || l.lastContact;
+              const dateObj = d ? new Date(d) : null;
+              const formattedDate =
+                dateObj && !isNaN(dateObj.getTime())
+                  ? dateObj.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+                  : d || "—";
+
+              return (
+                <div
+                  key={l.id}
+                  onClick={() => setActive(l)}
+                  className={`p-3.5 space-y-2.5 transition-colors active:bg-accent/30 ${
+                    selectedLeadIds.includes(l.id) ? "bg-violet-500/10" : ""
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                      {isAdmin && (
+                        <input
+                          type="checkbox"
+                          className="rounded accent-violet-600 size-4 mt-0.5 shrink-0 cursor-pointer"
+                          checked={selectedLeadIds.includes(l.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => {
+                            setSelectedLeadIds((prev) =>
+                              prev.includes(l.id) ? prev.filter((id) => id !== l.id) : [...prev, l.id]
+                            );
+                          }}
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm text-foreground truncate">{l.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {l.company || "—"} • <span className="text-[11px]">{formattedDate}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                      <Select
+                        value={l.status}
+                        onValueChange={(v) => handleStatusChange(l.id, v as LeadStatus)}
+                      >
+                        <SelectTrigger
+                          className={`h-7 w-auto min-w-[115px] rounded-full border text-[11px] font-semibold px-2.5 py-0.5 gap-1 ${
+                            statusTone[l.status] || "bg-slate-500/12 text-slate-400"
+                          }`}
+                          style={{ boxShadow: "none" }}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ALL_STATUSES.map((s) => (
+                            <SelectItem key={s} value={s} className="text-xs">
+                              {statusLabels[s]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Email & Phone Row */}
+                  <div className="grid grid-cols-1 gap-1 text-xs text-muted-foreground bg-surface-2/40 rounded-xl p-2.5 border border-border/50">
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <span className="font-mono text-[11px] truncate">{l.email || "—"}</span>
+                      {l.ip_address && (
+                        <span className="font-mono text-[10px] text-emerald-400 shrink-0 flex items-center gap-1">
+                          <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          {l.location || l.ip_address}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40">
+                      <span className="font-mono text-[11px] text-foreground/90">{l.phone || "—"}</span>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <CountryCombobox
+                          value={l.country_code || "US"}
+                          onValueChange={(val) => handleCountryChange(l.id, val)}
+                          className="h-6 text-[11px] min-w-[110px]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions Row: Agent + AI Call */}
+                  <div
+                    className="flex flex-wrap items-center justify-between gap-2 pt-0.5"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="min-w-0 flex-1">
+                      {isAdmin ? (
+                        <Select
+                          value={l.agent === "Unassigned" ? PRIMARY_ADMIN_EMAIL : l.agent}
+                          onValueChange={(v) => handleReassignLead(l.id, l.name, v)}
+                        >
+                          <SelectTrigger className="h-7 text-[11px] rounded-xl border-dashed bg-surface-2/80 w-full max-w-[190px]">
+                            <SelectValue placeholder="Assign agent..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={PRIMARY_ADMIN_EMAIL}>Admin Pool (Garry Amelia)</SelectItem>
+                            <SelectItem value="tzafar04@gmail.com">Admin Pool (T Zafar)</SelectItem>
+                            {approvedAgents.map((ag) => (
+                              <SelectItem key={ag.email} value={ag.email}>
+                                👤 {ag.name} ({ag.email})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="text-xs text-muted-foreground truncate block">Agent: {l.agent}</span>
+                      )}
+                    </div>
+
+                    {l.phone && l.phone.trim().length > 3 && l.phone !== "—" && (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {!call || call.status === "ended" ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleStartInlineCall(l)}
+                            className="h-7 rounded-xl px-2.5 gap-1.5 text-xs font-semibold bg-violet-600/10 hover:bg-violet-600 hover:text-white text-violet-400 border-violet-500/30"
+                          >
+                            <PhoneCall className="size-3.5" />
+                            <span>{hasHistory ? "Redial" : "Call"}</span>
+                          </Button>
+                        ) : call.status === "ringing" ? (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 rounded-xl px-2.5 gap-1.5 text-xs font-bold bg-amber-500/15 text-amber-300 border-amber-500/40 animate-pulse pointer-events-none"
+                            >
+                              <PhoneCall className="size-3.5 animate-bounce" />
+                              <span>Ringing...</span>
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleHangupInlineCall(l.id)}
+                              className="h-7 w-7 rounded-xl text-rose-400"
+                            >
+                              <PhoneOff className="size-3.5" />
+                            </Button>
+                          </div>
+                        ) : call.status === "connected" ? (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 rounded-xl px-2.5 gap-1.5 text-xs font-bold bg-emerald-500/15 text-emerald-300 border-emerald-500/40 pointer-events-none"
+                            >
+                              <span className="size-2 rounded-full bg-emerald-400 animate-ping" />
+                              <span>In Call {formatDuration(call.duration)}</span>
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleHangupInlineCall(l.id)}
+                              className="h-7 w-7 rounded-xl text-rose-400"
+                            >
+                              <PhoneOff className="size-3.5" />
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-surface-2/60">
@@ -1177,9 +1469,9 @@ function LeadsPage() {
                                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold border shadow-xs ${
                                   h.status === "no_answer" || h.duration === 0
                                     ? "bg-amber-950/40 text-amber-300 border-amber-500/30"
-                                    : "bg-slate-800/80 text-slate-300 border-slate-700/60"
+                                    : "bg-emerald-950/40 text-emerald-300 border-emerald-500/30"
                                 }`}
-                                title={`Call #${idx + 1} status`}
+                                title={`Call #${(callHistoryMap[l.id] || []).length - idx}: ${h.status === "no_answer" || h.duration === 0 ? "No Answer" : formatDuration(h.duration)}`}
                               >
                                 {h.status === "no_answer" || h.duration === 0 ? (
                                   <>

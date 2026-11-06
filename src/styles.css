@@ -246,6 +246,50 @@
   --shadow-float: 0 24px 60px -24px oklch(0 0 0 / 0.7);
 }
 
+html {
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  min-height: 100%;
+  min-height: 100dvh;
+  overflow-x: clip;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Smooth momentum scrolling for all scrollable containers on mobile & desktop */
+.overflow-y-auto,
+.overflow-x-auto,
+.overflow-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Sleek global custom scrollbar */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
 @layer base {
   body {
     font-family: var(--font-sans);
@@ -270,3 +314,30 @@
     radial-gradient(50% 50% at 88% 18%, color-mix(in oklab, var(--color-info) 24%, transparent), transparent 70%),
     radial-gradient(60% 60% at 60% 100%, color-mix(in oklab, var(--color-chart-5) 20%, transparent), transparent 70%);
 }
+
+/* ── Smooth Navigation & Transitions ──────────────────────────────────── */
+@keyframes pageGlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-fade-in {
+  animation: pageGlideIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Optimize UI layer transitions */
+.transition-smooth {
+  transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  transition-duration: 300ms;
+}
+

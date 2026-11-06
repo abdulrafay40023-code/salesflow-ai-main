@@ -55,6 +55,7 @@ export function LeadDetailSheet({
         const leadEmailClean = (lead?.email || "").trim().toLowerCase();
 
         const matched = res.calls.filter((c: any) => {
+          if (!c || c.endedReason === "call-deleted" || c.status === "deleted") return false;
           const customerNum = (c?.customer?.number || "").replace(/[^\d]/g, "");
           // 1. Strict Phone Match
           if (leadPhoneClean && customerNum) {
