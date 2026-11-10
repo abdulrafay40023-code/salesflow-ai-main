@@ -1292,8 +1292,8 @@ CALL CONTEXT & STEP-BY-STEP FLOW:
             },
             voice: CARTESIA_VOICE_CONFIG,
             model: {
-              provider: "openai",
-              model: "gpt-4.1",
+              provider: "google",
+              model: "gemini-2.5-flash",
               messages: [
                 {
                   role: "system",
@@ -1631,8 +1631,8 @@ RULE #4 — CAPTURING WHATSAPP / EMAIL & ENDING THE CALL CLEANLY
         },
         voice: CARTESIA_VOICE_CONFIG,
         model: {
-          provider: "openai",
-          model: "gpt-4.1",
+          provider: "google",
+          model: "gemini-2.5-flash",
           temperature: 0.6,
           messages: [
             {
