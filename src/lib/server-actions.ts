@@ -188,6 +188,7 @@ import {
   VAPI_ASSISTANT_ID,
   VAPI_PHONE_NUMBER_ID,
   VAPI_ACCOUNTS_POOL,
+  CARTESIA_VOICE_CONFIG,
   VapiAccount,
   formatE164Phone,
 } from "./vapi-client";
@@ -1289,16 +1290,7 @@ CALL CONTEXT & STEP-BY-STEP FLOW:
               customerEmail: cleanLeadEmail,
               agentEmail: agentEmail,
             },
-            voice: {
-              provider: "11labs",
-              voiceId: "IKcdrwcNOQGmq6wzEhW7",
-              model: "eleven_turbo_v2_5",
-              stability: 0.35,
-              similarityBoost: 0.80,
-              style: 0.25,
-              useSpeakerBoost: true,
-              fillerInjectionEnabled: true,
-            },
+            voice: CARTESIA_VOICE_CONFIG,
             model: {
               provider: "openai",
               model: "gpt-4.1",
@@ -1637,16 +1629,7 @@ RULE #4 — CAPTURING WHATSAPP / EMAIL & ENDING THE CALL CLEANLY
             "Teals:2",
           ],
         },
-        voice: {
-          provider: "11labs",
-          voiceId: "IKcdrwcNOQGmq6wzEhW7",
-          model: "eleven_turbo_v2_5",
-          stability: 0.35,
-          similarityBoost: 0.80,
-          style: 0.25,
-          useSpeakerBoost: true,
-          fillerInjectionEnabled: true,
-        },
+        voice: CARTESIA_VOICE_CONFIG,
         model: {
           provider: "openai",
           model: "gpt-4.1",

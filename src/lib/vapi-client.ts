@@ -84,6 +84,16 @@ export const VAPI_ASSISTANT_ID = process.env["VAPI_ASSISTANT_ID"] || "0bc6b506-c
 export const VAPI_PHONE_NUMBER_ID = VAPI_ACCOUNTS_POOL[0].phoneNumberId;
 export const VAPI_PHONE_NUMBER = VAPI_ACCOUNTS_POOL[0].phoneNumber;
 
+// Cartesia Sonic Voice Configuration (replaces ElevenLabs)
+// Default UUID is Cartesia's ultra-natural American Male voice; replace or set CARTESIA_VOICE_ID env var with your cloned Cartesia Voice ID
+export const CARTESIA_VOICE_ID = process.env["CARTESIA_VOICE_ID"] || "a0e99841-438c-4a64-b679-ae501e7d6091";
+export const CARTESIA_VOICE_CONFIG = {
+  provider: "cartesia",
+  voiceId: CARTESIA_VOICE_ID,
+  model: "sonic-3.5",
+  fillerInjectionEnabled: true,
+};
+
 /**
  * Clean & format phone numbers to standard E.164 (e.g. +447..., +923..., +1561..., +971...)
  */
